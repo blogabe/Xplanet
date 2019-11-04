@@ -1,3 +1,4 @@
+XPLANET_BIN=/Users/$USER/local/bin/xplanet
 XPLANET_HOME=/Users/$USER/.xplanet
 XPLANET_PERSONAL=${XPLANET_HOME}/personal
 XPLANET_SCRIPTS=${XPLANET_PERSONAL}/scripts

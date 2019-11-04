@@ -31,7 +31,7 @@ fi
 # START XPLANET
 ################################################################################
 if [[ ${SWITCH} == 'start' ]]; then
-	/usr/local/bin/xplanet \
+	${XPLANET_BIN} \
 		-searchdir=${XPLANET_HOME} \
 		-config=${XPLANET_CONFIG} \
 		-projection=${XPLANET_PROJECTION} \
