@@ -1,0 +1,16 @@
+XPLANET_BIN=/usr/local/bin/xplanet
+XPLANET_HOME=/Users/$USER/.xplanet
+
+XPLANET_CONFIG=${XPLANET_HOME}/config
+XPLANET_PROJECTION=mercator
+XPLANET_GEOMETRY=2560x1440
+XPLANET_LONGITUDE=-100
+
+#EARTH_MAP_PRE=world/world
+EARTH_MAP_PRE=world.topo/world.topo
+#EARTH_MAP_PRE=world.topo.bathy/world.topo.bathy
+
+CLOUD_URL=https://secure.xericdesign.com/xplanet/clouds/2048
+CLOUD_MAP=clouds-2048.jpg
+CLOUD_USER=
+CLOUD_PWD=
