@@ -59,8 +59,13 @@ XPLANET_HOME needs to reference the directory where 'config' is
         ln -sfn ${XPLANET_CONFIG}/images/$LAND_FILE ${XPLANET_HOME}/images/earth.png
         ;;
     clouds)
-    	TEMP="-u ${CLOUD_USER}:${CLOUD_PWD} -z ${XPLANET_HOME}/images/${CLOUD_MAP} -R -L -o ${XPLANET_HOME}/images/${CLOUD_MAP} ${CLOUD_URL}/${CLOUD_MAP}"
-    	curl $TEMP
+        if [[ ! -z "$CLOUD_USER" ]]; then
+            TEMP="-u ${CLOUD_USER}:${CLOUD_PWD} -z ${XPLANET_HOME}/images/${CLOUD_MAP} -R -L -o ${XPLANET_HOME}/images/${CLOUD_MAP} ${CLOUD_URL}/${CLOUD_MAP}"
+            curl $TEMP
+        else
+            echo "$(date): ERROR! Updating clouds, but the username is not defined. Check $XPLANET_CONFIG/xp.def"
+            exit 1;
+        fi
         ;;
     *)
         clear
