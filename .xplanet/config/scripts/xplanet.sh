@@ -13,9 +13,9 @@ case "$SWITCH" in
         echo "Xplanet won't work without these approvals"
         echo "Accept fast... (10 seconds)"
         echo 'Press any key to continue or Control-C to exit...'; read -k1 -s
-        `xplanet -num_times=1`
+        $(xplanet -num_times=1)
         sleep 8
-        `xplanet -num_times=1`
+        $(xplanet -num_times=1)
         sleep 4
         echo -e "
 Before running setup, make sure 'config' and its contents
