@@ -8,7 +8,7 @@ source /Users/$USER/.xplanet/config/xp.def
 case "$SWITCH" in
     install)
         brew tap blogabe/xplanet
-        brew install -s blogabe/xplanet/xplanet --without-giflib --with-cspice
+        brew install -s --HEAD blogabe/xplanet/xplanet --without-giflib --with-cspice
         echo "Running Xplanet to bring up Mac security approvals"
         echo "Xplanet won't work without these approvals"
         echo "Accept fast... (10 seconds)"
