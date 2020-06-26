@@ -1,16 +1,17 @@
-XPLANET_BIN=/usr/local/bin/xplanet
+PATH="/Users/$USER/perl5/bin${PATH:+:${PATH}}"; export PATH;
+PERL5LIB="/Users/$USER/perl5/lib/perl5${PERL5LIB:+:${PERL5LIB}}"; export PERL5LIB;
+PERL_LOCAL_LIB_ROOT="/Users/$USER/perl5${PERL_LOCAL_LIB_ROOT:+:${PERL_LOCAL_LIB_ROOT}}"; export PERL_LOCAL_LIB_ROOT;
+PERL_MB_OPT="--install_base \"/Users/$USER/perl5\""; export PERL_MB_OPT;
+PERL_MM_OPT="INSTALL_BASE=/Users/$USER/perl5"; export PERL_MM_OPT;
+
+XPLANET_BIN=
 XPLANET_HOME=/Users/$USER/.xplanet
 
-XPLANET_CONFIG=${XPLANET_HOME}/config
-XPLANET_PROJECTION=mercator
+XPLANET_CONFIG=$XPLANET_HOME/config
+XPLANET_PROJECTION=rectangular
 XPLANET_GEOMETRY=2560x1440
-XPLANET_LONGITUDE=-100
+XPLANET_LONGITUDE=-100.0000
 
-#EARTH_MAP_PRE=world/world
-EARTH_MAP_PRE=world.topo/world.topo
+EARTH_MAP_PRE=world/world
+#EARTH_MAP_PRE=world.topo/world.topo
 #EARTH_MAP_PRE=world.topo.bathy/world.topo.bathy
-
-CLOUD_URL=https://secure.xericdesign.com/xplanet/clouds/2048
-CLOUD_MAP=clouds-2048.jpg
-CLOUD_USER=
-CLOUD_PWD=

@@ -3,33 +3,31 @@
 <plist version="1.0">
 <dict>
 	<key>Label</key>
-	<string>local.xplanet.earth-map</string>
+	<string>local.xplanet.volcano</string>
 
 	<key>WorkingDirectory</key>
-	<string>/Users/<USERNAME>/.xplanet/images</string>
+	<string>/Users/<USERNAME>/.xplanet</string>
 
 	<key>ProgramArguments</key>
 	<array>
-		<string>../config/scripts/xplanet.sh</string>
-		<string>earth</string>
+		<string>./config/scripts/xplanet.sh</string>
+		<string>volcano</string>
 	</array>
 
 	<key>StartCalendarInterval</key>
 	<array>
 	<dict>
 		<key>Minute</key>
-		<integer>1</integer>
+		<integer>22</integer>
 		<key>Hour</key>
-		<integer>0</integer>
-		<key>Day</key>
-		<integer>1</integer>
+		<integer>12</integer>
 	</dict>
 	</array>
 
 	<key>StandardOutPath</key>
-	<string>../logs/xplanet.log</string>
+	<string>./logs/xplanet.log</string>
 	<key>StandardErrorPath</key>
-	<string>../logs/xplanet-error.log</string>
+	<string>./logs/xplanet-volcano.log</string>
 </dict>
 </plist>
 
