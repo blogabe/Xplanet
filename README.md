@@ -13,7 +13,7 @@ cd ~/.xplanet/config/scripts
 exit                                    # After the script completes then open a new terminal for the changes
 ```
 
-To update:
+To update (this will overwrite whatever changes you have made):
 ```
 git -C "$HOME/.xplanet" pull origin master'
 exit                                    # After the script completes then open a new terminal for the changes
