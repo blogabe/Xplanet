@@ -6,7 +6,7 @@
 	<string>local.xplanet.clouds</string>
 
 	<key>WorkingDirectory</key>
-	<string>/Users/[username]/.xplanet</string>
+	<string>/Users/<USERNAME>/.xplanet</string>
 
 	<key>ProgramArguments</key>
 	<array>
@@ -18,7 +18,7 @@
 	<array>
 	<dict>
 		<key>Minute</key>
-		<integer>50</integer>
+		<integer>1</integer>
 	</dict>
 	</array>
 
