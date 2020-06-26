@@ -6,7 +6,7 @@ https://blog.rajab.us/xplanet/
 To install:
 ```
 cd ~
-git clone https://github.com/blogabe/Xplanet.git ~
+git clone https://github.com/blogabe/Xplanet.git ~/.xplanet
 cd ~/.xplanet/config/scripts
 ./xplanet.sh install
 ./xplanet.sh setup
