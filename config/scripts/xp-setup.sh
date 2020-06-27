@@ -7,8 +7,6 @@ ln -s $XPLANET_CONFIG/images/clouds/clouds-4096.jpg clouds-4096.jpg
 ln -s $XPLANET_CONFIG/images/lights/earth_lights_4800.tiff lights.tiff
 ln -s $XPLANET_CONFIG/images/bump/gebco_08_rev_elev_21600x10800.png bump.png
 ln -s $XPLANET_CONFIG/images/specular/specular.png specular.png
-cd $XPLANET_HOME/markers
-cp `(brew --prefix)`/share/xplanet/markers/earth earth
 
 echo "Configuring Xplanet"
 echo -e "################################################################################
@@ -35,6 +33,8 @@ echo -e "#######################################################################
 echo "################################################################################"
 echo 'Step 1) Press any key to continue or Control-C to exit...'; read -k1 -s
 
+cd $XPLANET_HOME/markers
+cp `(brew --prefix)`/share/xplanet/markers/earth earth
 echo "Prepare marker files with Totalmarker"
 cd $XPLANET_HOME
 TMPL_LOC=$XPLANET_CONFIG/scripts/Totalmarker2.6.1.pl
