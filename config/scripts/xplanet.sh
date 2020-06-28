@@ -2,38 +2,36 @@
 
 SWITCH=$1
 CMDRESPONSE=1
+TM="Totalmarker.pl"
 
-source /Users/$USER/.xplanet/config/xp.def
+if [[ $SWITCH != 'install' ]]; then
+    source /Users/$USER/.xplanet/config/xp.def
+fi
 
 case "$SWITCH" in
     install)
+        echo "Installing Xplanet"
         brew tap blogabe/xplanet
         brew install -s --HEAD blogabe/xplanet/xplanet --without-giflib --with-cspice
+        echo "Point to Xplanet binary"
+        sed -i '' "s#XPLANET_BIN=#XPLANET_BIN=$(/usr/bin/which xplanet)#" ~/.xplanet/config/xp.def
+        if [ ! $? -eq 0 ]; then
+            echo "################################################################################"
+            echo "WARNING... Double check XPLANET_BIN is set correctly in file ~/.xplanet/config/xp.def"
+            echo "################################################################################"
+        fi
+        echo "################################################################################"
         echo "Running Xplanet to bring up Mac security approvals"
         echo "Xplanet won't work without these approvals"
-        echo "Accept fast... (10 seconds)"
+        echo "Accept fast... (within 10 seconds)"
+        echo "################################################################################"
         echo 'Press any key to continue or Control-C to exit...'; read -k1 -s
         $(xplanet -num_times=1)
         sleep 8
         $(xplanet -num_times=1)
-        sleep 4
-        echo -e "
-Before running setup, make sure 'config' and its contents
-are in your desired Xplanet home directory
-  e.g., the dir '~/.xplanet/config/*' exists
-
-The file 'config/xp.def' is sourced at the top of this script
-make sure the location points to the file
-
-'xp.def' also defines two variables that need to be checked:
-XPLANET_BIN needs to point to the Xplanet executable
-  run '/usr/bin/which xplanet'
-XPLANET_HOME needs to reference the directory where 'config' is
-  '~/.xplanet' in the above example
-"
+        sleep 2
         ;;
     setup)
-        echo "Setting up the Xplanet environment in ${XPLANET_HOME}"
         source $XPLANET_CONFIG/scripts/xp-setup.sh
         ;;
     start)
@@ -52,31 +50,45 @@ XPLANET_HOME needs to reference the directory where 'config' is
         killall xplanet
         ;;
     earth)
-        # rm ${XPLANET_HOME}/logs/xplanet*
+        # rm $XPLANET_HOME/logs/xplanet*
         MONTH=$(date +%m)
-        LAND_FILE="${EARTH_MAP_PRE}.2004$MONTH.3x5400x2700.png"
-        # unlink ${XPLANET_HOME}/images/earth.png
-        ln -sfn ${XPLANET_CONFIG}/images/$LAND_FILE ${XPLANET_HOME}/images/earth.png
+        LAND_FILE="$EARTH_MAP_PRE.2004$MONTH.3x5400x2700.png"
+        ln -sfn $XPLANET_CONFIG/images/$LAND_FILE $XPLANET_HOME/images/earth.png
         ;;
     clouds)
-        if [[ ! -z "$CLOUD_USER" ]]; then
-            TEMP="-u ${CLOUD_USER}:${CLOUD_PWD} -z ${XPLANET_HOME}/images/${CLOUD_MAP} -R -L -o ${XPLANET_HOME}/images/${CLOUD_MAP} ${CLOUD_URL}/${CLOUD_MAP}"
-            curl $TEMP
-        else
-            echo "$(date): ERROR! Updating clouds, but the username is not defined. Check $XPLANET_CONFIG/xp.def"
-            exit 1;
-        fi
+        echo "$(date): Updating Cloud Image"
+        /usr/bin/perl $TM -Clouds
+        ;;
+    quake)
+        echo "$(date): Updating Earthquake Information"
+        /usr/bin/perl $TM -Quake
+        ;;
+    storm)
+        echo "$(date): Updating Storm Information"
+        /usr/bin/perl $TM -Storm
+        ;;
+    volcano)
+        echo "$(date): Updating Volcano Information"
+        /usr/bin/perl $TM -Volcano
+        ;;
+    label)
+        echo "$(date): Updating Label"
+        /usr/bin/perl $TM -Label
         ;;
     *)
         clear
         echo -e "Options for this script:
 ./xplanet.sh
   'install' - installs Xplanet
-  'setup'   - sets the Xplanet environment 
+  'setup'   - sets the Xplanet environment
   'start'   - starts Xplanet in forked process
   'stop'    - stops all running instances of Xplanet
   'earth'   - updates the monthly Earth map and maintenance
   'clouds'  - updates the cloud map
+  'quake'   - updates the quake marker
+  'storm'   - updates the storm marker
+  'volcano' - updates the volcano marker
+  'label'   - updates the label marker
 "
         exit 1 ;;
 esac
@@ -92,7 +104,6 @@ if [ $CMDRESPONSE -eq 0 ]; then
         earth)      echo "$(date): Earth Map Updated"
                     # echo "$(date): Pruned Logs"
             ;;
-        clouds)     echo "$(date) Cloud Image Updated" ;;
     esac
 else
     case "$SWITCH" in
@@ -103,6 +114,10 @@ else
         earth)      echo "$(date): ERROR! Couldn't update Xplanet earth map, code '$CMDRESPONSE'"
                     # echo "$(date): ERROR! Couldn't prune Xplanet logs, code '$CMDRESPONSE'"
             ;;
-        clouds)     echo "$(date): ERROR! Couldn't download Xplanet cloud image, code '$CMDRESPONSE'" ;;
+        clouds)     echo "$(date): ERROR! Totalmarker cloud update didn't exit cleanly, code '$CMDRESPONSE'" ;;
+        quake)      echo "$(date): ERROR! Totalmarker earthquake update didn't exit cleanly, code '$CMDRESPONSE'" ;;
+        storm)      echo "$(date): ERROR! Totalmarker storm update didn't exit cleanly, code '$CMDRESPONSE'" ;;
+        volcano)    echo "$(date): ERROR! Totalmarker volcano update didn't exit cleanly, code '$CMDRESPONSE'" ;;
+        label)      echo "$(date): ERROR! Totalmarker label update didn't exit cleanly, code '$CMDRESPONSE'" ;;
     esac
 fi
