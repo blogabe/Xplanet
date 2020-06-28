@@ -6,7 +6,7 @@
 	<string>local.xplanet.start</string>
 
 	<key>WorkingDirectory</key>
-	<string>/Users/[username]/.xplanet</string>
+	<string>/Users/<USERNAME>/.xplanet</string>
 
 	<key>ProgramArguments</key>
 	<array>
