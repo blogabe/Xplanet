@@ -17,8 +17,8 @@ echo -e "#######################################################################
   Step 1) Installs a necessary PERL module for Totalmarker to work and updates
           the marker files.
 
-          Additionally, you can configure Totalmarker, e.g., QuakeMinimumSize,
-          by editing $XPLANET_CONFIG/totalmarker.ini
+          Additionally, you can configure Totalmarker by editing
+          $XPLANET_CONFIG/totalmarker.ini
 
   Step 2) Keeping the cloud image up to date requires a paid subscription to
           Xeric Designs: https://www.xericdesign.com/xplanet.php
@@ -55,17 +55,23 @@ if [ ! -L $XPLANET_CONFIG/totalmarker.ini ]; then
     sed -i '' "s/clouds_2048.jpg/clouds-4096.jpg/" $XPLANET_CONFIG/totalmarker.ini
     sed -i '' "s/Username/CloudUsername/" $XPLANET_CONFIG/totalmarker.ini
     sed -i '' "s/Password/CloudPassword/" $XPLANET_CONFIG/totalmarker.ini
-    open -e $XPLANET_CONFIG/totalmarker.ini
-    echo "********************************************************************************"
-    echo "  Now is a good time to review and edit Totalmarker's initialization file at\n$XPLANET_CONFIG/totalmarker.ini"
-    echo "********************************************************************************"
 fi
 echo "Updating markers"
 /usr/bin/perl $TM -Volcano
 /usr/bin/perl $TM -Storm
 /usr/bin/perl $TM -Quake
 PLISTS=('start' 'earth-map' 'quake' 'storm' 'volcano')
-echo "################################################################################"
+open -e $XPLANET_CONFIG/totalmarker.ini
+echo -e "################################################################################
+********************************************************************************
+  Now is a good time to review and edit Totalmarker's initialization file at
+  $XPLANET_CONFIG/totalmarker.ini
+
+  You may want to change QuakeMinimumSize
+
+  Subscribers to Xeric Designs cloud service need to update 'CloudUsername' and
+  'CloudPassword' credentials now before moving on
+********************************************************************************"
 read -k1 "YESNO?Step 2) Are you subscribing to Xeric Designs for the cloud updates? "
 if [[ "$YESNO" =~ ^[Yy]$ ]]; then
     echo "\nUpdating cloud image"
