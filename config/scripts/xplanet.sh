@@ -13,6 +13,10 @@ case "$SWITCH" in
         echo "Installing Xplanet"
         brew tap blogabe/xplanet
         brew install -s --HEAD blogabe/xplanet/xplanet --without-giflib --with-cspice
+        if [ ! $? -eq 0 ]; then
+            echo "ERROR... Problem with Xplanet build. Exiting."
+            exit 1
+        fi
         echo "Point to Xplanet binary"
         sed -i '' "s#XPLANET_BIN=#XPLANET_BIN=$(/usr/bin/which xplanet)#" ~/.xplanet/config/xp.def
         if [ ! $? -eq 0 ]; then
