@@ -91,7 +91,7 @@ if [[ "$YESNO" =~ ^[Yy]$ ]]; then
 
     echo "Starting Xplanet..."
     for plist_script in $PLISTS; do
-        cp $XPLANET_CONFIG/scripts/plist/local.xplanet.$plist_script.plist .
+        ln -s $XPLANET_CONFIG/scripts/plist/local.xplanet.$plist_script.plist ./local.xplanet.$plist_script.plist
         launchctl load -w local.xplanet.$plist_script.plist
         launchctl start local.xplanet.$plist_script
     done
