@@ -1,0 +1,20 @@
+{
+  "source": "Official public JTWC ABIO raw response",
+  "capture_purpose": "Wrapped dated issue interval regression",
+  "records": [
+    {
+      "path": "jtwc-abio-advisory.txt",
+      "url": "https://www.metoc.navy.mil/jtwc/products/abioweb.txt",
+      "retrieved_at": "2026-10-20T19:39:40.667865+00:00",
+      "status": 200,
+      "bytes": 1055,
+      "sha256": "09ea4f03e19c7b4f4f822fafa16884d183bc5fed546d6cd4b2748c2f73ee10e1",
+      "headers": {
+        "Date": "Tue, 20 Oct 2026 19:39:41 GMT",
+        "Last-Modified": "Tue, 20 Oct 2026 17:28:12 GMT",
+        "ETag": "\"badef41b3a60150369b46ff399dd9525\"",
+        "Content-Type": "text/plain"
+      }
+    }
+  ]
+}

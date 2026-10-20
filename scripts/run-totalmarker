@@ -1,0 +1,91 @@
+#!/bin/sh
+set -eu
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+project_root=$(CDPATH= cd -- "$script_dir/.." && pwd -P)
+export PYTHONPATH="$script_dir${PYTHONPATH:+:$PYTHONPATH}"
+export PYTHONDONTWRITEBYTECODE=1
+
+# Keep interpreter selection with the TotalMarker entry point. launchd reads
+# the resolved absolute path from --python-path during interactive setup.
+supported_python() {
+    [ -x "$1" ] && "$1" -B -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' \
+        >/dev/null 2>&1
+}
+
+select_python() {
+    if [ "${TOTALMARKER_PYTHON+x}" = x ]; then
+        case "$TOTALMARKER_PYTHON" in
+            /*) ;;
+            *) printf '%s\n' 'TOTALMARKER_PYTHON must be an absolute Python 3.11+ path' >&2; return 2 ;;
+        esac
+        if supported_python "$TOTALMARKER_PYTHON"; then
+            printf '%s\n' "$TOTALMARKER_PYTHON"
+            return 0
+        fi
+        printf '%s\n' 'TOTALMARKER_PYTHON is not an executable Python 3.11+' >&2
+        return 2
+    fi
+
+    # A system python3 may precede Homebrew in PATH. Check every absolute
+    # PATH directory rather than stopping at the first python3 found.
+    path_tail=${PATH:-}
+    while [ -n "$path_tail" ]; do
+        path_dir=${path_tail%%:*}
+        case "$path_dir" in
+            /*)
+                candidate="$path_dir/python3"
+                if supported_python "$candidate"; then
+                    printf '%s\n' "$candidate"
+                    return 0
+                fi
+                ;;
+        esac
+        case "$path_tail" in
+            *:*) path_tail=${path_tail#*:} ;;
+            *) break ;;
+        esac
+    done
+
+    brew_bin=$(command -v brew 2>/dev/null || true)
+    brew_python=''
+    case "$brew_bin" in
+        /*)
+            brew_prefix=$("$brew_bin" --prefix 2>/dev/null || true)
+            case "$brew_prefix" in
+                /*) brew_python="$brew_prefix/bin/python3" ;;
+            esac
+            ;;
+    esac
+    homebrew_python=''
+    if [ -n "${HOME:-}" ]; then
+        homebrew_python="$HOME/.homebrew/bin/python3"
+    fi
+    for candidate in "$brew_python" /opt/homebrew/bin/python3 \
+                     /usr/local/bin/python3 "$homebrew_python"; do
+        case "$candidate" in
+            /*) if supported_python "$candidate"; then printf '%s\n' "$candidate"; return 0; fi ;;
+        esac
+    done
+    printf '%s\n' 'Python 3.11+ is required; set TOTALMARKER_PYTHON to its absolute path' >&2
+    return 2
+}
+
+python_bin=$(select_python)
+case "${1:-}" in
+    --python-path)
+        [ "$#" -eq 1 ] || exit 2
+        printf '%s\n' "$python_bin"
+        exit 0
+        ;;
+    --test)
+        [ "$#" -eq 1 ] || exit 2
+        mkdir -p "$project_root/dev/tests/.tmp/cache"
+        cd "$project_root"
+        export TMPDIR="$project_root/dev/tests/.tmp"
+        export XDG_CACHE_HOME="$project_root/dev/tests/.tmp/cache"
+        export PYTHONNOUSERSITE=1
+        export TZ=UTC
+        exec "$python_bin" -B -m unittest discover -s dev/tests -t dev -v
+        ;;
+esac
+exec "$python_bin" -B -m totalmarker --root "$project_root" --config config/totalmarker.toml "$@"

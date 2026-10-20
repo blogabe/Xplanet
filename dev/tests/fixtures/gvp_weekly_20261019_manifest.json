@@ -1,0 +1,174 @@
+{
+  "source_file": "gvp-weekly-2026-10-19.html",
+  "raw_sha256": "e84aee19e4da52519787cc42cac9715bed90df4f94a4e3e10b0d5544481b817d",
+  "raw_size_bytes": 321855,
+  "crlf_pairs": 6206,
+  "lf_normalized_sha256": "a61dd6118e3d1b864914dd65ce0191737cd45cfde85fa088549b223b42cde04a",
+  "lf_normalized_size_bytes": 315649,
+  "period_start": "2026-10-08",
+  "period_end": "2026-10-14",
+  "reports": [
+    {
+      "id": 262000,
+      "name": "Krakatau",
+      "country": "Indonesia",
+      "category": "New Eruptive Activity"
+    },
+    {
+      "id": 251020,
+      "name": "Manam",
+      "country": "Papua New Guinea",
+      "category": "New Eruptive Activity"
+    },
+    {
+      "id": 261140,
+      "name": "Marapi",
+      "country": "Indonesia",
+      "category": "New Eruptive Activity"
+    },
+    {
+      "id": 357070,
+      "name": "Nevados de Chillán",
+      "country": "Chile",
+      "category": "New Eruptive Activity"
+    },
+    {
+      "id": 282080,
+      "name": "Aira",
+      "country": "Japan",
+      "category": "Continuing Eruptive Activity"
+    },
+    {
+      "id": 300250,
+      "name": "Bezymianny",
+      "country": "Russia",
+      "category": "Continuing Eruptive Activity"
+    },
+    {
+      "id": 268010,
+      "name": "Dukono",
+      "country": "Indonesia",
+      "category": "Continuing Eruptive Activity"
+    },
+    {
+      "id": 211060,
+      "name": "Etna",
+      "country": "Italy",
+      "category": "Continuing Eruptive Activity"
+    },
+    {
+      "id": 342090,
+      "name": "Fuego",
+      "country": "Guatemala",
+      "category": "Continuing Eruptive Activity"
+    },
+    {
+      "id": 311120,
+      "name": "Great Sitkin",
+      "country": "United States",
+      "category": "Continuing Eruptive Activity"
+    },
+    {
+      "id": 268030,
+      "name": "Ibu",
+      "country": "Indonesia",
+      "category": "Continuing Eruptive Activity"
+    },
+    {
+      "id": 272020,
+      "name": "Kanlaon",
+      "country": "Philippines",
+      "category": "Continuing Eruptive Activity"
+    },
+    {
+      "id": 267020,
+      "name": "Karangetang",
+      "country": "Indonesia",
+      "category": "Continuing Eruptive Activity"
+    },
+    {
+      "id": 332010,
+      "name": "Kīlauea",
+      "country": "United States",
+      "category": "Continuing Eruptive Activity"
+    },
+    {
+      "id": 264230,
+      "name": "Lewotolok",
+      "country": "Indonesia",
+      "category": "Continuing Eruptive Activity"
+    },
+    {
+      "id": 344100,
+      "name": "Masaya",
+      "country": "Nicaragua",
+      "category": "Continuing Eruptive Activity"
+    },
+    {
+      "id": 273030,
+      "name": "Mayon",
+      "country": "Philippines",
+      "category": "Continuing Eruptive Activity"
+    },
+    {
+      "id": 263250,
+      "name": "Merapi",
+      "country": "Indonesia",
+      "category": "Continuing Eruptive Activity"
+    },
+    {
+      "id": 341090,
+      "name": "Popocatépetl",
+      "country": "Mexico",
+      "category": "Continuing Eruptive Activity"
+    },
+    {
+      "id": 351060,
+      "name": "Puracé",
+      "country": "Colombia",
+      "category": "Continuing Eruptive Activity"
+    },
+    {
+      "id": 354006,
+      "name": "Sabancaya",
+      "country": "Peru",
+      "category": "Continuing Eruptive Activity"
+    },
+    {
+      "id": 342030,
+      "name": "Santa María",
+      "country": "Guatemala",
+      "category": "Continuing Eruptive Activity"
+    },
+    {
+      "id": 263300,
+      "name": "Semeru",
+      "country": "Indonesia",
+      "category": "Continuing Eruptive Activity"
+    },
+    {
+      "id": 300270,
+      "name": "Sheveluch",
+      "country": "Russia",
+      "category": "Continuing Eruptive Activity"
+    },
+    {
+      "id": 211040,
+      "name": "Stromboli",
+      "country": "Italy",
+      "category": "Continuing Eruptive Activity"
+    },
+    {
+      "id": 282030,
+      "name": "Suwanosejima",
+      "country": "Japan",
+      "category": "Continuing Eruptive Activity"
+    },
+    {
+      "id": 273070,
+      "name": "Taal",
+      "country": "Philippines",
+      "category": "Continuing Eruptive Activity"
+    }
+  ]
+}

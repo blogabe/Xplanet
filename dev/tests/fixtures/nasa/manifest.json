@@ -1,0 +1,22 @@
+{
+  "provenance": "Full public NASA/GSFC HTML responses captured by bounded HTTPS fetch after the isolated live eclipse attempt; the original failed response was not saved.",
+  "selection_reference_utc": "2026-10-19T19:56:29.432633+00:00",
+  "captures": [
+    {
+      "file": "index-20261019.html",
+      "source_url": "https://eclipse.gsfc.nasa.gov/SEpath/SEpath.html",
+      "http_status": 200,
+      "captured_at_utc": "2026-10-19T19:57:57.104698+00:00",
+      "bytes": 55495,
+      "sha256": "48b5ae2c79774e641181c0f8adfea73ffaa251061ccc4908960507d0ee1cca18"
+    },
+    {
+      "file": "2027-02-06-annular.html",
+      "source_url": "https://eclipse.gsfc.nasa.gov/SEpath/SEpath2001/SE2027Feb06Apath.html",
+      "http_status": 200,
+      "captured_at_utc": "2026-10-19T19:58:09.587057+00:00",
+      "bytes": 22765,
+      "sha256": "4a6643899668c26b523e39442196223c15130379e82733ce2f24aadb1d8e39aa"
+    }
+  ]
+}

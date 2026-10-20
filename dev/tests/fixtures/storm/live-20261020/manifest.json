@@ -1,0 +1,50 @@
+{
+  "source": "Official public JTWC RSS and linked products",
+  "records": [
+    {
+      "path": "jtwc-rss.xml",
+      "url": "https://www.metoc.navy.mil/jtwc/rss/jtwc.rss",
+      "kind": "rss",
+      "identity": null,
+      "retrieved_at": "2026-10-20T06:00:43.739233+00:00",
+      "bytes": 6336,
+      "sha256": "7a652432623507a028f09d1c6082811d9ebafec7bdd8cb7124b9f16c3dc19eb3"
+    },
+    {
+      "path": "wp292026-warning.txt",
+      "url": "https://www.metoc.navy.mil/jtwc/products/wp2926web.txt",
+      "kind": "warning",
+      "identity": "WP292026",
+      "retrieved_at": "2026-10-20T06:00:44.150704+00:00",
+      "bytes": 8140,
+      "sha256": "fcc765cbaf25c9e8769d144777514b1d6ecec967ef1bafc7ba279b9a076cb507"
+    },
+    {
+      "path": "sh932027-warning.txt",
+      "url": "https://www.metoc.navy.mil/jtwc/products/sh9327web.txt",
+      "kind": "formation_alert",
+      "identity": "SH932027",
+      "retrieved_at": "2026-10-20T06:00:44.563914+00:00",
+      "bytes": 1941,
+      "sha256": "cf12dca700a0b06c78169a36f736fb7f07771fc2e52d7ad9f3ef565f232f0a2c"
+    },
+    {
+      "path": "jtwc-abio-advisory.txt",
+      "url": "https://www.metoc.navy.mil/jtwc/products/abioweb.txt",
+      "kind": "advisory",
+      "identity": "abio",
+      "retrieved_at": "2026-10-20T06:01:10.854768+00:00",
+      "bytes": 2122,
+      "sha256": "751358897f609e943b7fe158244ca229b5d71faf310892a008f42c04f8e4fc42"
+    },
+    {
+      "path": "jtwc-abpw-advisory.txt",
+      "url": "https://www.metoc.navy.mil/jtwc/products/abpwweb.txt",
+      "kind": "advisory",
+      "identity": "abpw",
+      "retrieved_at": "2026-10-20T06:01:11.261109+00:00",
+      "bytes": 1067,
+      "sha256": "85aa1d6381db373231b8e49992e88b98a59dcd824c82665d5445ae6f319941ed"
+    }
+  ]
+}

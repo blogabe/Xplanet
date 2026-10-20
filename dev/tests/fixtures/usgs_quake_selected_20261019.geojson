@@ -1,0 +1,104 @@
+{
+  "type": "FeatureCollection",
+  "metadata": {
+    "generated": 1792381805000,
+    "count": 5
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "id": "us6000u2mq",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          157.2701,
+          51.9848,
+          135
+        ]
+      },
+      "properties": {
+        "mag": 6.9,
+        "time": 1792121731925,
+        "updated": 1792208509338,
+        "place": "76 km NE of Ozernovskiy, Russia",
+        "type": "earthquake"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "us6000u24c",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          152.1364,
+          -5.4832,
+          20.842
+        ]
+      },
+      "properties": {
+        "mag": 6,
+        "time": 1791917103231,
+        "updated": 1792011043787,
+        "place": "126 km S of Kokopo, Papua New Guinea",
+        "type": "earthquake"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "us6000u214",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -19.4308,
+          -0.4085,
+          10
+        ]
+      },
+      "properties": {
+        "mag": 6.8,
+        "time": 1791894187248,
+        "updated": 1791905973040,
+        "place": "central Mid-Atlantic Ridge",
+        "type": "earthquake"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "us6000u1z5",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -19.8598,
+          0.1685,
+          10
+        ]
+      },
+      "properties": {
+        "mag": 6.7,
+        "time": 1791870286919,
+        "updated": 1791996075359,
+        "place": "central Mid-Atlantic Ridge",
+        "type": "earthquake"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "us6000u1wn",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -81.4896,
+          7.6896,
+          11
+        ]
+      },
+      "properties": {
+        "mag": 6.1,
+        "time": 1791847236003,
+        "updated": 1792168137969,
+        "place": "17 km W of Río Grande, Panama",
+        "type": "earthquake"
+      }
+    }
+  ]
+}

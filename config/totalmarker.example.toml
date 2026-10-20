@@ -1,0 +1,195 @@
+# Example only. Keep personal config/totalmarker.toml separate; never overwrite it.
+# The selected .invalid custom source cannot be fetched; choose sources deliberately.
+# All check and warning intervals are seconds; max_bytes limits response size.
+
+[paths]
+# Relative paths resolve against --root, not this file or the current directory.
+image = "images/{local_image_name}"
+labels = "markers/updatelabel"
+state = ".state/totalmarker/state.json"
+journal = ".state/totalmarker/pending.json"
+lock = ".state/totalmarker/job.lock"
+log = "logs/totalmarker/events.jsonl"
+
+[labels]
+# Product operations refresh existing rows and retain their coordinates/order.
+# Clouds use the intentional -12 second coordinate; other product rows use -13.
+enabled = true
+warning_cloud_seconds = 21600
+warning_quake_seconds = 10800
+warning_volcano_seconds = 259200
+warning_storm_seconds = 10800
+warning_norad_seconds = 86400
+
+[labels.colors]
+ok = "Green"
+warning = "Yellow"
+error = "Red"
+
+[cloud]
+# Custom is a placeholder here. Xeric requires its fixed HTTPS origin and
+# basic credentials in [cloud.xeric] or corresponding environment references.
+provider = "custom"
+resolution = 4096
+local_image_name_template = "clouds-{resolution}.jpg"
+check_interval_seconds = 3600
+timeout_seconds = 30
+max_bytes = 33554432
+
+[cloud.xeric]
+# Inactive while custom is selected. Use credentials or environment references
+# only after deliberately selecting Xeric in [cloud].
+url_template = "https://secure.xericdesign.com/xplanet/clouds/{resolution}/clouds-{resolution}.jpg"
+auth_mode = "basic"
+username = ""
+password = ""
+username_env = ""
+password_env = ""
+
+[cloud.custom]
+url_template = "https://cloud.example.invalid/clouds-{resolution}.jpg"
+auth_mode = "none"
+# Leave credentials empty with auth_mode = "none".
+username = ""
+password = ""
+username_env = ""
+password_env = ""
+
+[quake]
+# Day/Week/Month and All/1.0/2.5/4.5/Significant select USGS GeoJSON.
+reporting_duration = "Week"
+reporting_size = "All"
+minimum_magnitude = 6.0
+output = "markers/quake"
+journal = ".state/totalmarker/quake-pending.json"
+check_interval_seconds = 1200
+timeout_seconds = 30
+max_bytes = 33554432
+circle_color = "Multi"
+pixel_max = ""
+pixel_min = ""
+pixel_factor = 1.0
+image = ""
+image_transparent = ""
+detail = "<mag>"
+detail_color = "Multi"
+detail_color_min = "Green"
+detail_color_int = "Yellow"
+detail_color_max = "Red"
+detail_align = "Above"
+
+[volcano]
+# CAP is selected; this example URL is deliberately invalid. "weekly_html"
+# uses the fixed official GVP weekly page and ignores the retained CAP URL.
+# GVP currently may return HTTP 403 to programmatic requests; no equivalent
+# global weekly replacement has been verified. Setup warns on that specific
+# access failure while preserving the last good marker and failed source status.
+# Check source access before a deliberate live request.
+provider = "cap"
+url = "https://volcano.example.invalid/WeeklyVolcanoCAP.xml"
+output = "markers/volcano"
+journal = ".state/totalmarker/volcano-pending.json"
+check_interval_seconds = 86400
+timeout_seconds = 30
+max_bytes = 8388608
+circle_size_inner = 4
+circle_size_middle = 8
+circle_size_outer = 12
+circle_color_inner = "Yellow"
+circle_color_middle = "Red"
+circle_color_outer = "Brown"
+name_enabled = true
+name_color = "Brown"
+name_align = "Below"
+image = ""
+image_transparent = ""
+detail = ""
+detail_align = "Below"
+detail_color = "Brown"
+
+[storm]
+# NHC/JTWC are fixed public sources. Missing or stale source coverage retains
+# the last good marker/arc pair.
+output = "markers/storm"
+arc_output = "arcs/storm"
+journal = ".state/totalmarker/storm-pending.json"
+check_interval_seconds = 1800
+timeout_seconds = 30
+max_bytes = 16777216
+track_real_color = "Blue"
+track_forecast_color = "SkyBlue"
+name_enabled = true
+name_color = "SkyBlue"
+name_align = "Above"
+detail_align = "Below"
+detail = "<type>"
+detail_color = "SkyBlue"
+image = ""
+image_transparent = ""
+track_enabled = true
+
+[norad]
+# Optional CelesTrak GP TLE product. Select up to 16 one-to-five-digit IDs.
+# Explicit IDs lead; enabled group matches follow in configuration/source order.
+# Duplicate IDs use the first selection, and an ID profile overrides group style.
+# A complete invalid group response or an unsupported six-digit match fails the
+# update without replacing the last good selector/TLE pair.
+# Keep disabled until an operator deliberately configures Xplanet satellite_file.
+enabled = false
+catalog_ids = "25544"
+output = "satellites/totalmarker"
+journal = ".state/totalmarker/norad-pending.json"
+check_interval_seconds = 7200
+timeout_seconds = 30
+max_bytes = 65536
+group_max_bytes = 1048576
+max_age_seconds = 1209600
+color = "Yellow"
+
+[[norad.groups]]
+# Optional current CelesTrak group discovery. Enable deliberately; a source
+# may have no current match. Supported sources: stations, science, visual.
+source = "stations"
+name_contains = "SOYUZ"
+enabled = false
+color = "Yellow"
+
+[[norad.profiles]]
+# A profile styles a selected ID; it does not fetch that ID by itself.
+catalog_id = 25544
+enabled = true
+caption = "ISS"
+color = "Yellow"
+trail = [-30, 30, 5]
+# icon = "iss.png"       # Require a real local images/iss.png first.
+# transparent = [0, 0, 0]
+# altcirc = 0
+# align = "Above"
+
+[eclipse]
+# Optional NASA GSFC central path product. Blank URL discovers the upcoming
+# or current central event; a specific total, annular, or hybrid URL overrides.
+# Partial-only events have no central path. Xplanet marker_file/arc_file
+# references require a separate deliberate operator change.
+enabled = false
+path_url = ""
+marker_output = "markers/eclipse"
+arc_output = "arcs/eclipse"
+journal = ".state/totalmarker/eclipse-pending.json"
+check_interval_seconds = 86400
+timeout_seconds = 30
+max_bytes = 2097152
+notify_hours = 48
+notice_enabled = true
+edge_color = "Grey"
+center_color = "Black"
+notice_color = "White"
+
+# Santa is a stub: intended as an on/off choice when Xplanet is invoked.
+# Invocation-time integration and a verified live provider are pending.
+# Keep the whole section commented until that workflow is defined.
+# [santa]
+# enabled = false
+# output = "markers/santa"
+# journal = ".state/totalmarker/santa-pending.json"
+# freshness_seconds = 0

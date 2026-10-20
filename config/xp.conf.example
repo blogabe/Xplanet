@@ -1,0 +1,19 @@
+# Copy to ignored config/xp.conf. Xplanet resolves earth.jpg and night.jpg
+# from its installed data directory when they are not in this checkout.
+# Cloud and personal texture layers are commented until their files exist.
+[earth]
+"Earth"
+map=earth.jpg
+night_map=night.jpg
+marker_file=earth
+marker_file=quake
+marker_file=volcano
+marker_file=storm arc_file=storm
+marker_file=updatelabel
+# The verified stock day/night images are 2048x1024. Set the personal
+# TotalMarker cloud resolution to 2048 before enabling this matching layer.
+#cloud_map=clouds-2048.jpg
+
+# For personal seasonal maps, set EARTH_MAP_PRE=folder/stem in xp.def,
+# change map=earth.png, and optionally set night_map=lights.tiff,
+# bump_map=bump.png and specular_map=specular.png after supplying those assets.

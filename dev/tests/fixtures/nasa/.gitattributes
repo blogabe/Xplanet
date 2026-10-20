@@ -1,0 +1,2 @@
+# Preserve complete captured NASA responses byte for byte; tests verify hashes.
+*.html binary

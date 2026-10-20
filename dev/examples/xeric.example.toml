@@ -1,0 +1,42 @@
+# Change resolution once; URL and output filename templates follow it.
+[cloud]
+provider = "xeric"
+resolution = 4096
+local_image_name_template = "clouds-{resolution}.jpg"
+check_interval_seconds = 3600
+timeout_seconds = 30
+max_bytes = 33554432
+
+[cloud.xeric]
+url_template = "https://secure.xericdesign.com/xplanet/clouds/{resolution}/clouds-{resolution}.jpg"
+auth_mode = "basic"
+username = ""
+password = ""
+# Optional environment references instead of each plaintext field.
+username_env = ""
+password_env = ""
+
+[cloud.custom]
+url_template = "https://cloud.example.invalid/clouds-{resolution}.jpg"
+auth_mode = "none"
+username = ""
+password = ""
+username_env = ""
+password_env = ""
+
+[paths]
+image = "images/{local_image_name}"
+labels = "markers/updatelabel"
+state = ".state/totalmarker/state.json"
+journal = ".state/totalmarker/pending.json"
+lock = ".state/totalmarker/job.lock"
+log = "logs/totalmarker/events.jsonl"
+
+[labels]
+enabled = true
+warning_cloud_seconds = 21600
+
+[labels.colors]
+ok = "Green"
+warning = "Yellow"
+error = "Red"

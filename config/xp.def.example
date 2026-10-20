@@ -1,0 +1,14 @@
+# Copy to ignored config/xp.def. The launcher supplies project_root when sourcing.
+# Setup fills XPLANET_BIN in a new personal copy after confirmation.
+# If this file is copied manually, set an absolute installed executable path.
+XPLANET_BIN=
+XPLANET_HOME="$project_root"
+XPLANET_CONFIG="$project_root/config"
+XPLANET_PROJECTION=rectangular
+XPLANET_GEOMETRY=1920x1080
+XPLANET_LONGITUDE=0
+
+# stock uses earth.jpg and night.jpg from the installed Xplanet package.
+# For private high-resolution monthly maps, use folder/stem instead and
+# supply assets/maps/folder/stem.2004MM.3x5400x2700.png for each month.
+EARTH_MAP_PRE=stock

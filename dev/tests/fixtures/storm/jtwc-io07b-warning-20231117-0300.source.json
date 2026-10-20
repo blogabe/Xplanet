@@ -1,0 +1,14 @@
+{
+  "source_url": "https://www.gdacs.org/gts.aspx?eventid=1001034&eventtype=TC",
+  "retrieved_at_utc": "2026-10-19T16:15:51.057000Z",
+  "bulletin": "WTIO31 PGTW 170300",
+  "storm": "07B (SEVEN)",
+  "warning_number": "002",
+  "archive_status": "Historical 17 November 2023 bulletin; not live-feed validation",
+  "html_selector": "div#gts_WTIO31PGTW170300 pre_gts",
+  "extraction": "Remove br tags, preserve internal carriage-return line breaks as LF, HTML-unescape, trim trailing blank line; no prose rewrite",
+  "page_bytes": 143474,
+  "page_sha256": "c62de8e9dbf37a450e202f27843109d828b9c57811dbf174dc75739024c37de7",
+  "fixture_bytes": 1928,
+  "fixture_sha256": "8570cf370ffa75cbbdd43627332b870678b494b8cae342909937a37169ce03e5"
+}

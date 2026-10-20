@@ -1,0 +1,110 @@
+{
+  "source": "Official public JTWC and NHC products, raw captured response bytes",
+  "capture_purpose": "Diagnose and test an ABIO invest-to-warning transition",
+  "records": [
+    {
+      "path": "jtwc-abio-advisory.txt",
+      "url": "https://www.metoc.navy.mil/jtwc/products/abioweb.txt",
+      "retrieved_at": "2026-10-20T16:01:37.830711+00:00",
+      "status": 200,
+      "bytes": 1347,
+      "sha256": "5822e9b8d1f90a953346a83bfacbdfd5327325fea3547e743d49b7203487e6eb",
+      "headers": {
+        "Date": "Tue, 20 Oct 2026 16:01:38 GMT",
+        "Last-Modified": "Tue, 20 Oct 2026 08:12:14 GMT",
+        "Content-Type": "text/plain"
+      }
+    },
+    {
+      "path": "jtwc-abpw-advisory.txt",
+      "url": "https://www.metoc.navy.mil/jtwc/products/abpwweb.txt",
+      "retrieved_at": "2026-10-20T16:01:38.531175+00:00",
+      "status": 200,
+      "bytes": 1067,
+      "sha256": "85aa1d6381db373231b8e49992e88b98a59dcd824c82665d5445ae6f319941ed",
+      "headers": {
+        "Date": "Tue, 20 Oct 2026 16:01:39 GMT",
+        "Last-Modified": "Tue, 20 Oct 2026 05:34:13 GMT",
+        "Content-Type": "text/plain"
+      }
+    },
+    {
+      "path": "jtwc-rss.xml",
+      "url": "https://www.metoc.navy.mil/jtwc/rss/jtwc.rss",
+      "retrieved_at": "2026-10-20T16:01:39.237534+00:00",
+      "status": 200,
+      "bytes": 6465,
+      "sha256": "7dcd83dcf3c6304dff2e27521cd0a1a4bca2439e54395a40feac097db24a8a46",
+      "headers": {
+        "Date": "Tue, 20 Oct 2026 16:01:40 GMT",
+        "Last-Modified": "Tue, 20 Oct 2026 16:00:22 GMT",
+        "Content-Type": "application/rss+xml"
+      }
+    },
+    {
+      "path": "wp2926web.txt",
+      "url": "https://www.metoc.navy.mil/jtwc/products/wp2926web.txt",
+      "retrieved_at": "2026-10-20T16:01:39.955604+00:00",
+      "status": 200,
+      "bytes": 8384,
+      "sha256": "b5be5ba22eea7b65f9e56eb9d685daefd448758ac42ce2d745dd22dd0b8bbcd8",
+      "headers": {
+        "Date": "Tue, 20 Oct 2026 16:01:40 GMT",
+        "Last-Modified": "Tue, 20 Oct 2026 14:06:12 GMT",
+        "Content-Type": "text/plain"
+      }
+    },
+    {
+      "path": "wp2926.kmz",
+      "url": "https://www.metoc.navy.mil/jtwc/products/wp2926.kmz",
+      "retrieved_at": "2026-10-20T16:01:41.240272+00:00",
+      "status": 200,
+      "bytes": 462106,
+      "sha256": "e47db661e98e9d4a34b856de87ac3d49911d5329ca345fbb7c89b5aae7a8fe74",
+      "headers": {
+        "Date": "Tue, 20 Oct 2026 16:01:41 GMT",
+        "Last-Modified": "Tue, 20 Oct 2026 14:05:14 GMT",
+        "Content-Type": "application/vnd.google-earth.kmz"
+      }
+    },
+    {
+      "path": "sh0227web.txt",
+      "url": "https://www.metoc.navy.mil/jtwc/products/sh0227web.txt",
+      "retrieved_at": "2026-10-20T16:01:41.990449+00:00",
+      "status": 200,
+      "bytes": 4510,
+      "sha256": "ed649502d42b1fcc34942b1875f427cfebb0359f06d890eaf0bdff6b9f147e24",
+      "headers": {
+        "Date": "Tue, 20 Oct 2026 16:01:42 GMT",
+        "Last-Modified": "Tue, 20 Oct 2026 07:58:12 GMT",
+        "Content-Type": "text/plain"
+      }
+    },
+    {
+      "path": "sh0227.kmz",
+      "url": "https://www.metoc.navy.mil/jtwc/products/sh0227.kmz",
+      "retrieved_at": "2026-10-20T16:01:43.247899+00:00",
+      "status": 200,
+      "bytes": 438989,
+      "sha256": "0d60572f384a1bc05f7aea9c10bcb0d6adb4e0476c68e4beb9ea90fe6b18118a",
+      "headers": {
+        "Date": "Tue, 20 Oct 2026 16:01:43 GMT",
+        "Last-Modified": "Tue, 20 Oct 2026 07:57:14 GMT",
+        "Content-Type": "application/vnd.google-earth.kmz"
+      }
+    },
+    {
+      "path": "nhc-current.json",
+      "url": "https://www.nhc.noaa.gov/CurrentStorms.json",
+      "retrieved_at": "2026-10-20T16:04:41.966249+00:00",
+      "status": 200,
+      "bytes": 24,
+      "sha256": "faea5cf4718512d456018c5081c2b274d7709e4f7f69e4d0bb2556d0d33360d7",
+      "headers": {
+        "Date": "Tue, 20 Oct 2026 16:03:30 GMT",
+        "Last-Modified": "Tue, 20 Oct 2026 10:42:00 GMT",
+        "Content-Type": "application/json"
+      }
+    }
+  ]
+}
