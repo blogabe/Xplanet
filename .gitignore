@@ -1,6 +1,8 @@
 *
 !/.gitignore
 !/README.md
+!/docs/
+!/docs/technical-notes.md
 !/scripts/
 !/scripts/totalmarker/
 !/scripts/totalmarker/**

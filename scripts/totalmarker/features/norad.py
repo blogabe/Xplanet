@@ -260,8 +260,8 @@ def run(fs, settings, *, fetcher=None, now=None):
     options = settings.norad
     if not options.enabled:
         return Result("disabled", "NORAD is disabled in configuration", None, None, None, None)
-    now = time.time() if now is None else now
     with fs.lock(settings.lock):
+        now = time.time() if now is None else now
         recover_pending(fs, settings)
         publisher = _publisher(fs, settings)
         state = load_state(fs, settings.state)

@@ -16,16 +16,17 @@ MONTH = {name: number for number, name in enumerate(
     ("JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"), 1)}
 ISSUE = re.compile(r"(?m)\b(?:REISSUED|ISSUED)/([0-9]{2})([0-9]{2})([0-9]{2})Z-"
                    r"([0-9]{2})([0-9]{2})([0-9]{2})Z([A-Z]{3})(20[0-9]{2})//[ \t]*\r?$")
+INDIAN_REGION = r"INDIAN(?:[ \t]+|[ \t]*\r?\n[ \t]*)OCEAN"
 SUBJECT_ISSUE = re.compile(
     r"(?m)^SUBJ/SIGNIFICANT TROPICAL WEATHER ADVISORY FOR THE "
-    r"(INDIAN OCEAN|WESTERN AND SOUTH\s+PACIFIC OCEANS)/"
+    rf"({INDIAN_REGION}|WESTERN AND SOUTH\s+PACIFIC OCEANS)/"
     r"([0-9]{2})([0-9]{2})([0-9]{2})Z-[ \t]*(?:\r?\n[ \t]*)?"
     r"([0-9]{2})([0-9]{2})([0-9]{2})Z([A-Z]{3})(20[0-9]{2})//[ \t]*\r?$")
 ISSUE_CUE = re.compile(r"\b(?:REISSUED|ISSUED)(?=/|[ \t]+[0-9]{6}Z-)")
 SUBJECT_CUE = re.compile(r"(?m)^SUBJ/")
 REISSUE_SUBJECT = re.compile(
     r"(?m)^SUBJ/SIGNIFICANT TROPICAL WEATHER ADVISORY FOR THE "
-    r"(INDIAN OCEAN|WESTERN AND SOUTH\s+PACIFIC OCEANS)\s+"
+    rf"({INDIAN_REGION}|WESTERN AND SOUTH\s+PACIFIC OCEANS)\s+"
     r"(?:REISSUED|ISSUED)/")
 AREA = re.compile(r"(?m)^([12])\.\s+(NORTH INDIAN OCEAN AREA|SOUTH INDIAN OCEAN AREA|"
                   r"WESTERN NORTH PACIFIC AREA|SOUTH PACIFIC AREA)\b[^\n]*:")
@@ -78,23 +79,24 @@ class Advisory:
 
 
 def _issue_interval(text, kind):
+    missing_issue = f"Storm JTWC {kind.upper()} advisory lacks a dated issue interval"
     explicit = list(ISSUE.finditer(text))
     subject = list(SUBJECT_ISSUE.finditer(text))
     issue_cues = list(ISSUE_CUE.finditer(text))
     subject_cues = list(SUBJECT_CUE.finditer(text))
     if len(subject_cues) > 1:
-        raise FeedError("Storm JTWC advisory lacks a dated issue interval")
+        raise FeedError(missing_issue)
     if subject:
         if len(subject) != 1 or issue_cues or len(subject_cues) != 1:
-            raise FeedError("Storm JTWC advisory lacks a dated issue interval")
+            raise FeedError(missing_issue)
         region, *parts = subject[0].groups()
     else:
         if len(issue_cues) != 1 or len(explicit) != 1:
-            raise FeedError("Storm JTWC advisory lacks a dated issue interval")
+            raise FeedError(missing_issue)
         if subject_cues:
             heading = REISSUE_SUBJECT.search(text)
             if heading is None or heading.start() != subject_cues[0].start():
-                raise FeedError("Storm JTWC advisory lacks a dated issue interval")
+                raise FeedError(missing_issue)
             region = heading[1]
         else:
             region = None  # Header-only issue intervals have no subject region.

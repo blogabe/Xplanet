@@ -47,8 +47,8 @@ def record_creation_time(record, image, digest, now):
 
 
 def run(fs, settings, *, label_only=False, fetcher=None, now=None, environment=None):
-    now = time.time() if now is None else now
     with fs.lock(settings.lock):
+        now = time.time() if now is None else now
         publisher = Publisher(fs, settings)
         recover_pending(fs, settings)
         state = load_state(fs, settings.state)

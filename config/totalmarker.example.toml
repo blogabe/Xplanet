@@ -132,8 +132,9 @@ track_enabled = true
 # Optional CelesTrak GP TLE product. Select up to 16 one-to-five-digit IDs.
 # Explicit IDs lead; enabled group matches follow in configuration/source order.
 # Duplicate IDs use the first selection, and an ID profile overrides group style.
-# A complete invalid group response or an unsupported six-digit match fails the
-# update without replacing the last good selector/TLE pair.
+# Invalid group responses fail. Unsupported six-digit group IDs are skipped
+# with a warning when supported selections remain; all-unsupported selection
+# fails without replacing the last good selector/TLE pair.
 # Keep disabled until an operator deliberately configures Xplanet satellite_file.
 enabled = false
 catalog_ids = "25544"

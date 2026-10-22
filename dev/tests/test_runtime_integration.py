@@ -169,7 +169,7 @@ class ProductCliIntegrationTests(RuntimeFixture):
         self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
         self.assertEqual(json.loads(result.stdout)["count"], 5)
         self.assertIn(b'"6.0"', (self.root / "markers/quake").read_bytes())
-        self.assertIn('Earthquake Infomation Last Updated',
+        self.assertIn('Earthquake Information Last Updated',
                       (self.root / "markers/updatelabel").read_text())
         self.assertEqual(snapshot(self.root / "config"), before_config)
 
@@ -184,6 +184,6 @@ class ProductCliIntegrationTests(RuntimeFixture):
         self.assertIn('"Champi"', marker)
         self.assertIn('color=Blue', arc)
         self.assertIn('color=SkyBlue', arc)
-        self.assertIn('Storm Infomation Last Updated',
+        self.assertIn('Storm Information Last Updated',
                       (self.root / "markers/updatelabel").read_text())
         self.assertEqual(snapshot(self.root / "config"), before_config)

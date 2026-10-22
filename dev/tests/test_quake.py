@@ -111,7 +111,7 @@ class QuakeTests(Sandbox):
         self.assertEqual(failed.successful_at, NOW)
         self.assertEqual(self.fs.read(settings.quake.marker), marker)
         row = next(line for line in self.fs.read(settings.labels).decode().splitlines()
-                   if "Earthquake Infomation" in line)
+                   if "Earthquake Information" in line)
         self.assertIn(legacy_time(NOW), row)
         self.assertIn("color=Red", row)
         self.assertEqual(self.read_state(settings)["products"]["quake"]["last_outcome"],
@@ -127,7 +127,7 @@ class QuakeTests(Sandbox):
         marker1 = self.fs.read(settings.quake.marker)
         label1 = self.fs.read(settings.labels).decode()
         self.assertTrue(label1.startswith(old))
-        self.assertIn(f'-68 -13 "Earthquake Infomation Last Updated {legacy_time(NOW)}"',
+        self.assertIn(f'-68 -13 "Earthquake Information Last Updated {legacy_time(NOW)}"',
                       label1)
         record = self.read_state(settings)["products"]["quake"]
         self.assertEqual((record["latest_origin_at"], record["latest_revision_at"],

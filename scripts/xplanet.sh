@@ -268,14 +268,20 @@ case "$switch" in
         load_render_config
         [[ "$XPLANET_CONFIG" == "$project_root/config" ]] ||
             fail "xp.def XPLANET_CONFIG must match this project's config directory"
+        geometry_args=()
+        if [[ -n "$XPLANET_GEOMETRY" ]]; then
+            geometry_args=("-geometry=$XPLANET_GEOMETRY")
+        fi
         "$XPLANET_BIN" \
             "-searchdir=$XPLANET_HOME" \
             "-config=$XPLANET_CONFIG/xp.conf" \
             "-projection=$XPLANET_PROJECTION" \
+            "${latitude_args[@]}" \
             "-longitude=$XPLANET_LONGITUDE" \
             -labelpos=+10-45 \
             '-date_format=%D at %r' \
             -color=green2 \
+            "${geometry_args[@]}" \
             -fork
         ;;
     stop)

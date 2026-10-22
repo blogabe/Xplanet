@@ -9,6 +9,6 @@ XPLANET_GEOMETRY=1920x1080
 XPLANET_LONGITUDE=0
 
 # stock uses earth.jpg and night.jpg from the installed Xplanet package.
-# For private high-resolution monthly maps, use folder/stem instead and
-# supply assets/maps/folder/stem.2004MM.3x5400x2700.png for each month.
+# Included monthly sets are under assets/maps/. For example, select
+# world.topo/world.topo; the earth command and monthly job rotate the link.
 EARTH_MAP_PRE=stock

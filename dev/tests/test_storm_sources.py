@@ -3,9 +3,12 @@ from dataclasses import replace
 from datetime import datetime, timezone
 import gzip
 import hashlib
+from io import BytesIO
 import json
 from pathlib import Path
 from unittest.mock import patch
+from xml.etree import ElementTree as ET
+from zipfile import ZipFile
 
 from totalmarker.errors import FeedError, StorageError
 from totalmarker.features.clouds import run as run_clouds
@@ -247,6 +250,41 @@ class StormSourcesTests(Sandbox):
         with self.assertRaisesRegex(FeedError, "header disagrees with issue time"):
             parse_advisory(wrong_header, "abio")
 
+    def test_authentic_abio_region_wrap_keeps_strict_interval_and_basin_checks(self):
+        captured = FIXTURES / "live-20261021-indian-wrap"
+        record = json.loads((captured / "manifest.json").read_text())["records"][0]
+        raw = (captured / record["path"]).read_bytes()
+        self.assertEqual((len(raw), hashlib.sha256(raw).hexdigest()),
+                         (record["bytes"], record["sha256"]))
+        self.assertIn(b"INDIAN \r\nOCEAN/211800Z-221800ZOCT2026//", raw)
+        advisory = parse_advisory(raw, "abio")
+        self.assertEqual((advisory.issue_at, advisory.valid_until_at), (
+            datetime(2026, 10, 21, 18, tzinfo=timezone.utc).timestamp(),
+            datetime(2026, 10, 22, 18, tzinfo=timezone.utc).timestamp()))
+        self.assertEqual(advisory.areas[1].warned_codes, ("02S",))
+
+        # Older reissues place the date on its own line after the subject.
+        reissued = (FIXTURES / "live-20261020-promotion/jtwc-abio-advisory.txt").read_bytes()
+        self.assertIn(b"INDIAN OCEAN \r\nREISSUED/", reissued)
+        reissued = reissued.replace(b"INDIAN OCEAN ", b"INDIAN \r\nOCEAN ", 1)
+        self.assertEqual(parse_advisory(reissued, "abio").issue_at,
+                         datetime(2026, 10, 20, 8, 30, tzinfo=timezone.utc).timestamp())
+
+        malformed = (
+            (raw.replace(b"221800ZOCT2026", b"321800ZOCT2026", 1),
+             "validity interval is invalid"),
+            (raw.replace(b"RMKS/", b"ISSUED/211800Z-221800ZOCT2026//\r\nRMKS/", 1),
+             "JTWC ABIO advisory lacks a dated issue interval"),
+            (raw.replace(b"INDIAN \r\nOCEAN/", b"INDIAN \r\n\r\nOCEAN/", 1),
+             "JTWC ABIO advisory lacks a dated issue interval"),
+        )
+        for body, message in malformed:
+            with self.subTest(body=hashlib.sha256(body).hexdigest()):
+                with self.assertRaisesRegex(FeedError, message):
+                    parse_advisory(body, "abio")
+        with self.assertRaisesRegex(FeedError, "subject disagrees with region"):
+            parse_advisory(raw, "abpw")
+
     def test_advisory_month_year_rollover_and_invalid_intervals(self):
         rollover = empty_advisory("abpw")
         for header, interval, issue, until in (
@@ -369,7 +407,7 @@ class StormSourcesTests(Sandbox):
         self.assertIn("   7.60  -88.00    7.40  -89.20 color=Blue", arc)
         self.assertIn("  19.60 -107.40   19.70 -107.60 color=SkyBlue", arc)
         self.assertNotIn(" 4.00   57.00 ", arc)
-        self.assertIn("Storm Infomation Last Updated", self.fs.read(settings.labels).decode())
+        self.assertIn("Storm Information Last Updated", self.fs.read(settings.labels).decode())
 
     def test_ambiguous_advisory_fails_instead_of_promoting_previous_position(self):
         original = (FIXTURES / "jtwc-abio-20261019.txt").read_bytes()
@@ -404,6 +442,66 @@ class StormSourcesTests(Sandbox):
         self.assertEqual(failed.successful_at, NOW)
         self.assertEqual((self.fs.read(settings.storm.marker),
                           self.fs.read(settings.storm.arc)), (marker, arc))
+
+    def test_kmz_identity_mismatch_or_ambiguity_keeps_last_good_pair(self):
+        settings = self.config("StormCheckIntervalSeconds=0\n")
+        first = run(self.fs, settings, fetcher=MappedFetcher(), now=NOW)
+        self.assertEqual(first.outcome, "changed")
+        marker, arc = self.fs.read(settings.storm.marker), self.fs.read(settings.storm.arc)
+        label = self.fs.read(settings.labels)
+        original = MappedFetcher().payloads[JTWC + "sh0127.kmz"]
+
+        def altered_kmz(change):
+            with ZipFile(BytesIO(original)) as archive:
+                root = ET.fromstring(archive.read("doc.kml"))
+            ns = "{http://www.opengis.net/kml/2.2}"
+            document = root.find(ns + "Document")
+            folder = document.find(ns + "Folder")
+            change(document, folder, ns)
+            output = BytesIO()
+            with ZipFile(output, "w") as archive:
+                archive.writestr("doc.kml", ET.tostring(root))
+            return output.getvalue()
+
+        def missing_description(document, folder, ns):
+            folder.find(ns + "description").text = ""
+
+        def other_name(document, folder, ns):
+            folder.find(ns + "name").text = "OTHER"
+            folder.find(ns + "description").text = (
+                folder.find(ns + "description").text.replace("WATI", "OTHER"))
+
+        def wrong_code(document, folder, ns):
+            description = folder.find(ns + "description")
+            description.text = description.text.replace("01P", "02P")
+
+        def ambiguous_header(document, folder, ns):
+            description = folder.find(ns + "description")
+            description.text += " " + description.text
+
+        def ambiguous_folder(document, folder, ns):
+            document.append(ET.fromstring(ET.tostring(folder)))
+
+        for source, payload in (
+                ("sh0127.kmz", MappedFetcher().payloads[JTWC + "wp2926.kmz"]),
+                ("wp2926.kmz", original),
+                ("sh0127.kmz", altered_kmz(missing_description)),
+                ("sh0127.kmz", altered_kmz(other_name)),
+                ("sh0127.kmz", altered_kmz(wrong_code)),
+                ("sh0127.kmz", altered_kmz(ambiguous_header)),
+                ("sh0127.kmz", altered_kmz(ambiguous_folder))):
+            with self.subTest(source=source, digest=hashlib.sha256(payload).hexdigest()):
+                fetcher = MappedFetcher()
+                fetcher.payloads[JTWC + source] = payload
+                failed = run(self.fs, settings, fetcher=fetcher, now=NOW + 60)
+                self.assertEqual(failed.outcome, "failed")
+                self.assertEqual(failed.successful_at, NOW)
+                self.assertEqual((self.fs.read(settings.storm.marker),
+                                  self.fs.read(settings.storm.arc),
+                                  self.fs.read(settings.labels)), (marker, arc, label))
+        valid = run(self.fs, settings, fetcher=MappedFetcher(), now=NOW + 120)
+        self.assertEqual(valid.outcome, "unchanged")
+        self.assertEqual(valid.successful_at, NOW + 120)
 
     def test_missing_or_corrupt_global_source_cannot_become_empty_success(self):
         for url, raw in [(JTWC_RSS, b"<rss/>"),
@@ -468,7 +566,7 @@ class StormSourcesTests(Sandbox):
         self.assertIn('"Invest 96A"', marker1.decode())
         self.assertIn('"Invest 93S"', marker1.decode())
         self.assertIn('color=SkyBlue', arc1.decode())
-        self.assertIn(f'-68 -13 "Storm Infomation Last Updated {legacy_time(NOW)}"',
+        self.assertIn(f'-68 -13 "Storm Information Last Updated {legacy_time(NOW)}"',
                       label1)
         again = run(self.fs, settings, fetcher=MappedFetcher(), now=NOW + 60)
         self.assertEqual(again.outcome, "unchanged")
@@ -519,7 +617,7 @@ class StormSourcesTests(Sandbox):
         self.assertEqual(first_record["installed_at"], LIVE_NOW)
         self.assertEqual(first_record["source_at"], snapshot.oldest_source_at)
         label = self.fs.read(settings.labels).decode()
-        row = next(line for line in label.splitlines() if "Storm Infomation" in line)
+        row = next(line for line in label.splitlines() if "Storm Information" in line)
         self.assertIn(legacy_time(LIVE_NOW), row)
         self.assertIn("color=Green", row)
 
@@ -536,7 +634,7 @@ class StormSourcesTests(Sandbox):
         run_clouds(self.fs, settings, label_only=True,
                    now=LIVE_NOW + 60 + warning + 1)
         refreshed = self.fs.read(settings.labels).decode()
-        row = next(line for line in refreshed.splitlines() if "Storm Infomation" in line)
+        row = next(line for line in refreshed.splitlines() if "Storm Information" in line)
         self.assertIn(legacy_time(LIVE_NOW + 60), row)
         self.assertIn("color=Yellow", row)
         self.assertEqual(self.read_state(settings)["products"]["storm"]["installed_at"],
@@ -554,7 +652,7 @@ class StormSourcesTests(Sandbox):
         self.assertEqual(self.fs.read(settings.storm.marker), marker)
         self.assertEqual(self.fs.read(settings.storm.arc), arc)
         row = next(line for line in self.fs.read(settings.labels).decode().splitlines()
-                   if "Storm Infomation" in line)
+                   if "Storm Information" in line)
         self.assertIn(legacy_time(LIVE_NOW + 60), row)
         self.assertIn("color=Red", row)
 

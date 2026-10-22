@@ -40,3 +40,10 @@ The prior parser rejected this valid transition as lacking a current invest
 position; 02S's warning supplies the current point and forecast. The rejected
 overnight HTTP body was not saved, so this captured current bulletin reproduces
 the same reported error but cannot establish byte identity with that poll.
+
+`live-20261021-indian-wrap/` holds the raw official ABIO bulletin captured
+2026-10-21 at 20:33 UTC. Its subject breaks between `INDIAN` and `OCEAN`,
+followed by a valid dated interval; its manifest records the exact response
+hash and retrieval metadata. The earlier rejected production response was not
+saved, so this fixture establishes the current format failure, not byte
+identity with the first failed poll.

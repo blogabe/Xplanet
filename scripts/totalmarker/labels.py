@@ -4,10 +4,16 @@ from datetime import datetime
 import time
 
 PREFIX = "Cloud Map Last Updated"
-VOLCANO_PREFIX = "Volcano Infomation Last Updated"  # Legacy spelling is visible output.
-QUAKE_PREFIX = "Earthquake Infomation Last Updated"
-STORM_PREFIX = "Storm Infomation Last Updated"
-NORAD_PREFIX = "NORAD Infomation Last Updated"
+VOLCANO_PREFIX = "Volcano Information Last Updated"
+QUAKE_PREFIX = "Earthquake Information Last Updated"
+STORM_PREFIX = "Storm Information Last Updated"
+NORAD_PREFIX = "NORAD Information Last Updated"
+LEGACY_PREFIXES = {
+    VOLCANO_PREFIX: "Volcano Infomation Last Updated",
+    QUAKE_PREFIX: "Earthquake Infomation Last Updated",
+    STORM_PREFIX: "Storm Infomation Last Updated",
+    NORAD_PREFIX: "NORAD Infomation Last Updated",
+}
 # Broad legacy names count as occupied product rows when placing a new label.
 STACK_ROW_PREFIXES = (PREFIX, "Earthquake", "Storm", "Volcano", "NORAD")
 ROW = re.compile(r'^(?P<head>\s*-?\d+(?:\.\d+)?\s+-?\d+(?:\.\d+)?\s+")'
@@ -26,10 +32,15 @@ def legacy_time(timestamp):
             f"{stamp.tm_year},{stamp.tm_hour:02d}:{stamp.tm_min:02d}:{stamp.tm_sec:02d}")
 
 
+def matches_product(text, prefix):
+    return (text.startswith(prefix + " ")
+            or text.startswith(LEGACY_PREFIXES.get(prefix, prefix) + " "))
+
+
 def product_timestamp(text, prefix):
     for line in text.splitlines():
         row = ROW.match(line)
-        if row and row["text"].startswith(prefix + " "):
+        if row and matches_product(row["text"], prefix):
             stamp = STAMP.search(row["text"])
             if stamp:
                 day, month, year, hour, minute, second = stamp.groups()
@@ -79,7 +90,7 @@ def render_product(existing, prefix, timestamp, now, warning, colors, *,
             occupied.add(float(row["head"].split()[0]))
             if row["text"].startswith(STACK_ROW_PREFIXES):
                 count += 1
-            if row["text"].startswith(prefix):
+            if matches_product(row["text"], prefix):
                 if found:
                     # Preserve unusual duplicate legacy records rather than deleting them.
                     lines.append(line)

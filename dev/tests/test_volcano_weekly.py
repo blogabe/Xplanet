@@ -138,7 +138,7 @@ class WeeklyVolcanoTests(Sandbox):
         marker = self.fs.read(settings.volcano.marker)
         label = self.fs.read(settings.labels).decode()
         self.assertIn('"Aira"', marker.decode())
-        self.assertIn(f'-68 -13 "Volcano Infomation Last Updated {legacy_time(NOW)}"', label)
+        self.assertIn(f'-68 -13 "Volcano Information Last Updated {legacy_time(NOW)}"', label)
         self.assertIn('color=Green', label.splitlines()[1])
         second = run(self.fs, settings, fetcher=Fetcher(ScriptedTransport(good)), now=NOW + 60)
         self.assertEqual(second.outcome, 'unchanged')

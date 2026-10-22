@@ -1,0 +1,20 @@
+{
+  "source": "Official public JTWC ABIO raw response",
+  "capture_purpose": "Wrapped Indian Ocean subject-name regression",
+  "records": [
+    {
+      "path": "jtwc-abio-advisory.txt",
+      "url": "https://www.metoc.navy.mil/jtwc/products/abioweb.txt",
+      "retrieved_at": "2026-10-21T20:33:44.241959+00:00",
+      "status": 200,
+      "bytes": 1050,
+      "sha256": "d404c2f3343989eae52544359222d528e1f4144704d5ec8c585725d2351b2cf5",
+      "headers": {
+        "Date": "Wed, 21 Oct 2026 20:33:45 GMT",
+        "Last-Modified": "Wed, 21 Oct 2026 17:06:12 GMT",
+        "ETag": "\"05d3a3c38743422cd47509af8f4f4202\"",
+        "Content-Type": "text/plain"
+      }
+    }
+  ]
+}

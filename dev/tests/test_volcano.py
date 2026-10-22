@@ -128,7 +128,7 @@ class VolcanoProviderTests(Sandbox):
         settings = self.config("VolcanoCheckIntervalSeconds=0\n")
         old = ('# preserve this header\n'
                '-53 -12 "Cloud Map Last Updated UNKNOWN" color=Red image=none position=pixel\n'
-               '-68 -13 "Earthquake Infomation Last Updated UNKNOWN" color=Red image=none position=pixel\n')
+               '-68 -13 "Earthquake Information Last Updated UNKNOWN" color=Red image=none position=pixel\n')
         self.fs.write(settings.labels, old.encode())
         result, _ = self.run_with(settings, cap_response(
             ETag='"edition-1"', **{"Last-Modified": "Tue, 14 Nov 2023 20:00:00 GMT"}))
@@ -139,7 +139,7 @@ class VolcanoProviderTests(Sandbox):
         self.assertIn(b'"Shiveluch" color=Brown symbolsize=12 align=Below', marker)
         label = self.fs.read(settings.labels).decode()
         self.assertTrue(label.startswith(old))
-        self.assertIn(f'-83 -13 "Volcano Infomation Last Updated {legacy_time(NOW)}"',
+        self.assertIn(f'-83 -13 "Volcano Information Last Updated {legacy_time(NOW)}"',
                       label)
         record = self.read_state(settings)["products"]["volcano"]
         self.assertEqual(record["installed_at"], NOW)
@@ -220,15 +220,15 @@ class VolcanoProviderTests(Sandbox):
     def test_existing_volcano_row_keeps_coordinates_order_and_options(self):
         settings = self.config("VolcanoCheckIntervalSeconds=0\n")
         old = ('-68 -12 "Cloud Map Last Updated UNKNOWN" color=Red\n'
-               '-108 -13 "Volcano Infomation Last Updated Mon 1 Jan 2020,00:00:00" '
+               '-108 -13 "Volcano Information Last Updated Mon 1 Jan 2020,00:00:00" '
                'image=none color=Red position=pixel\n'
-               '-53 -13 "Earthquake Infomation Last Updated UNKNOWN" color=Red\n')
+               '-53 -13 "Earthquake Information Last Updated UNKNOWN" color=Red\n')
         self.fs.write(settings.labels, old.encode())
         self.run_with(settings, cap_response())
         lines = self.fs.read(settings.labels).decode().splitlines()
         self.assertEqual(len(lines), 3)
         self.assertEqual(lines[0], old.splitlines()[0])
-        self.assertTrue(lines[1].startswith('-108 -13 "Volcano Infomation Last Updated '))
+        self.assertTrue(lines[1].startswith('-108 -13 "Volcano Information Last Updated '))
         self.assertIn('image=none color=Green position=pixel', lines[1])
         self.assertEqual(lines[2], old.splitlines()[2])
 

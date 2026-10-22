@@ -62,4 +62,4 @@ class ArchivedNorthIndianWarningTests(Sandbox):
         self.assertIn('  20.30   88.90   21.90   90.20 color=SkyBlue', arc)
         self.assertIn('  21.90   90.20   23.10   91.10 color=SkyBlue', arc)
         self.assertNotIn('  20.70   89.20', marker + arc)
-        self.assertIn("Storm Infomation Last Updated", self.fs.read(settings.labels).decode())
+        self.assertIn("Storm Information Last Updated", self.fs.read(settings.labels).decode())

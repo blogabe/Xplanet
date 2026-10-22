@@ -29,17 +29,16 @@ def _source_key(fs, options):
         style.pop(name)
     for name in ["marker", "arc"]:
         style[name] = str(fs.resolve(getattr(options, name), write=True).relative_to(fs.root))
-    # Version 6 replaces the old 12-hour advisory cache deadline with each
-    # bulletin's explicit validity end; old cached snapshots must be fetched.
-    style["parser_version"] = 6
+    # Revalidate cached snapshots against the KMZ storm identity rule.
+    style["parser_version"] = 7
     style["sources"] = "NHC-ATCF+JTWC-RSS-warning-KMZ-ABPW-ABIO"
     return hashlib.sha256(json.dumps(style, sort_keys=True).encode()).hexdigest()
 
 
 def run(fs, settings, *, fetcher=None, now=None):
-    now = time.time() if now is None else now
     options = settings.storm
     with fs.lock(settings.lock):
+        now = time.time() if now is None else now
         recover_pending(fs, settings)
         publisher = StormPublisher(fs, settings)
         state = load_state(fs, settings.state)

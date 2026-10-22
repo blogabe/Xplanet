@@ -194,7 +194,7 @@ class LauncherRenderTests(Sandbox):
             "XPLANET_HOME=" + shlex.quote(str(spaced)) + "\n"
             "XPLANET_CONFIG=" + shlex.quote(str(spaced / "config")) + "\n"
             "XPLANET_PROJECTION=lambert\nXPLANET_LONGITUDE=-21.91\n"
-            "XPLANET_LATITUDE=12.5\nXPLANET_GEOMETRY=1600x900\n")
+            "XPLANET_LATITUDE=12.5\nXPLANET_GEOMETRY=1600x900+12-34\n")
         environment = {**self.environment, "MOCK_CAPTURE": str(capture)}
         result = subprocess.run([str(wrapper), "start"], cwd=self.base,
                                 env=environment, capture_output=True, text=True,
@@ -203,14 +203,32 @@ class LauncherRenderTests(Sandbox):
         self.assertEqual(json.loads(capture.read_text())["args"], [
             "-searchdir=" + str(spaced),
             "-config=" + str(spaced / "config/xp.conf"),
-            "-projection=lambert", "-longitude=-21.91", "-labelpos=+10-45",
-            "-date_format=%D at %r", "-color=green2", "-fork",
+            "-projection=lambert", "-latitude", "12.5", "-longitude=-21.91",
+            "-labelpos=+10-45",
+            "-date_format=%D at %r", "-color=green2",
+            "-geometry=1600x900+12-34", "-fork",
         ])
         self.assertFalse((spaced / "dev/preview").exists())
         failed = subprocess.run([str(wrapper), "start"], cwd=self.base,
                                 env={**environment, "MOCK_EXIT": "37"},
                                 capture_output=True, text=True, check=False)
         self.assertEqual(failed.returncode, 37, failed.stderr)
+
+    def test_start_without_geometry_leaves_size_to_xplanet(self):
+        config = self.root / "config/xp.def"
+        original = config.read_text()
+        capture = self.base / "start-capture.json"
+        for replacement in ("", "XPLANET_GEOMETRY=\n"):
+            with self.subTest(replacement=replacement):
+                config.write_text(original.replace("XPLANET_GEOMETRY=1600x900\n",
+                                                   replacement))
+                result = self.invoke("start", {"XPLANET_GEOMETRY": "999x999",
+                                               "MOCK_CAPTURE": str(capture)})
+                self.assertEqual(result.returncode, 0, result.stderr)
+                args = json.loads(capture.read_text())["args"]
+                self.assertFalse(any(arg.startswith("-geometry") for arg in args))
+                self.assertNotIn("-latitude", args)
+                self.assertEqual(args[-1], "-fork")
 
     def test_start_rejects_missing_or_other_project_config(self):
         config = self.root / "config/xp.def"

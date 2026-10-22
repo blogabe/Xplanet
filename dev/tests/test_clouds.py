@@ -133,7 +133,7 @@ class CloudTests(Sandbox):
     def test_label_only_ages_known_time_and_preserves_other_rows(self):
         settings = self.config()
         self.run_with(settings, image_response())
-        other = '-9 -13 "Earthquake Infomation Last Updated UNKNOWN" color=Red image=none position=pixel\n'
+        other = '-9 -13 "Earthquake Information Last Updated UNKNOWN" color=Red image=none position=pixel\n'
         self.fs.write(settings.labels, other.encode() + self.fs.read(settings.labels))
         result, _ = self.run_with(settings, now=NOW + 43201, label_only=True)
         self.assertEqual(result.installed_at, NOW)

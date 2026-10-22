@@ -417,7 +417,7 @@ def parse_jtwc_warning(body, identity, rss_at):
     return current, name, wind, tuple(forecasts), header[1]
 
 
-def parse_jtwc_kmz(body, current):
+def parse_jtwc_kmz(body, current, identity, name):
     try:
         with ZipFile(BytesIO(body)) as archive:
             members = archive.infolist()
@@ -429,11 +429,27 @@ def parse_jtwc_kmz(body, current):
             root = ET.fromstring(archive.read(member))
     except (BadZipFile, KeyError, ET.ParseError, OSError):
         raise FeedError("Storm JTWC KMZ is invalid") from None
-    history_folder = next((folder for folder in root.findall(".//k:Folder", KML_NS)
-                           if folder.findtext("k:name", default="", namespaces=KML_NS)
-                           == "Previous Best Track Posits"), None)
-    if history_folder is None:
-        raise FeedError("Storm JTWC KMZ lacks previous best-track positions")
+    documents = root.findall("k:Document", KML_NS)
+    storm_folders = documents[0].findall("k:Folder", KML_NS) if len(documents) == 1 else []
+    if len(storm_folders) != 1:
+        raise FeedError("Storm JTWC KMZ lacks one storm identity")
+    storm_folder = storm_folders[0]
+    kmz_name = storm_folder.findtext("k:name", default="", namespaces=KML_NS)
+    description = storm_folder.findtext("k:description", default="", namespaces=KML_NS)
+    headers = list(re.finditer(r"\b([0-9]{2}[A-Z])\s+\(([^)]+)\)\s+WARNING\b",
+                               description, flags=re.I))
+    normalized = lambda value: " ".join(value.split()).casefold()
+    if (len(headers) != 1 or
+            not _jtwc_code_matches(identity, headers[0][1].upper()) or
+            normalized(headers[0][2]) != normalized(name) or
+            normalized(kmz_name) != normalized(name)):
+        raise FeedError("Storm JTWC KMZ identity disagrees with warning")
+    history_folders = [folder for folder in storm_folder.findall(".//k:Folder", KML_NS)
+                       if folder.findtext("k:name", default="", namespaces=KML_NS)
+                       == "Previous Best Track Posits"]
+    if len(history_folders) != 1:
+        raise FeedError("Storm JTWC KMZ lacks one previous best-track folder")
+    history_folder = history_folders[0]
     points = {}
     for place in history_folder.findall("k:Placemark", KML_NS):
         name = place.findtext("k:name", default="", namespaces=KML_NS)
@@ -546,7 +562,7 @@ def collect_snapshot(fetcher, *, now, timeout=30, max_bytes=16 * 1024 * 1024):
         warning_codes.add(warning_code)
         _fresh(current.at, now, 30 * 3600, "JTWC warning")
         deadlines.append(current.at + 30 * 3600)
-        history = parse_jtwc_kmz(get(product.kmz_url).body, current)
+        history = parse_jtwc_kmz(get(product.kmz_url).body, current, product.identity, name)
         storms.append(Storm(product.identity, name,
                             "DEP" if name.upper().startswith("INVEST") else "STO",
                             current, wind, history, current, forecast, "issued"))
