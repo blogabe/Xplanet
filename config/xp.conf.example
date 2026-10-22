@@ -14,6 +14,6 @@ marker_file=updatelabel
 # TotalMarker cloud resolution to 2048 before enabling this matching layer.
 #cloud_map=clouds-2048.jpg
 
-# For personal seasonal maps, set EARTH_MAP_PRE=folder/stem in xp.def,
-# change map=earth.png, and optionally set night_map=lights.tiff,
-# bump_map=bump.png and specular_map=specular.png after supplying those assets.
+# For an included monthly Earth set, set EARTH_MAP_PRE=folder/stem in xp.def
+# and map=earth.png. Optional included textures use night_map=lights.tiff,
+# bump_map=bump.png and specular_map=specular.png after setup links them.

@@ -87,6 +87,18 @@ class ReleaseContentTests(unittest.TestCase):
             with self.subTest(path=name):
                 self.assertIsNone(forbidden.search(path.read_bytes()), name)
 
+    def test_readme_monthly_map_example_has_all_shipped_months(self):
+        readme = (PROJECT / "README.md").read_text()
+        match = re.search(r"`EARTH_MAP_PRE=([A-Za-z0-9.]+)/([A-Za-z0-9.]+)`", readme)
+        self.assertIsNotNone(match)
+        folder, stem = match.groups()
+        self.assertIn(f"{folder}/{stem}",
+                      (PROJECT / "config/xp.def.example").read_text())
+        for month in range(1, 13):
+            path = (PROJECT / "assets/maps" / folder /
+                    f"{stem}.2004{month:02d}.3x5400x2700.png")
+            self.assertTrue(path.is_file() and not path.is_symlink(), path)
+
     def test_public_toml_examples_contain_no_credentials(self):
         examples = [PROJECT / "config/totalmarker.example.toml"]
         examples.extend((PROJECT / "dev/examples").glob("*.example.toml"))

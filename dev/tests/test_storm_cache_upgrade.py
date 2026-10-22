@@ -24,18 +24,18 @@ class FailingFetcher:
 
 
 class StormCacheUpgradeTests(Sandbox):
-    def old_source_key(self, settings):
+    def old_source_key(self, settings, version=3):
         style = asdict(settings.storm)
         for name in ("journal", "interval", "timeout", "max_bytes", "warning"):
             style.pop(name)
         for name in ("marker", "arc"):
             style[name] = str(self.fs.resolve(getattr(settings.storm, name),
                                               write=True).relative_to(self.fs.root))
-        style["parser_version"] = 3
+        style["parser_version"] = version
         style["sources"] = "NHC-ATCF+JTWC-RSS-warning-KMZ-ABPW-ABIO"
         return hashlib.sha256(json.dumps(style, sort_keys=True).encode()).hexdigest()
 
-    def exercise_upgrade(self, storms):
+    def exercise_upgrade(self, storms, version=3):
         settings = self.config("StormCheckIntervalSeconds=86400\n")
         old = NOW - 60
         snapshot = StormSnapshot(storms, tuple((group, old)
@@ -43,7 +43,7 @@ class StormCacheUpgradeTests(Sandbox):
         marker_body, arc_body = render_bodies(snapshot, settings.storm,
                                               required_groups=REQUIRED_GROUPS)
         marker, arc = render_marker(marker_body, old), render_arc(arc_body, old)
-        old_key = self.old_source_key(settings)
+        old_key = self.old_source_key(settings, version)
         new_key = _source_key(self.fs, settings.storm)
         self.assertNotEqual(old_key, new_key)
         record = {
@@ -54,6 +54,7 @@ class StormCacheUpgradeTests(Sandbox):
             "installed_at": old,
             "successful_at": old,
             "fetched_at": old,
+            "source_valid_until_at": NOW + 3600,
             "count": len(storms),
         }
         self.fs.write(settings.storm.marker, marker)
@@ -81,6 +82,9 @@ class StormCacheUpgradeTests(Sandbox):
         self.assertEqual(refreshed.successful_at, NOW + 1)
         self.assertEqual(self.read_state(settings)["products"]["storm"]["source_key"],
                          new_key)
+
+    def test_v6_cache_revalidates_before_kmz_identity_rule(self):
+        self.exercise_upgrade((), version=6)
 
     def test_false_empty_v3_cache_revalidates_and_keeps_files_on_failure(self):
         self.exercise_upgrade(())

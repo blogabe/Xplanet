@@ -453,7 +453,7 @@ name_contains = "SOYUZ"
         tle = self.fs.read(settings.norad.satellite + ".tle")
         self.assertIn(b'25544 "ISS (ZARYA)"', selector)
         self.assertEqual(tle, SAMPLE.replace(b"             \n", b"\n", 1))
-        self.assertIn(b"NORAD Infomation Last Updated", self.fs.read(settings.labels))
+        self.assertIn(b"NORAD Information Last Updated", self.fs.read(settings.labels))
         self.assertEqual(len(transport.calls), 1)
         self.assertIn("CATNR=25544&FORMAT=TLE", transport.calls[0][0])
         again = run(self.fs, settings, fetcher=Fetcher(transport), now=EPOCH + 100)

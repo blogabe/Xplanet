@@ -46,9 +46,9 @@ def _validate_weekly_coverage(coverage_end_at, now):
 
 
 def run(fs, settings, *, fetcher=None, now=None):
-    now = time.time() if now is None else now
     options = settings.volcano
     with fs.lock(settings.lock):
+        now = time.time() if now is None else now
         recover_pending(fs, settings)
         publisher = MarkerPublisher(fs, settings)
         state = load_state(fs, settings.state)

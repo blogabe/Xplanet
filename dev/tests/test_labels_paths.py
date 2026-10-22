@@ -5,18 +5,43 @@ from unittest.mock import patch
 from totalmarker.errors import ImageError, StorageError
 from totalmarker.image import validate_jpeg
 from totalmarker.labels import (color_for, legacy_time, render_cloud, render_quake,
-                                cloud_timestamp)
+                                render_storm, render_volcano, render_norad,
+                                cloud_timestamp, quake_timestamp, storm_timestamp,
+                                volcano_timestamp)
 from .support import Sandbox, jpeg
 
 
 class LabelTests(Sandbox):
+    def test_old_and_correct_product_spelling_update_same_row(self):
+        colors = ("Green", "Yellow", "Red")
+        timestamp = 100000
+        for product, render, read_timestamp in (
+                ("Earthquake", render_quake, quake_timestamp),
+                ("Storm", render_storm, storm_timestamp),
+                ("Volcano", render_volcano, volcano_timestamp),
+                ("NORAD", render_norad, None)):
+            for spelling in ("Infomation", "Information"):
+                with self.subTest(product=product, spelling=spelling):
+                    old = (f'-73 -19 "{product} {spelling} Last Updated '
+                           f'{legacy_time(timestamp)}" image=none color=Yellow '
+                           'position=pixel\n')
+                    if read_timestamp is not None:
+                        self.assertEqual(read_timestamp(old), timestamp)
+                    expected = (f'-73 -19 "{product} Information Last Updated '
+                                f'{legacy_time(timestamp)}" image=none color=Green '
+                                'position=pixel\n')
+                    result = render(old, timestamp, timestamp, 3600, colors)
+                    self.assertEqual(result, expected)
+                    self.assertEqual(render(result, timestamp, timestamp, 3600, colors),
+                                     expected)
+
     def test_new_product_skips_occupied_row_without_moving_existing_rows(self):
         old = ('-53 -12 "Cloud Map Last Updated UNKNOWN" color=Green\n'
-               '-83 -13 "Storm Infomation Last Updated UNKNOWN" color=Green\n')
+               '-83 -13 "Storm Information Last Updated UNKNOWN" color=Green\n')
         result = render_quake(old, 100, 100, 21600,
                               ("Green", "Yellow", "Red"))
         self.assertTrue(result.startswith(old))
-        self.assertIn('-98 -13 "Earthquake Infomation Last Updated ', result)
+        self.assertIn('-98 -13 "Earthquake Information Last Updated ', result)
         self.assertEqual(result.count('-83 -13 "'), 1)
 
     def test_strict_aging_boundaries_and_future_clock(self):
@@ -35,10 +60,10 @@ class LabelTests(Sandbox):
     def test_existing_rows_coordinates_options_and_order(self):
         timestamp = 100000
         other = ('# unchanged comment\n'
-                 '-53 -13 "Earthquake Infomation Last Updated Mon 1 Jan 2020,00:00:00" '
+                 '-53 -13 "Earthquake Information Last Updated Mon 1 Jan 2020,00:00:00" '
                  'color=Red image=none position=pixel\n')
         cloud = f'-83 -12 "Cloud Map Last Updated {legacy_time(timestamp)}" color=Green image=none position=pixel\n'
-        tail = '-98 -13 "Volcano Infomation Last Updated Mon 1 Jan 2020,00:00:00" color=Yellow image=none position=pixel\n'
+        tail = '-98 -13 "Volcano Information Last Updated Mon 1 Jan 2020,00:00:00" color=Yellow image=none position=pixel\n'
         result = render_cloud(other + cloud + tail, timestamp, timestamp + 21601,
                               21600, ("Green", "Yellow", "Red"))
         self.assertTrue(result.startswith(other))
@@ -48,7 +73,7 @@ class LabelTests(Sandbox):
         self.assertEqual(cloud_timestamp(result), timestamp)
 
     def test_new_cloud_offset_and_row_count(self):
-        other = '# header\n-53 -13 "Earthquake Infomation Last Updated UNKNOWN" color=Red\n'
+        other = '# header\n-53 -13 "Earthquake Information Last Updated UNKNOWN" color=Red\n'
         text = render_cloud(other, None, 100, 21600, ("Green", "Yellow", "Red"))
         self.assertIn('-68 -12 "Cloud Map Last Updated UNKNOWN" color=Red', text)
         self.assertTrue(text.startswith(other))

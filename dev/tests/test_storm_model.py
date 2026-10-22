@@ -101,7 +101,7 @@ class StormModelTests(Sandbox):
         label = render_storm(old, BASE, BASE, 3 * 86400,
                              ("Green", "Yellow", "Red"))
         self.assertTrue(label.startswith(old))
-        self.assertIn(f'-68 -13 "Storm Infomation Last Updated {legacy_time(BASE)}"',
+        self.assertIn(f'-68 -13 "Storm Information Last Updated {legacy_time(BASE)}"',
                       label)
         self.assertIn('color=Green', label.splitlines()[1])
 
@@ -113,5 +113,5 @@ class StormModelTests(Sandbox):
             with self.subTest(age=age):
                 label = render_storm("", BASE, BASE + age, warning,
                                      ("Green", "Yellow", "Red"))
-                self.assertIn(f'Storm Infomation Last Updated {legacy_time(BASE)}', label)
+                self.assertIn(f'Storm Information Last Updated {legacy_time(BASE)}', label)
                 self.assertIn(f'color={color} image=none position=pixel', label)

@@ -220,5 +220,5 @@ class StormPromotionTests(Sandbox):
         self.assertEqual((self.fs.read(settings.storm.marker), self.fs.read(settings.storm.arc)),
                          saved)
         row = next(line for line in self.fs.read(settings.labels).decode().splitlines()
-                   if "Storm Infomation" in line)
+                   if "Storm Information" in line)
         self.assertIn("color=Red", row)
