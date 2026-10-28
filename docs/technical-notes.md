@@ -22,6 +22,37 @@ A provider download or validation failure reports `failed` and retains prior pub
 
 TotalMarker writes only to approved runtime areas inside its project root: `images/`, `markers/`, `arcs/`, `satellites/`, `logs/totalmarker/`, and `.state/totalmarker/`. An internal output symlink is allowed only when its destination remains in an approved area; outside-root and protected source/configuration paths are rejected. A shared local lock serializes jobs in one installation. Product journals can replay an interrupted output/state/label publication on the next run using the same configuration. The files are not one atomic filesystem transaction, so a viewer can briefly see a partial update before recovery. This lock does not coordinate separate computers syncing the same folder.
 
+## First-install bootstrap
+
+`xplanet.sh bootstrap` downloads `xp-bootstrap.sh`, which requires Homebrew and
+Git, reserves `~/.xplanet`, clones the repository, and invokes the checkout's
+`xplanet.sh install`. Existing destinations, including empty directories and
+symlinks, are refused. A failed clone leaves its destination for inspection.
+Both downloads finish successfully before execution; installer stdin is retained.
+The entry point defaults to `main`; developers can select a branch or tag with
+`XPLANET_BOOTSTRAP_REF`. For example, from a feature checkout whose branch is
+available on GitHub:
+
+```sh
+XPLANET_BOOTSTRAP_REF=feature/bootstrap-install ./scripts/xplanet.sh bootstrap
+```
+
+The local entry point, downloaded helper and clone must use the same ref. Offline
+tests exercise the README one-liner, failed downloads, destination protection,
+stdin, exit status, and real Git clone mechanics with a local repository. They do
+not perform a live first install.
+
+`install` installs Xplanet and Homebrew Python, offers a one-frame Xplanet launch
+for macOS security approval, and continues into interactive setup. Setup creates
+missing personal files from examples and preserves existing files. The example
+cloud URL ends in `.invalid` and must be replaced before enabling cloud refreshes.
+Setup offers product refreshes and launchd automation separately.
+
+To rerun setup, use `./scripts/xplanet.sh setup`. With an existing `config/xp.def`,
+`XPLANET_BIN` must point to the installed Xplanet executable. Set
+`TOTALMARKER_PYTHON` to an absolute Python 3.11+ executable only to override the
+launcher's interpreter selection. No global `PATH` change is required.
+
 ## Setup checks and testing
 
 `./scripts/xplanet.sh setup --dry-run` lists safe preparation without writing. `setup --check` returns 0 when directory, link, and personal-file preparation is ready; 1 when safe preparation remains; and 2 for invalid or unsafe input. It does not test live providers or prove launchd jobs will run. Setup verifies existing personal launchd plists and preserves them rather than replacing them; it renders only missing ones. A provider refresh that returns a valid failed TotalMarker result is reported as an optional warning; malformed results, configuration errors, and preparation or automation failures remain setup failures.

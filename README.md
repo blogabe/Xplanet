@@ -12,31 +12,22 @@ see the [original marker-file notes](https://blog.rajab.us/xplanet/markerfiles/)
 
 ## Install on macOS
 
-Install [Homebrew](https://brew.sh/), then run:
+Requires [Homebrew](https://brew.sh/), Git, curl and zsh.
+
+```sh
+/bin/zsh -c 's=$(curl -fsSL https://raw.githubusercontent.com/blogabe/Xplanet/main/scripts/xplanet.sh) && eval "$s"' -- bootstrap
+```
+
+Follow the setup prompts. Set your cloud URL in
+`~/.xplanet/config/totalmarker.toml` before enabling cloud refreshes.
+
+Or clone and install manually:
 
 ```sh
 git clone https://github.com/blogabe/Xplanet.git ~/.xplanet
 cd ~/.xplanet
 ./scripts/xplanet.sh install
 ```
-
-`install` installs Xplanet and Homebrew Python, offers a one-frame Xplanet launch
-for macOS security approval, and continues into interactive setup. You do not need
-a separate setup command. To run setup later, use `./scripts/xplanet.sh setup`;
-`setup --dry-run` shows what it would prepare without changing files.
-
-Setup creates missing personal files in `config/` from the supplied examples and
-leaves existing ones in place. Review `config/totalmarker.toml` before accepting
-live refresh prompts: the example cloud URL ends in `.invalid` and must be
-replaced. Setup offers product refreshes and launchd automation separately. A
-failed optional refresh is reported as a warning; configuration and setup failures
-remain failures.
-
-If you run standalone setup with an existing `config/xp.def`, make sure
-`XPLANET_BIN` points to your installed Xplanet executable. Set
-`TOTALMARKER_PYTHON` to an absolute Python 3.11+ executable only when you need to
-override the launcher's interpreter selection. No global `PATH` change is
-required.
 
 ## Maps and configuration
 
@@ -74,6 +65,7 @@ any directory.
 
 | Command | Action |
 | --- | --- |
+| `bootstrap` | Clone into a new `~/.xplanet`, then run install (Homebrew required) |
 | `install` | Install Xplanet and Python, then run setup |
 | `setup [--dry-run\|--check]` | Prepare or inspect this installation |
 | `update` | Fast-forward Git, then reinstall Xplanet if the tap formula changed |
