@@ -86,6 +86,9 @@ class StormCacheUpgradeTests(Sandbox):
     def test_v6_cache_revalidates_before_kmz_identity_rule(self):
         self.exercise_upgrade((), version=6)
 
+    def test_v7_cache_revalidates_before_reissue_rule(self):
+        self.exercise_upgrade((), version=7)
+
     def test_false_empty_v3_cache_revalidates_and_keeps_files_on_failure(self):
         self.exercise_upgrade(())
 

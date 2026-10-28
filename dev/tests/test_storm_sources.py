@@ -214,6 +214,86 @@ class StormSourcesTests(Sandbox):
                         _fresh_advisory(advisory, now, kind)
             _fresh_advisory(advisory, issue - 3600, kind)  # Existing clock skew.
 
+    def test_authentic_abpw_reissue_has_distinct_header_and_validity_start(self):
+        # Official JTWC ABPW and RSS captured October 27, 2026.
+        raw = (FIXTURES / "jtwc-abpw-20261026-2230.txt").read_bytes()
+        self.assertEqual(hashlib.sha256(raw).hexdigest(),
+                         "510e0b6e8b3c4b765c852725a3efafd3936f5a49ad79da4f61e9ef472d6f7395")
+        advisory = parse_advisory(raw, "abpw")
+        start = datetime(2026, 10, 26, 22, tzinfo=timezone.utc).timestamp()
+        issued = datetime(2026, 10, 26, 22, 30, tzinfo=timezone.utc).timestamp()
+        until = datetime(2026, 10, 27, 6, tzinfo=timezone.utc).timestamp()
+        self.assertEqual((advisory.issue_at, advisory.issued_at,
+                          advisory.valid_until_at, advisory.reissued),
+                         (start, issued, until, True))
+        self.assertEqual(advisory.areas[0].warned_codes, ("30W",))
+        rss = (FIXTURES / "jtwc-rss-20261027-reissue.xml").read_bytes()
+        self.assertEqual(hashlib.sha256(rss).hexdigest(),
+                         "c3a695d2f549b04e33f2552a673d1fdd3eafd637970a1dd3dad34d9b2838cb20")
+        _, _, advisory_links = parse_jtwc_rss(rss)
+        self.assertEqual(advisory_links["abpw"],
+                         (JTWC + "abpwweb.txt", ("Reissued", "26/2230Z")))
+        for now in (issued - 3600, issued, until):
+            _fresh_advisory(advisory, now, "abpw")
+        for now in (issued - 3601, until + 1):
+            with self.assertRaisesRegex(FeedError, "ABPW advisory is stale"):
+                _fresh_advisory(advisory, now, "abpw")
+
+        invalid = (
+            raw.replace(b"REISSUED/", b"ISSUED/", 1),
+            raw.replace(b"ABPW10 PGTW 262230", b"ABPW10 PGTW 262159", 1),
+            raw.replace(b"ABPW10 PGTW 262230", b"ABPW10 PGTW 270600", 1),
+            raw.replace(b"ABPW10 PGTW 262230", b"ABPW10 PGTW 322230", 1),
+            raw.replace(b"MSGID/", b"ABPW10 PGTW 262230\r\nMSGID/", 1),
+        )
+        for body in invalid:
+            with self.subTest(body=hashlib.sha256(body).hexdigest()):
+                with self.assertRaisesRegex(FeedError, "header disagrees with issue time"):
+                    parse_advisory(body, "abpw")
+        duplicate = raw.replace(b"RMKS/", b"REISSUED/262200Z-270600ZOCT2026//\r\nRMKS/", 1)
+        with self.assertRaisesRegex(FeedError, "lacks a dated issue interval"):
+            parse_advisory(duplicate, "abpw")
+        invalid_end = raw.replace(b"270600ZOCT2026", b"320600ZOCT2026", 1)
+        with self.assertRaisesRegex(FeedError, "validity interval is invalid"):
+            parse_advisory(invalid_end, "abpw")
+
+        indian = (FIXTURES / "jtwc-abio-20261019.txt").read_bytes()
+        indian = indian.replace(b"ABIO10 PGTW 190300", b"ABIO10 PGTW 190330", 1)
+        changed = parse_advisory(indian, "abio")
+        self.assertEqual(changed.issued_at - changed.issue_at, 30 * 60)
+        self.assertTrue(changed.invests)
+        self.assertTrue(all(storm.current.at == changed.issue_at for storm in changed.invests))
+
+    def test_reissue_requires_matching_rss_issue_and_keeps_last_good_on_mismatch(self):
+        settings = self.config("StormCheckIntervalSeconds=0\n")
+        first = run(self.fs, settings, fetcher=MappedFetcher(), now=NOW)
+        self.assertEqual(first.outcome, "changed")
+        marker, arc = self.fs.read(settings.storm.marker), self.fs.read(settings.storm.arc)
+        reissue = MappedFetcher()
+        reissue.payloads[JTWC + "abpwweb.txt"] = reissue.payloads[JTWC + "abpwweb.txt"].replace(
+            b"ABPW10 PGTW 190900", b"ABPW10 PGTW 190930", 1)
+        original_rss = reissue.payloads[JTWC_RSS]
+        self.assertIn(b"Issued at 19/0600Z", original_rss)
+        reissue.payloads[JTWC_RSS] = original_rss.replace(
+            b"Issued at 19/0600Z", b"Reissued at 19/0930Z", 1)
+        accepted = run(self.fs, settings, fetcher=reissue, now=NOW + 600)
+        self.assertEqual(accepted.outcome, "unchanged", accepted.message)
+        self.assertEqual(accepted.successful_at, NOW + 600)
+        self.assertEqual((self.fs.read(settings.storm.marker),
+                          self.fs.read(settings.storm.arc)), (marker, arc))
+        for rss_status in (b"Reissued at 19/0931Z", b"Issued at 19/0930Z", b"Unknown"):
+            with self.subTest(rss_status=rss_status):
+                bad = MappedFetcher()
+                bad.payloads[JTWC + "abpwweb.txt"] = reissue.payloads[JTWC + "abpwweb.txt"]
+                bad.payloads[JTWC_RSS] = original_rss.replace(
+                    b"Issued at 19/0600Z", rss_status, 1)
+                failed = run(self.fs, settings, fetcher=bad, now=NOW + 1200)
+                self.assertEqual(failed.outcome, "failed")
+                self.assertIn("ABPW reissue disagrees with RSS", failed.message)
+                self.assertEqual(failed.successful_at, NOW + 600)
+                self.assertEqual((self.fs.read(settings.storm.marker),
+                                  self.fs.read(settings.storm.arc)), (marker, arc))
+
     def test_authentic_wrapped_abio_interval_and_boundary_controls(self):
         captured = FIXTURES / "live-20261020-interval-wrap"
         record = json.loads((captured / "manifest.json").read_text())["records"][0]
@@ -300,6 +380,15 @@ class StormSourcesTests(Sandbox):
                                  datetime(*issue, tzinfo=timezone.utc).timestamp())
                 self.assertEqual(advisory.valid_until_at,
                                  datetime(*until, tzinfo=timezone.utc).timestamp())
+        reissue = (empty_advisory("abpw")
+                   .replace(b"ABPW10 PGTW 190900", b"ABPW10 PGTW 010030", 1)
+                   .replace(b"ISSUED/190900Z-200600ZOCT2026//",
+                            b"REISSUED/312300Z-010600ZNOV2026//", 1))
+        parsed = parse_advisory(reissue, "abpw")
+        self.assertEqual((parsed.issue_at, parsed.issued_at, parsed.valid_until_at), (
+            datetime(2026, 10, 31, 23, tzinfo=timezone.utc).timestamp(),
+            datetime(2026, 11, 1, 0, 30, tzinfo=timezone.utc).timestamp(),
+            datetime(2026, 11, 1, 6, tzinfo=timezone.utc).timestamp()))
         original = (FIXTURES / "live-20261020-promotion/jtwc-abpw-advisory.txt").read_bytes()
         for bad in (b"200600Z-200500ZOCT2026",  # Reversed.
                     b"200600Z-210700ZOCT2026",  # More than 24 hours.
