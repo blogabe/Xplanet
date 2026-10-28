@@ -76,8 +76,8 @@ any directory.
 | --- | --- |
 | `install` | Install Xplanet and Python, then run setup |
 | `setup [--dry-run\|--check]` | Prepare or inspect this installation |
-| `update` | Fast-forward the current branch from its configured upstream |
-| `start` / `stop` | Start the desktop display / stop permitted Xplanet processes |
+| `update` | Fast-forward Git, then reinstall Xplanet if the tap formula changed |
+| `start` / `stop` / `restart` | Start, stop, or restart the desktop display |
 | `preview` / `render` | Save one frame under `dev/preview/` |
 | `earth` | Select the current seasonal Earth map |
 | `clouds`, `quake`, `storm`, `volcano` | Refresh that product and its labels |
@@ -87,9 +87,9 @@ any directory.
 
 `start` uses `XPLANET_GEOMETRY` from `xp.def` when nonempty; otherwise Xplanet
 sizes the desktop automatically. `render` saves a frame at the configured
-dimensions, while `preview` uses a fixed 1920×1080 size. `stop` uses
-`killall xplanet`, so it can stop other Xplanet processes you are permitted to
-signal.
+dimensions, while `preview` uses a fixed 1920×1080 size. `stop` signals
+this user's Xplanet processes and succeeds when none is running. `restart`
+waits for them to stop, then starts one display.
 
 To update your checkout:
 
@@ -97,8 +97,14 @@ To update your checkout:
 ./scripts/xplanet.sh update
 ```
 
-`update` needs a configured upstream, fast-forwards only when local changes allow
-it, and does not run install or setup.
+`update` needs a configured upstream and fast-forwards only when local changes
+allow it. It then updates Homebrew tap metadata and rebuilds the tap's Xplanet
+formula from source only when its recipe differs from the installed build,
+keeping the installed build options. If Xplanet was running before a successful
+reinstall, `update` restarts the display; otherwise it stays stopped. If the
+Homebrew check fails, the Git checkout may already be updated; rerun `update`
+after resolving the reported issue.
+It does not run setup.
 
 ## Output and freshness
 

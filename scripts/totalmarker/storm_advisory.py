@@ -14,7 +14,7 @@ from .storm_model import Storm, TrackPoint
 
 MONTH = {name: number for number, name in enumerate(
     ("JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"), 1)}
-ISSUE = re.compile(r"(?m)\b(?:REISSUED|ISSUED)/([0-9]{2})([0-9]{2})([0-9]{2})Z-"
+ISSUE = re.compile(r"(?m)\b(REISSUED|ISSUED)/([0-9]{2})([0-9]{2})([0-9]{2})Z-"
                    r"([0-9]{2})([0-9]{2})([0-9]{2})Z([A-Z]{3})(20[0-9]{2})//[ \t]*\r?$")
 INDIAN_REGION = r"INDIAN(?:[ \t]+|[ \t]*\r?\n[ \t]*)OCEAN"
 SUBJECT_ISSUE = re.compile(
@@ -27,7 +27,7 @@ SUBJECT_CUE = re.compile(r"(?m)^SUBJ/")
 REISSUE_SUBJECT = re.compile(
     r"(?m)^SUBJ/SIGNIFICANT TROPICAL WEATHER ADVISORY FOR THE "
     rf"({INDIAN_REGION}|WESTERN AND SOUTH\s+PACIFIC OCEANS)\s+"
-    r"(?:REISSUED|ISSUED)/")
+    r"(REISSUED|ISSUED)/")
 AREA = re.compile(r"(?m)^([12])\.\s+(NORTH INDIAN OCEAN AREA|SOUTH INDIAN OCEAN AREA|"
                   r"WESTERN NORTH PACIFIC AREA|SOUTH PACIFIC AREA)\b[^\n]*:")
 SUMMARY = re.compile(r"(?m)^\s*([ABC])\.\s+(TROPICAL CYCLONE SUMMARY|"
@@ -69,9 +69,11 @@ class AdvisoryArea:
 
 @dataclass(frozen=True)
 class Advisory:
-    issue_at: float
+    issue_at: float                # Validity start; conservative invest position proxy.
     valid_until_at: float
     areas: tuple[AdvisoryArea, ...]
+    issued_at: float               # Actual header time, possibly a later reissue.
+    reissued: bool
 
     @property
     def invests(self):
@@ -90,6 +92,7 @@ def _issue_interval(text, kind):
         if len(subject) != 1 or issue_cues or len(subject_cues) != 1:
             raise FeedError(missing_issue)
         region, *parts = subject[0].groups()
+        reissued = False
     else:
         if len(issue_cues) != 1 or len(explicit) != 1:
             raise FeedError(missing_issue)
@@ -100,7 +103,10 @@ def _issue_interval(text, kind):
             region = heading[1]
         else:
             region = None  # Header-only issue intervals have no subject region.
-        parts = explicit[0].groups()
+        status, *parts = explicit[0].groups()
+        if subject_cues and heading[2] != status:
+            raise FeedError(missing_issue)
+        reissued = status == "REISSUED"
     if region is not None:
         expected_region = ("INDIAN OCEAN" if kind == "abio" else
                            "WESTERN AND SOUTH PACIFIC OCEANS")
@@ -126,10 +132,23 @@ def _issue_interval(text, kind):
             starts.append(start)
     if len(starts) != 1:
         raise FeedError("Storm JTWC advisory validity interval is invalid")
-    header = re.search(r"(?m)^" + kind.upper() + r"10\s+PGTW\s+([0-9]{6})\s*$", text)
-    if not header or header[1] != day + hour + minute:
+    headers = re.findall(r"(?m)^" + kind.upper() + r"10[ \t]+PGTW[ \t]+([0-9]{6})[ \t]*\r?$", text)
+    if len(headers) != 1:
         raise FeedError("Storm JTWC advisory header disagrees with issue time")
-    return starts[0].timestamp(), until.timestamp()
+    start = starts[0]
+    header_day, header_hour, header_minute = int(headers[0][:2]), int(headers[0][2:4]), int(headers[0][4:])
+    issued = set()
+    for year_month in {(start.year, start.month), (until.year, until.month)}:
+        try:
+            candidate = datetime(*year_month, header_day, header_hour, header_minute,
+                                 tzinfo=timezone.utc)
+        except ValueError:
+            continue
+        if start <= candidate < until:
+            issued.add(candidate)
+    if len(issued) != 1 or (not reissued and next(iter(issued)) != start):
+        raise FeedError("Storm JTWC advisory header disagrees with issue time")
+    return start.timestamp(), until.timestamp(), issued.pop().timestamp(), reissued
 
 
 def _current_position(text):
@@ -204,7 +223,7 @@ def parse_advisory(raw, kind):
         raise FeedError("Storm JTWC advisory is not ASCII") from None
     if not text or len(text) > 256 * 1024:
         raise FeedError("Storm JTWC advisory is empty or too large")
-    issue_at, valid_until_at = _issue_interval(text, kind)
+    issue_at, valid_until_at, issued_at, reissued = _issue_interval(text, kind)
     area_matches = list(AREA.finditer(text))
     expected = AREAS[kind]
     if len(area_matches) != 2 or [(m[1], m[2]) for m in area_matches] != [
@@ -277,4 +296,4 @@ def parse_advisory(raw, kind):
             raise FeedError("Storm JTWC advisory repeats an invest")
         result.append(AdvisoryArea(area_name, group, cyclone_none, warned_codes,
                                    tuple(invests)))
-    return Advisory(issue_at, valid_until_at, tuple(result))
+    return Advisory(issue_at, valid_until_at, tuple(result), issued_at, reissued)

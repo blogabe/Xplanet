@@ -162,16 +162,25 @@ class _Anchors(HTMLParser):
         self.links = []
         self._href = None
         self._label = []
+        self.entries = []
+        self._item_urls = None
+        self._item_text = None
 
     def handle_starttag(self, tag, attrs):
+        if tag == "li":
+            self._item_urls, self._item_text = [], []
         if tag == "a":
             href = dict(attrs).get("href")
             if href:
                 self.urls.append(href)
                 self._href = href
                 self._label = []
+                if self._item_urls is not None:
+                    self._item_urls.append(href)
 
     def handle_data(self, data):
+        if self._item_text is not None:
+            self._item_text.append(data)
         if self._href is not None:
             self._label.append(data)
 
@@ -180,6 +189,9 @@ class _Anchors(HTMLParser):
             self.links.append((self._href, "".join(self._label).strip()))
             self._href = None
             self._label = []
+        if tag == "li" and self._item_text is not None:
+            self.entries.append((tuple(self._item_urls), " ".join(self._item_text)))
+            self._item_urls, self._item_text = None, None
 
 
 def _jtwc_url(url):
@@ -221,7 +233,10 @@ def parse_jtwc_rss(body):
                     if filename == expected:
                         if kind in found:
                             raise FeedError("Storm JTWC RSS duplicates an advisory link")
-                        found[kind] = url
+                        entries = [text for urls, text in anchors.entries if url in urls]
+                        stamps = (re.findall(r"\b(Reissued|Issued)\s+at\s+([0-9]{2}/[0-9]{4}Z)\b",
+                                             entries[0], flags=re.I) if len(entries) == 1 else [])
+                        found[kind] = (url, stamps[0] if len(stamps) == 1 else None)
             if set(found) != set(JTWC_ADVISORIES):
                 raise FeedError("Storm JTWC RSS lacks both significant advisories")
             advisories = found
@@ -480,7 +495,7 @@ def _fresh(at, now, max_age, label):
 
 
 def _fresh_advisory(advisory, now, kind):
-    if advisory.issue_at > now + 3600 or now > advisory.valid_until_at:
+    if advisory.issued_at > now + 3600 or now > advisory.valid_until_at:
         raise FeedError("Storm JTWC " + kind.upper() + " advisory is stale or future-dated")
 
 
@@ -569,8 +584,13 @@ def collect_snapshot(fetcher, *, now, timeout=30, max_bytes=16 * 1024 * 1024):
         source_times[product.group] = min(source_times[product.group], current.at)
     advisory_codes = set()
     advisory_invests = []
-    for kind, url in advisory_urls.items():
+    for kind, (url, rss_issue) in advisory_urls.items():
         advisory = parse_advisory(get(url, 256 * 1024).body, kind)
+        if advisory.issued_at != advisory.issue_at:
+            header_time = datetime.fromtimestamp(advisory.issued_at, timezone.utc)
+            expected = ("reissued", header_time.strftime("%d/%H%MZ"))
+            if rss_issue is None or (rss_issue[0].lower(), rss_issue[1]) != expected:
+                raise FeedError("Storm JTWC " + kind.upper() + " reissue disagrees with RSS")
         _fresh_advisory(advisory, now, kind)
         deadlines.append(advisory.valid_until_at)
         for area in advisory.areas:

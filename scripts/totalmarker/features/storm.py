@@ -30,7 +30,7 @@ def _source_key(fs, options):
     for name in ["marker", "arc"]:
         style[name] = str(fs.resolve(getattr(options, name), write=True).relative_to(fs.root))
     # Revalidate cached snapshots against the KMZ storm identity rule.
-    style["parser_version"] = 7
+    style["parser_version"] = 8
     style["sources"] = "NHC-ATCF+JTWC-RSS-warning-KMZ-ABPW-ABIO"
     return hashlib.sha256(json.dumps(style, sort_keys=True).encode()).hexdigest()
 

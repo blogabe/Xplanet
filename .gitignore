@@ -1,5 +1,6 @@
 *
 !/.gitignore
+!/.gitattributes
 !/README.md
 !/docs/
 !/docs/technical-notes.md
