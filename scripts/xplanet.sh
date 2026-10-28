@@ -1,6 +1,28 @@
 #!/bin/zsh
 
 set -u
+
+# A downloaded entry point has no checkout-local dependencies yet.
+if [[ "${1:-}" == bootstrap ]]; then
+    if (( $# != 1 )); then
+        print -u2 -- "xplanet.sh: bootstrap takes no arguments"
+        exit 2
+    fi
+    bootstrap_ref=${XPLANET_BOOTSTRAP_REF:-main}
+    if [[ ! "$bootstrap_ref" =~ '^[A-Za-z0-9][A-Za-z0-9._/-]*$' ]]; then
+        print -u2 -- "xplanet.sh: invalid XPLANET_BOOTSTRAP_REF"
+        exit 2
+    fi
+    bootstrap_tmp=$(mktemp -d "${TMPDIR:-/tmp}/xplanet-bootstrap.XXXXXXXX") || exit 1
+    trap 'rm -rf -- "$bootstrap_tmp"' EXIT
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
+    curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' \
+        --output "$bootstrap_tmp/xp-bootstrap.sh" \
+        "https://raw.githubusercontent.com/blogabe/Xplanet/$bootstrap_ref/scripts/xp-bootstrap.sh" || exit 1
+    /bin/zsh "$bootstrap_tmp/xp-bootstrap.sh" "$bootstrap_ref"
+    exit $?
+fi
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
 project_root=$(CDPATH= cd -- "$script_dir/.." && pwd -P)
 
@@ -355,6 +377,7 @@ usage() {
     cat <<'USAGE'
 Usage: scripts/xplanet.sh COMMAND [SETUP_OPTION]
 
+  bootstrap  Clone into ~/.xplanet, then run install (Homebrew required)
   install    Install Xplanet and Python, offer approval run, then run setup
   setup      Prompt for preparation, marker refresh and optional automation
   update     Fast-forward Git, then check the blogabe Xplanet tap formula

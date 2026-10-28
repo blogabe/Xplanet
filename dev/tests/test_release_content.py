@@ -55,6 +55,7 @@ class ReleaseContentTests(unittest.TestCase):
         entrypoints = {name for name in names if name.startswith("scripts/")
                        and "/" not in name[len("scripts/"):]}
         self.assertEqual(entrypoints, {"scripts/xplanet.sh", "scripts/xp-setup.sh",
+                                       "scripts/xp-bootstrap.sh",
                                        "scripts/run-totalmarker"})
         self.assertFalse(any(name.startswith("dev/examples/") and name.endswith(".ini")
                              for name in names))

@@ -10,6 +10,7 @@
 !/scripts/run-totalmarker
 !/scripts/xplanet.sh
 !/scripts/xp-setup.sh
+!/scripts/xp-bootstrap.sh
 !/scripts/launchd/
 !/scripts/launchd/*.plist.example
 /scripts/launchd/*.plist
