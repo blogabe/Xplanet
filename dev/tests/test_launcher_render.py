@@ -1,7 +1,10 @@
 """Launcher display and finite renders use fixture executables only."""
 import json
 import os
+import pty
+import select
 import shlex
+import sys
 import shutil
 import subprocess
 
@@ -200,6 +203,7 @@ class LauncherRenderTests(Sandbox):
                                 env=environment, capture_output=True, text=True,
                                 check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "")
         self.assertEqual(json.loads(capture.read_text())["args"], [
             "-searchdir=" + str(spaced),
             "-config=" + str(spaced / "config/xp.conf"),
@@ -243,29 +247,144 @@ class LauncherRenderTests(Sandbox):
                 self.assertIn("XPLANET_CONFIG must match", result.stderr)
                 self.assertFalse(self.capture.exists())
 
-    def test_stop_calls_only_the_private_killall_stub(self):
-        help_text = self.invoke("--help")
-        self.assertEqual(help_text.returncode, 0)
-        self.assertIn("render", help_text.stdout)
-        self.assertIn("earth", help_text.stdout)
-        self.assertIn("  start", help_text.stdout)
-        self.assertIn("  stop", help_text.stdout)
-        safe_bin = self.base / "stub-bin"
+    def lifecycle_env(self):
+        safe_bin = self.base / "lifecycle-bin"
         safe_bin.mkdir()
-        (safe_bin / "dirname").symlink_to(shutil.which("dirname"))
-        killall = safe_bin / "killall"
-        killall.write_text(
-            '#!/bin/sh\n'
-            'printf "%s\\n" "$@" > "$MOCK_KILLALL_TRACE"\n'
-            'exit "$MOCK_KILLALL_EXIT"\n')
-        killall.chmod(0o700)
-        trace = self.base / "killall-args.txt"
-        result = self.invoke("stop", {"PATH": str(safe_bin),
-                                      "MOCK_KILLALL_TRACE": str(trace),
-                                      "MOCK_KILLALL_EXIT": "37"})
-        self.assertEqual(result.returncode, 37, result.stderr)
-        self.assertEqual(trace.read_text(), "xplanet\n")
-        self.assertFalse(self.capture.exists())
+        stub = "#!" + sys.executable + "\n" + """
+import json
+import os
+from pathlib import Path
+import sys
+name = Path(sys.argv[0]).name
+table_path = Path(os.environ["MOCK_PROCESS_TABLE"])
+table = json.loads(table_path.read_text())
+args = sys.argv[1:]
+if name == "pgrep":
+    if os.environ.get("MOCK_PGREP_ERROR") == "1":
+        sys.exit(2)
+    if args[:3] != ["-u", str(os.geteuid()), "-x"] or args[3:] != ["xplanet"]:
+        sys.exit(4)
+    for pid in sorted(table):
+        print(pid)
+    sys.exit(0 if table else 1)
+if name == "kill":
+    pid = args[-1]
+    if args[0] == "-0":
+        sys.exit(0 if pid in table else 1)
+    with open(os.environ["MOCK_KILL_TRACE"], "a") as trace:
+        trace.write(" ".join(args) + "\\n")
+    if os.environ.get("MOCK_KILL_EXIT") != "0":
+        sys.exit(int(os.environ["MOCK_KILL_EXIT"]))
+    if os.environ.get("MOCK_STAY_RUNNING") != "1":
+        table.pop(pid, None)
+        table_path.write_text(json.dumps(table))
+    sys.exit(0)
+sys.exit(4)
+"""
+        for name in ("pgrep", "kill"):
+            binary = safe_bin / name
+            binary.write_text(stub)
+            binary.chmod(0o700)
+        sleep = safe_bin / "sleep"
+        sleep.write_text("#!/bin/sh\nexit 0\n")
+        sleep.chmod(0o700)
+        table = self.base / "processes.json"
+        table.write_text("{}")
+        trace = self.base / "signals.txt"
+        capture = self.base / "lifecycle-capture.json"
+        env = {
+            "PATH": f"{safe_bin}:{self.environment['PATH']}",
+            "MOCK_CAPTURE": str(capture),
+            "MOCK_PROCESS_TABLE": str(table),
+            "MOCK_KILL_TRACE": str(trace),
+            "MOCK_KILL_EXIT": "0",
+            "MOCK_STAY_RUNNING": "0",
+        }
+        return env, table, trace, capture
+
+    def invoke_tty(self, command, env):
+        master, slave = pty.openpty()
+        try:
+            result = subprocess.run([str(self.wrapper), command],
+                                    cwd=self.base, env={**self.environment, **env},
+                                    stdout=slave, stderr=subprocess.PIPE,
+                                    text=True, timeout=5)
+            ready, _, _ = select.select([master], [], [], 1)
+            output = os.read(master, 4096).decode() if ready else ""
+            return result, output
+        finally:
+            os.close(slave)
+            os.close(master)
+
+    def test_stop_signals_all_current_user_xplanet_processes(self):
+        env, table, trace, capture = self.lifecycle_env()
+        table.write_text(json.dumps({"101": "first", "202": "second", "303": "third"}))
+        stopped = self.invoke("stop", env)
+        self.assertEqual(stopped.returncode, 0, stopped.stderr)
+        self.assertEqual(stopped.stdout, "")
+        self.assertEqual(trace.read_text(), "-TERM 101\n-TERM 202\n-TERM 303\n")
+        self.assertEqual(json.loads(table.read_text()), {})
+        self.assertFalse(capture.exists())
+
+    def test_stop_and_restart_when_not_running(self):
+        env, table, trace, capture = self.lifecycle_env()
+        stopped = self.invoke("stop", env)
+        self.assertEqual(stopped.returncode, 0, stopped.stderr)
+        self.assertEqual(stopped.stdout, "")
+        self.assertFalse(trace.exists())
+        restarted = self.invoke("restart", env)
+        self.assertEqual(restarted.returncode, 0, restarted.stderr)
+        self.assertFalse(trace.exists())
+        self.assertEqual(json.loads(capture.read_text())["args"][-1], "-fork")
+
+    def test_restart_stops_all_current_user_processes_then_starts_once(self):
+        env, table, trace, capture = self.lifecycle_env()
+        table.write_text(json.dumps({"101": "first", "202": "second"}))
+        result = self.invoke("restart", env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(trace.read_text(), "-TERM 101\n-TERM 202\n")
+        self.assertEqual(json.loads(table.read_text()), {})
+        self.assertEqual(json.loads(capture.read_text())["args"][-1], "-fork")
+
+    def test_stop_failure_or_process_inspection_error_prevents_restart(self):
+        env, table, trace, capture = self.lifecycle_env()
+        table.write_text(json.dumps({"101": "first"}))
+        denied = self.invoke("restart", {**env, "MOCK_KILL_EXIT": "37"})
+        self.assertEqual(denied.returncode, 2)
+        self.assertIn("could not stop", denied.stderr)
+        self.assertFalse(capture.exists())
+        self.assertEqual(json.loads(table.read_text()), {"101": "first"})
+        unknown = self.invoke("restart", {**env, "MOCK_PGREP_ERROR": "1"})
+        self.assertEqual(unknown.returncode, 2)
+        self.assertIn("could not inspect", unknown.stderr)
+        self.assertFalse(capture.exists())
+
+    def test_lingering_process_blocks_restart_and_start_error_propagates(self):
+        env, table, trace, capture = self.lifecycle_env()
+        table.write_text(json.dumps({"101": "first"}))
+        lingering = self.invoke("restart", {**env, "MOCK_STAY_RUNNING": "1"})
+        self.assertEqual(lingering.returncode, 2)
+        self.assertIn("still running after stop", lingering.stderr)
+        self.assertFalse(capture.exists())
+        table.write_text("{}")
+        failed_start = self.invoke("restart", {**env, "MOCK_EXIT": "37"})
+        self.assertEqual(failed_start.returncode, 37, failed_start.stderr)
+        self.assertTrue(capture.exists())
+
+    def test_lifecycle_status_is_interactive_only_and_errors_use_stderr(self):
+        env, table, trace, capture = self.lifecycle_env()
+        started, start_output = self.invoke_tty("start", env)
+        self.assertEqual(started.returncode, 0, started.stderr)
+        self.assertIn("Xplanet display started.", start_output)
+        table.write_text(json.dumps({"101": "first"}))
+        stopped, stop_output = self.invoke_tty("stop", env)
+        self.assertEqual(stopped.returncode, 0, stopped.stderr)
+        self.assertIn("Xplanet display stopped.", stop_output)
+        restarted, restart_output = self.invoke_tty("restart", env)
+        self.assertEqual(restarted.returncode, 0, restarted.stderr)
+        self.assertIn("Xplanet display running.", restart_output)
+        self.assertNotIn("Xplanet display stopped.", restart_output)
+        self.assertTrue(capture.exists())
 
     def test_wrong_home_or_missing_geometry_fails_before_executable(self):
         config = self.root / "config/xp.def"

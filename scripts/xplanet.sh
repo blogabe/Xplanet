@@ -9,6 +9,12 @@ fail() {
     exit 2
 }
 
+interactive_note() {
+    if [[ -t 1 ]]; then
+        print -- "$1"
+    fi
+}
+
 install_failed() {
     print -u2 -- "xplanet.sh install: $1"
     exit 1
@@ -69,6 +75,7 @@ update_repository() {
     dirty=$("$git_bin" -C "$project_root" status --porcelain=v1 --untracked-files=no) ||
         fail "could not inspect local changes"
     [[ -z "$dirty" ]] || fail "local tracked changes exist; commit or handle them before update"
+    print -- "Checking the configured Git upstream..."
     "$git_bin" -C "$project_root" fetch --no-tags --no-recurse-submodules \
         --refmap= "$remote" "$source_ref" || fail "could not fetch configured upstream"
     target=$("$git_bin" -C "$project_root" rev-parse --verify 'FETCH_HEAD^{commit}') ||
@@ -88,6 +95,96 @@ update_repository() {
         merge --ff-only --no-autostash \
         --no-overwrite-ignore "$target" ||
         fail "fast-forward blocked by local files or another checkout change"
+}
+
+update_tap_formula() {
+    local brew_bin git_bin tap_root prefix receipt formula_path installed_path
+    local installed_commit installed_blob current_blob installed_rel current_rel
+    local installed_tap count option index refreshed_prefix refreshed_receipt
+    local refreshed_commit refreshed_blob tap_dirty running_before
+    local -a options
+    brew_bin=$(command -v brew) || fail "Git checkout updated, but Homebrew is unavailable; the Xplanet formula was not checked"
+    [[ "$brew_bin" == /* && -x "$brew_bin" ]] || fail "Homebrew must be an executable on PATH"
+    git_bin=$(command -v git) || fail "Git is required to compare the installed Xplanet formula"
+    command -v plutil >/dev/null || fail "macOS plutil is required to read the installed Xplanet receipt"
+    print -- "Checking the blogabe/xplanet Homebrew formula..."
+    "$brew_bin" update || fail "Git checkout updated, but Homebrew could not update its taps; Xplanet was not reinstalled"
+    tap_root=$(HOMEBREW_NO_AUTO_UPDATE=1 "$brew_bin" --repository blogabe/xplanet) ||
+        fail "the blogabe/xplanet tap is unavailable"
+    prefix=$(HOMEBREW_NO_AUTO_UPDATE=1 "$brew_bin" --prefix --installed blogabe/xplanet/xplanet) ||
+        fail "the tap's Xplanet formula is not installed; use install"
+    formula_path=$(HOMEBREW_NO_AUTO_UPDATE=1 "$brew_bin" formula blogabe/xplanet/xplanet) ||
+        fail "the tap's Xplanet formula is unavailable"
+    [[ "$tap_root" == /* && -d "$tap_root" && "$prefix" == /* &&
+       "$formula_path" == "$tap_root/"* ]] || fail "Homebrew returned an unexpected tap or formula path"
+    receipt="$prefix/INSTALL_RECEIPT.json"
+    [[ -f "$receipt" ]] || fail "installed Xplanet has no Homebrew receipt; cannot verify its build"
+    installed_tap=$(plutil -extract source.tap raw -o - "$receipt") ||
+        fail "installed Xplanet receipt has no tap identity"
+    [[ "$installed_tap" == blogabe/xplanet ]] ||
+        fail "installed Xplanet came from $installed_tap, not blogabe/xplanet; refusing to switch formula"
+    installed_path=$(plutil -extract source.path raw -o - "$receipt") ||
+        fail "installed Xplanet receipt has no formula path"
+    installed_commit=$(plutil -extract source.tap_git_head raw -o - "$receipt") ||
+        fail "installed Xplanet receipt has no tap commit; review its build options and reinstall manually"
+    [[ "$installed_path" == "$tap_root/"* &&
+       "$installed_commit" =~ '^[0-9a-f]{40,64}$' ]] ||
+        fail "installed Xplanet formula provenance is not verifiable"
+    installed_rel="${installed_path#$tap_root/}"
+    current_rel="${formula_path#$tap_root/}"
+    [[ "$installed_rel" == xplanet.rb || "$installed_rel" == Formula/xplanet.rb ]] ||
+        fail "installed Xplanet receipt names an unexpected formula file"
+    [[ "$current_rel" == xplanet.rb || "$current_rel" == Formula/xplanet.rb ]] ||
+        fail "the tap names an unexpected Xplanet formula file"
+    tap_dirty=$("$git_bin" -C "$tap_root" status --porcelain=v1 -- "$current_rel") ||
+        fail "could not inspect the tap formula checkout"
+    [[ -z "$tap_dirty" ]] ||
+        fail "the tap formula has local changes; refusing to reinstall from an uncommitted recipe"
+    # Tap HEAD can advance for unrelated commits; compare the committed formula bytes.
+    installed_blob=$("$git_bin" -C "$tap_root" rev-parse --verify "$installed_commit:$installed_rel") ||
+        fail "installed Xplanet formula commit is unavailable; review its build options and reinstall manually"
+    current_blob=$("$git_bin" -C "$tap_root" rev-parse --verify "HEAD:$current_rel") ||
+        fail "current tap formula is not committed; cannot compare recipes"
+    if [[ "$installed_blob" == "$current_blob" ]]; then
+        print -- "Xplanet tap formula unchanged; no reinstall needed."
+        return 0
+    fi
+    count=$(plutil -extract used_options raw -o - "$receipt") ||
+        fail "installed Xplanet build options are unavailable; refusing to lose them"
+    [[ "$count" == <-> && "$count" -le 32 ]] ||
+        fail "installed Xplanet build options are invalid"
+    options=()
+    for ((index = 0; index < count; index++)); do
+        option=$(plutil -extract "used_options.$index" raw -o - "$receipt") ||
+            fail "could not read installed Xplanet build option $index"
+        [[ "$option" =~ '^--(with|without)-[A-Za-z0-9-]+$' ]] ||
+            fail "installed Xplanet build option is not supported for automatic reinstall: $option"
+        options+=("$option")
+    done
+    running_before=$(xplanet_pids) ||
+        fail "could not inspect this user's Xplanet processes before reinstall"
+    print -- "Xplanet tap formula changed; rebuilding from source with installed options."
+    HOMEBREW_NO_AUTO_UPDATE=1 "$brew_bin" reinstall --formula --build-from-source \
+        blogabe/xplanet/xplanet "${options[@]}" ||
+        fail "Xplanet formula reinstall failed; the Git checkout may already be updated"
+    refreshed_prefix=$(HOMEBREW_NO_AUTO_UPDATE=1 "$brew_bin" --prefix --installed blogabe/xplanet/xplanet) ||
+        fail "Xplanet reinstall returned success, but no installed formula was found"
+    refreshed_receipt="$refreshed_prefix/INSTALL_RECEIPT.json"
+    [[ -f "$refreshed_receipt" ]] ||
+        fail "Xplanet reinstall returned success without an installed receipt"
+    [[ "$(plutil -extract source.tap raw -o - "$refreshed_receipt")" == blogabe/xplanet ]] ||
+        fail "Xplanet reinstall did not retain the blogabe/xplanet tap"
+    refreshed_commit=$(plutil -extract source.tap_git_head raw -o - "$refreshed_receipt") ||
+        fail "Xplanet reinstall did not record tap provenance"
+    refreshed_blob=$("$git_bin" -C "$tap_root" rev-parse --verify "$refreshed_commit:$current_rel") ||
+        fail "Xplanet reinstall provenance cannot be verified"
+    [[ "$refreshed_blob" == "$current_blob" ]] ||
+        fail "Xplanet reinstall did not record the updated formula; check Homebrew before retrying"
+    print -- "Xplanet tap formula reinstall verified."
+    if [[ -n "$running_before" ]]; then
+        print -- "Restarting the running Xplanet display with the updated formula..."
+        restart_xplanet || fail "Xplanet was reinstalled, but the display could not be restarted"
+    fi
 }
 
 select_earth_map() (
@@ -187,16 +284,84 @@ render_frame() {
         -num_times 1
 }
 
+start_xplanet() {
+    local -a geometry_args
+    load_render_config
+    [[ "$XPLANET_CONFIG" == "$project_root/config" ]] ||
+        fail "xp.def XPLANET_CONFIG must match this project's config directory"
+    geometry_args=()
+    if [[ -n "$XPLANET_GEOMETRY" ]]; then
+        geometry_args=("-geometry=$XPLANET_GEOMETRY")
+    fi
+    "$XPLANET_BIN" \
+        "-searchdir=$XPLANET_HOME" \
+        "-config=$XPLANET_CONFIG/xp.conf" \
+        "-projection=$XPLANET_PROJECTION" \
+        "${latitude_args[@]}" \
+        "-longitude=$XPLANET_LONGITUDE" \
+        -labelpos=+10-45 \
+        '-date_format=%D at %r' \
+        -color=green2 \
+        "${geometry_args[@]}" \
+        -fork || return $?
+    [[ "${1:-}" == quiet ]] || interactive_note "Xplanet display started."
+}
+
+xplanet_pids() {
+    local listing result pid
+    listing=$(pgrep -u "$EUID" -x xplanet)
+    result=$?
+    (( result == 1 )) && return 0
+    (( result == 0 )) || return 2
+    for pid in ${(f)listing}; do
+        [[ "$pid" == <-> ]] || return 2
+        print -- "$pid"
+    done
+}
+
+stop_xplanet() {
+    local listing pid remaining attempt kill_bin
+    kill_bin=$(whence -p kill) || fail "cannot locate the PID-specific kill command"
+    [[ "$kill_bin" == /* && -x "$kill_bin" ]] ||
+        fail "cannot use the PID-specific kill command"
+    listing=$(xplanet_pids) || fail "could not inspect this user's Xplanet processes"
+    if [[ -z "$listing" ]]; then
+        [[ "${1:-}" == quiet ]] ||
+            interactive_note "No Xplanet display for this user is running."
+        return 0
+    fi
+    for pid in ${(f)listing}; do
+        if ! "$kill_bin" -TERM "$pid"; then
+            "$kill_bin" -0 "$pid" 2>/dev/null &&
+                fail "could not stop Xplanet process $pid"
+        fi
+    done
+    for ((attempt = 0; attempt < 20; attempt++)); do
+        remaining=$(xplanet_pids) || fail "could not verify that Xplanet stopped"
+        [[ -z "$remaining" ]] && break
+        sleep 0.25
+    done
+    [[ -z "$remaining" ]] || fail "Xplanet is still running after stop"
+    [[ "${1:-}" == quiet ]] || interactive_note "Xplanet display stopped."
+}
+
+restart_xplanet() {
+    stop_xplanet quiet || return $?
+    start_xplanet quiet || return $?
+    interactive_note "Xplanet display running."
+}
+
 usage() {
     cat <<'USAGE'
 Usage: scripts/xplanet.sh COMMAND [SETUP_OPTION]
 
   install    Install Xplanet and Python, offer approval run, then run setup
   setup      Prompt for preparation, marker refresh and optional automation
-  update     Fast-forward the configured Git upstream if local files allow
+  update     Fast-forward Git, then check the blogabe Xplanet tap formula
 
   start      Launch the configured Xplanet display with -fork
-  stop       Stop Xplanet processes with killall
+  stop       Stop this user's Xplanet processes
+  restart    Stop and start Xplanet; start if it was not running
   preview    Render one 1920x1080 Earth frame to dev/preview/earth-manual.png
   render     Render one configured-size Earth frame to dev/preview/earth-render.png
 
@@ -216,12 +381,16 @@ Usage: scripts/xplanet.sh COMMAND [SETUP_OPTION]
 
 Install runs before the interactive setup and may request macOS security approvals.
 Update fetches only the current branch's configured upstream and refuses local
-tracked changes or untracked/ignored file collisions. It runs no setup steps.
+tracked changes or untracked/ignored file collisions. It then updates Homebrew
+tap metadata and rebuilds Xplanet only when this tap's formula recipe changed.
+It runs no setup steps.
 Setup delegates to xp-setup.sh. Use setup --dry-run or setup --check to inspect;
 these modes inspect working-directory preparation only. Without an option,
 setup prompts before preparation, live marker refresh and launchd activation.
 Setup installs no packages or virtual environment.
-Start detaches Xplanet; stop runs killall xplanet for all permitted matches.
+Start detaches Xplanet. Stop targets this user's Xplanet processes; restart
+waits for them to exit before starting one display. A formula reinstall restarts
+the display only if Xplanet was running before the rebuild.
 USAGE
 }
 
@@ -243,6 +412,7 @@ case "$switch" in
         ;;
     update)
         update_repository
+        update_tap_formula
         ;;
     test)
         "$script_dir/run-totalmarker" --test
@@ -265,27 +435,13 @@ case "$switch" in
             "$project_root/dev/preview/tmp"
         ;;
     start)
-        load_render_config
-        [[ "$XPLANET_CONFIG" == "$project_root/config" ]] ||
-            fail "xp.def XPLANET_CONFIG must match this project's config directory"
-        geometry_args=()
-        if [[ -n "$XPLANET_GEOMETRY" ]]; then
-            geometry_args=("-geometry=$XPLANET_GEOMETRY")
-        fi
-        "$XPLANET_BIN" \
-            "-searchdir=$XPLANET_HOME" \
-            "-config=$XPLANET_CONFIG/xp.conf" \
-            "-projection=$XPLANET_PROJECTION" \
-            "${latitude_args[@]}" \
-            "-longitude=$XPLANET_LONGITUDE" \
-            -labelpos=+10-45 \
-            '-date_format=%D at %r' \
-            -color=green2 \
-            "${geometry_args[@]}" \
-            -fork
+        start_xplanet
+        ;;
+    restart)
+        restart_xplanet
         ;;
     stop)
-        killall xplanet
+        stop_xplanet
         ;;
     earth)
         select_earth_map
@@ -294,19 +450,19 @@ case "$switch" in
         "$script_dir/run-totalmarker" labels
         ;;
     clouds)
-        print -- "Fetching the live cloud image with Python TotalMarker."
+        interactive_note "Fetching the live cloud image with Python TotalMarker."
         "$script_dir/run-totalmarker" clouds
         ;;
     quake)
-        print -- "Fetching live USGS earthquake data with Python TotalMarker."
+        interactive_note "Fetching live USGS earthquake data with Python TotalMarker."
         "$script_dir/run-totalmarker" quake
         ;;
     storm)
-        print -- "Fetching worldwide storm positions and tracks with Python TotalMarker."
+        interactive_note "Fetching worldwide storm positions and tracks with Python TotalMarker."
         "$script_dir/run-totalmarker" storm
         ;;
     volcano)
-        print -- "Fetching the live weekly volcano feed with Python TotalMarker."
+        interactive_note "Fetching the live weekly volcano feed with Python TotalMarker."
         "$script_dir/run-totalmarker" volcano
         ;;
     norad)

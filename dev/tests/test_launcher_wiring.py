@@ -1,5 +1,7 @@
 """Offline checks for launcher delegation before other providers exist."""
 import os
+import pty
+import select
 import shutil
 import subprocess
 
@@ -20,6 +22,8 @@ class LauncherWiringTests(Sandbox):
         runner.write_text(
             '#!/bin/sh\n'
             'printf "%s\\n" "$@" > "$TM_TEST_TRACE"\n'
+            'if [ -n "$TM_TEST_OUTPUT" ]; then printf "%s\\n" "$TM_TEST_OUTPUT"; fi\n'
+            'if [ -n "$TM_TEST_STDERR" ]; then printf "%s\\n" "$TM_TEST_STDERR" >&2; fi\n'
             'exit "$TM_TEST_EXIT"\n')
         runner.chmod(0o755)
         setup = scripts / "xp-setup.sh"
@@ -30,16 +34,12 @@ class LauncherWiringTests(Sandbox):
             'exit "$TM_SETUP_EXIT"\n')
         setup.chmod(0o755)
 
-    def test_products_delegate_one_argument_and_preserve_exit_status(self):
-        messages = {
-            "clouds": "Fetching the live cloud image with Python TotalMarker.",
-            "quake": "Fetching live USGS earthquake data with Python TotalMarker.",
-            "storm": "Fetching worldwide storm positions and tracks with Python TotalMarker.",
-            "volcano": "Fetching the live weekly volcano feed with Python TotalMarker.",
-        }
+    def test_products_delegate_json_and_errors_without_scheduled_banners(self):
         trace = self.base / "trace.txt"
         environment = {**os.environ, "TM_TEST_TRACE": str(trace),
-                       "TM_TEST_EXIT": "37"}
+                       "TM_TEST_EXIT": "37",
+                       "TM_TEST_OUTPUT": '{"outcome":"failed"}',
+                       "TM_TEST_STDERR": "provider diagnostic"}
         before = sorted(p.relative_to(self.root) for p in self.root.rglob("*"))
         for product in PRODUCTS:
             with self.subTest(product=product):
@@ -49,10 +49,32 @@ class LauncherWiringTests(Sandbox):
                     env=environment, text=True, capture_output=True, timeout=5)
                 self.assertEqual(result.returncode, 37, result.stderr)
                 self.assertEqual(trace.read_text(), product + "\n")
-                self.assertEqual(result.stdout, messages[product] + "\n")
+                self.assertEqual(result.stdout, '{"outcome":"failed"}\n')
+                self.assertEqual(result.stderr, "provider diagnostic\n")
                 self.assertEqual(
                     sorted(p.relative_to(self.root) for p in self.root.rglob("*")),
                     before)
+
+    def test_interactive_product_has_banner_and_preserves_json(self):
+        trace = self.base / "tty-trace.txt"
+        environment = {**os.environ, "TM_TEST_TRACE": str(trace),
+                       "TM_TEST_EXIT": "0",
+                       "TM_TEST_OUTPUT": '{"outcome":"unchanged"}',
+                       "TM_TEST_STDERR": ""}
+        master, slave = pty.openpty()
+        try:
+            result = subprocess.run([str(self.launcher), "quake"],
+                                    cwd=self.base, env=environment, stdout=slave,
+                                    stderr=subprocess.PIPE, text=True, timeout=5)
+            ready, _, _ = select.select([master], [], [], 1)
+            output = os.read(master, 4096).decode() if ready else ""
+        finally:
+            os.close(slave)
+            os.close(master)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Fetching live USGS earthquake data", output)
+        self.assertIn('{"outcome":"unchanged"}', output)
+        self.assertEqual(trace.read_text(), "quake\n")
 
     def test_setup_forwards_arguments_and_exit_status(self):
         trace = self.base / "setup-trace.txt"
@@ -88,6 +110,6 @@ class LauncherWiringTests(Sandbox):
             [str(self.launcher), "--help"], cwd=self.base,
             text=True, capture_output=True, timeout=5)
         self.assertEqual(result.returncode, 0)
-        for product in (*PRODUCTS, "start", "stop", "setup", "install", "update",
+        for product in (*PRODUCTS, "start", "stop", "restart", "setup", "install", "update",
                         "--dry-run", "--check"):
             self.assertIn(product, result.stdout)
