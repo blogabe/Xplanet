@@ -23,6 +23,10 @@ class BootstrapTests(unittest.TestCase):
         self.bin.mkdir()
         self.downloads = self.base / "downloads"
         self.downloads.mkdir()
+        # Apple Git may create xcrun_db in TMPDIR; keep its cache separate
+        # so download cleanup assertions still detect bootstrap leftovers.
+        self.git_tmp = self.base / "git-tmp"
+        self.git_tmp.mkdir()
         self.entry = self.base / "xplanet.sh"
         shutil.copy2(PROJECT / "scripts/xplanet.sh", self.entry)
         self.helper = self.base / "xp-bootstrap.sh"
@@ -57,7 +61,8 @@ raise SystemExit(int(os.environ.get("CURL_EXIT", "0")))
 args = sys.argv[1:]
 with open(os.environ["BOOT_TRACE"], "a") as f: f.write(json.dumps(["git", *args]) + "\\n")
 if args[0] == "check-ref-format":
-    raise SystemExit(subprocess.call([{real_git!r}, *args]))
+    raise SystemExit(subprocess.call(
+        [{real_git!r}, *args], env={{**os.environ, "TMPDIR": {str(self.git_tmp)!r}}}))
 if args[0] != "clone": raise SystemExit(99)
 if os.environ.get("CLONE_EXIT"): raise SystemExit(int(os.environ["CLONE_EXIT"]))
 scripts = Path(args[-1]) / "scripts"
@@ -105,7 +110,8 @@ if not os.environ.get("NO_INSTALLER"):
         # Substitute only the network URL; exercise Git's real clone mechanics.
         self.stub("git", f'''args = sys.argv[1:]
 if args[0] == "clone": args[-2] = {str(origin)!r}
-raise SystemExit(subprocess.call([{real_git!r}, *args]))
+raise SystemExit(subprocess.call(
+        [{real_git!r}, *args], env={{**os.environ, "TMPDIR": {str(self.git_tmp)!r}}}))
 ''')
         result = self.run_bootstrap(XPLANET_BOOTSTRAP_REF="feature/bootstrap-install")
         self.assertEqual(result.returncode, 0, result.stderr)
