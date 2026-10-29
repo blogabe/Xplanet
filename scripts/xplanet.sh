@@ -391,9 +391,9 @@ Usage: scripts/xplanet.sh COMMAND [SETUP_OPTION]
   earth      Select the current month's configured Earth map link
   clouds     Fetch the live cloud image through Python TotalMarker
   quake      Fetch USGS GeoJSON through Python TotalMarker
-  volcano    Fetch the live GVP CAP feed through Python TotalMarker
+  volcano    Refresh volcano markers from configured CAP or GVP weekly HTML
   storm      Fetch worldwide tropical-cyclone markers and tracks
-  label      Refresh the cloud update label offline (alias: labels)
+  label      Refresh product update labels without fetching (alias: labels)
 
   norad      Update optional, explicitly selected NORAD satellite files
   eclipse    Update optional NASA central eclipse markers and arcs

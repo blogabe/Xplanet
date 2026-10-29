@@ -52,8 +52,8 @@ Motherlode tiles.
 
 TotalMarker settings live in `config/totalmarker.toml`. `[cloud]` selects a Xeric
 or custom HTTPS image source and its credentials; `[quake]` selects a USGS feed
-and magnitude threshold; `[storm]` uses NHC and JTWC; `[volcano]` uses Smithsonian
-GVP weekly data. See `config/totalmarker.example.toml` for available styles,
+and magnitude threshold; `[storm]` uses NHC and JTWC; `[volcano]` supports CAP or
+Smithsonian GVP weekly data. See `config/totalmarker.example.toml` for styles,
 intervals and output settings. If a launchd job needs a credential from the
 environment, configure it for that job; launchd does not inherit your interactive
 shell environment.
@@ -117,6 +117,9 @@ corresponding Xplanet display settings. Santa has no live provider or production
 tracking.
 
 ## Known limitation
+
+Set a CAP URL or choose `provider = "weekly_html"` in `[volcano]` before
+refreshing; the shipped CAP URL is a placeholder.
 
 Automated requests to the Smithsonian GVP weekly volcano source are returning
 HTTP 403. Setup treats a failed volcano refresh as a warning and continues,

@@ -82,8 +82,8 @@ detail_align = "Above"
 # CAP is selected; this example URL is deliberately invalid. "weekly_html"
 # uses the fixed official GVP weekly page and ignores the retained CAP URL.
 # GVP currently may return HTTP 403 to programmatic requests; no equivalent
-# global weekly replacement has been verified. Setup warns on that specific
-# access failure while preserving the last good marker and failed source status.
+# global weekly replacement has been verified. Setup warns on failed product
+# refreshes while preserving prior markers and the last successful refresh time.
 # Check source access before a deliberate live request.
 provider = "cap"
 url = "https://volcano.example.invalid/WeeklyVolcanoCAP.xml"
