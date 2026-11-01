@@ -2,10 +2,12 @@
 !/.gitignore
 !/.gitattributes
 !/README.md
+!/LICENSE
 !/docs/
 !/docs/technical-notes.md
 !/docs/architecture.md
 !/docs/audit-disposition.md
+!/docs/asset-credits.md
 !/.github/
 !/.github/workflows/
 !/.github/workflows/offline-tests.yml
@@ -19,8 +21,6 @@
 !/scripts/lib/
 !/scripts/lib/xplanet/
 !/scripts/lib/xplanet/*.zsh
-!/scripts/lib/xplanet/display_process.py
-!/scripts/lib/xplanet/launchd_registration.py
 !/scripts/launchd/
 !/scripts/launchd/*.plist.example
 /scripts/launchd/*.plist

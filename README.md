@@ -154,3 +154,10 @@ Data sources include
 [Smithsonian GVP](https://volcano.si.edu/), [CelesTrak](https://celestrak.org/)
 and [NASA GSFC eclipses](https://eclipse.gsfc.nasa.gov/). The Xplanet build is
 provided through the [Homebrew tap](https://github.com/blogabe/homebrew-xplanet).
+
+## License and credits
+
+Original project code and documentation are [MIT licensed](LICENSE). Bundled
+textures, third-party data and upstream software retain their own terms; see
+[asset credits and third-party terms](docs/asset-credits.md). Finished runtime
+textures remain included; source tiles/archives are local development material.
