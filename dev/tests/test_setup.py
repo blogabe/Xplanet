@@ -1,5 +1,4 @@
 """Preparation writes only to isolated project fixture roots."""
-from datetime import datetime
 from pathlib import Path
 import plistlib
 import shlex
@@ -7,7 +6,7 @@ import shutil
 import subprocess
 import sys
 
-from .support import PROJECT, Sandbox, wait_for_prompt
+from .support import PROJECT, Sandbox, wait_for_prompt, copy_launcher
 
 
 class SetupTests(Sandbox):
@@ -67,11 +66,16 @@ class SetupTests(Sandbox):
         (config / "totalmarker.example.toml").write_bytes(b"personal example\n")
         (config / "earth.example").write_bytes(b"earth example\n")
         self.sources = {
-            f"assets/maps/world/world.2004{datetime.now().month:02d}.3x5400x2700.png": b"map",
             "assets/maps/lights/earth_lights_4800.tiff": b"lights",
             "assets/maps/bump/gebco_08_rev_elev_21600x10800.png": b"bump",
             "assets/maps/specular/specular.png": b"specular",
         }
+        # Setup selects the local calendar month. Supply the complete fixture
+        # set so an inherited UTC runner and a local shell cannot disagree.
+        self.sources.update({
+            f"assets/maps/world/world.2004{month:02d}.3x5400x2700.png": b"map"
+            for month in range(1, 13)
+        })
         for name, data in self.sources.items():
             destination = self.root / name
             destination.parent.mkdir(parents=True, exist_ok=True)
@@ -356,8 +360,8 @@ class SetupTests(Sandbox):
     def _shell_fixture(self):
         scripts = self.root / "scripts"
         scripts.mkdir()
-        for name in ("xp-setup.sh", "xplanet.sh"):
-            shutil.copy2(PROJECT / "scripts" / name, scripts / name)
+        shutil.copy2(PROJECT / "scripts/xp-setup.sh", scripts / "xp-setup.sh")
+        copy_launcher(scripts / "xplanet.sh")
         runner = scripts / "run-totalmarker"
         runner.write_text('#!/bin/sh\n'
                           'if [ "$1" = --python-path ]; then printf "%s\\n" "$TM_PYTHON"; exit 0; fi\n'

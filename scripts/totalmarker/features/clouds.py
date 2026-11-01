@@ -6,6 +6,7 @@ import hashlib
 import json
 import time
 
+from ..diagnostics import Attempt, finish
 from ..errors import DownloadError, ImageError, StorageError
 from ..http import Fetcher, safe_header
 from ..image import cloud_creation_time, validate_jpeg
@@ -71,6 +72,7 @@ def run(fs, settings, *, label_only=False, fetcher=None, now=None, environment=N
             if old_estimate is not None:
                 record.setdefault("legacy_label_at", old_estimate)
         record["checked_at"] = now
+        attempt = Attempt(fetcher if fetcher is not None else Fetcher())
         existing = fs.read(settings.image, settings.max_bytes)
         valid_existing = False
         if existing is not None:
@@ -114,7 +116,7 @@ def run(fs, settings, *, label_only=False, fetcher=None, now=None, environment=N
                 previous_record = copy.deepcopy(record)
                 try:
                     credentials = settings.auth.resolve(environment)
-                    response = (fetcher if fetcher is not None else Fetcher()).fetch(
+                    response = attempt.fetch(
                         settings.url, validators=validators, credentials=credentials,
                         timeout=settings.timeout, max_bytes=settings.max_bytes)
                     if response.status == 304:
@@ -153,7 +155,9 @@ def run(fs, settings, *, label_only=False, fetcher=None, now=None, environment=N
                     # Never import an attempt time as a successful installed time.
                     record.clear()
                     record.update(previous_record)
-        record["last_outcome"] = outcome
+        if not label_only and outcome != "failed" and (new_image is not None or valid_existing):
+            record["successful_at"] = now
+        finish(record, now, outcome, message, attempt)
         label = (refresh_all(old_label, state, settings, now, append_product="clouds")
                  if settings.labels_enabled else None)
         publisher.publish(state, label, image=new_image, source_mtime=source_mtime)

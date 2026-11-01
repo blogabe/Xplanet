@@ -78,7 +78,7 @@ class HealthTests(Sandbox):
         row = rows(report)['volcano']
         self.assertEqual(row['last_error']['message'], 'Source returned HTTP 403')
         self.assertEqual(row['last_success_at'], NOW)
-        self.assertIsNone(row['last_attempt_at'])  # checked_at is not an HTTP attempt.
+        self.assertEqual(row['last_attempt_at'], NOW)  # Actual request provenance is saved.
         self.assertEqual(row['coverage']['report_period_end'], '2023-11-08')
         self.assertEqual(row['output'], {'present': True, 'verified': True, 'retained': True})
         self.assertEqual(snapshot(self.root), before)
@@ -180,6 +180,7 @@ class HealthTests(Sandbox):
         self.assertIn('Volcanoes: no saved output; no successful refresh recorded', text)
         code, text = invoke('--json')
         self.assertEqual(json.loads(text)['mode'], 'saved')
+        self.assertIn('last_publication_at', json.loads(text)['products'][0])
         self.assertEqual(snapshot(self.root), before)
         code, text = invoke('--verbose')
         self.assertEqual(code, 0)

@@ -3,6 +3,9 @@ import re
 import subprocess
 import tomllib
 import unittest
+from pathlib import Path
+import tempfile
+from unittest.mock import patch
 
 from .support import PROJECT
 
@@ -89,6 +92,9 @@ class ReleaseContentTests(unittest.TestCase):
                 self.assertIsNone(forbidden.search(path.read_bytes()), name)
 
     def test_readme_monthly_map_example_has_all_shipped_months(self):
+        if (not (PROJECT / "assets/maps").exists()
+                and not any(name.startswith("assets/") for _, name in self.tracked())):
+            self.skipTest("optional asset bundle absent from source checkout; validate it in the release candidate")
         readme = (PROJECT / "README.md").read_text()
         match = re.search(r"`EARTH_MAP_PRE=([A-Za-z0-9.]+)/([A-Za-z0-9.]+)`", readme)
         self.assertIsNotNone(match)
@@ -99,6 +105,22 @@ class ReleaseContentTests(unittest.TestCase):
             path = (PROJECT / "assets/maps" / folder /
                     f"{stem}.2004{month:02d}.3x5400x2700.png")
             self.assertTrue(path.is_file() and not path.is_symlink(), path)
+
+    def test_source_only_skip_does_not_hide_an_incomplete_release_bundle(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "README.md").write_text("`EARTH_MAP_PRE=world.topo/world.topo`")
+            (root / "config").mkdir()
+            (root / "config/xp.def.example").write_text("world.topo/world.topo")
+            with patch(__name__ + ".PROJECT", root):
+                with patch.object(self, "tracked", return_value=iter(())):
+                    with self.assertRaises(unittest.SkipTest):
+                        self.test_readme_monthly_map_example_has_all_shipped_months()
+                # A packaged bundle containing icons but omitting promised maps
+                # must fail rather than inheriting the source-only exemption.
+                with patch.object(self, "tracked", return_value=iter((("100644", "assets/icons/example.png"),))):
+                    with self.assertRaises(AssertionError):
+                        self.test_readme_monthly_map_example_has_all_shipped_months()
 
     def test_public_toml_examples_contain_no_credentials(self):
         examples = [PROJECT / "config/totalmarker.example.toml"]

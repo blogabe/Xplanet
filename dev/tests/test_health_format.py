@@ -12,6 +12,7 @@ def product(name, **changes):
            'status': 'unknown', 'access': 'not_checked', 'content': 'unknown',
            'freshness': 'unknown', 'last_check_at': NOW - 60,
            'last_attempt_at': None, 'last_success_at': NOW - 3600,
+           'last_publication_at': NOW - 7200,
            'last_outcome': 'changed', 'source_at': None,
            'coverage': {'report_period_start': None, 'report_period_end': None,
                         'coverage_end_at': None}, 'last_error': None, 'count': None,
@@ -44,6 +45,8 @@ Disabled: Satellites, Eclipses, Santa''')
         self.assertIn('https://example.invalid/feed', verbose)
         self.assertIn('before last success: Old contradictory JTWC source', verbose)
         self.assertNotIn('recovered', verbose)
+        self.assertIn('success 2026-11-01 04:00Z; publication 2026-11-01 03:00Z', verbose)
+        self.assertNotIn('publication', format_report(saved))
 
     def test_live_valid_quake_and_stale_volcano_remain_truthful(self):
         live = report('live', product('quake', access='ok', content='valid'),

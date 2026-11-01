@@ -8,6 +8,7 @@ import json
 import math
 import re
 
+from .diagnostics import PRODUCTS, validate as validate_diagnostics
 from .errors import FeedError, StorageError
 from .santa_model import snapshot_from_record
 
@@ -48,6 +49,11 @@ def validate_state(value):
     if not isinstance(value, dict) or value.get("schema") != 1 or not isinstance(
             value.get("products"), dict):
         raise StorageError("Unsupported or invalid persistent state")
+    for product in PRODUCTS:
+        record = value["products"].get(product, {})
+        if not isinstance(record, dict):
+            raise StorageError("Invalid product state")
+        validate_diagnostics(record)
     record = value["products"].get("clouds", {})
     if not isinstance(record, dict):
         raise StorageError("Invalid cloud state")

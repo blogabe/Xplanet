@@ -6,6 +6,7 @@ import hashlib
 import json
 import time
 
+from ..diagnostics import Attempt, finish
 from ..errors import DownloadError, FeedError, StorageError
 from ..http import Fetcher, safe_header
 from ..labels import refresh_all, volcano_timestamp
@@ -66,6 +67,7 @@ def run(fs, settings, *, fetcher=None, now=None):
             if legacy is not None:
                 record["legacy_label_at"] = legacy  # Unverified, never a source timestamp.
         record["checked_at"] = now
+        attempt = Attempt(fetcher if fetcher is not None else Fetcher())
         existing = fs.read(options.marker, 32 * 1024 * 1024)
         existing_hash = hashlib.sha256(existing).hexdigest() if existing is not None else None
         valid_existing = (existing_hash is not None
@@ -93,7 +95,7 @@ def run(fs, settings, *, fetcher=None, now=None):
                                 raise StorageError("Invalid stored HTTP validator")
                             validators[header] = value
                 source_url = WEEKLY_URL if options.provider == "weekly_html" else options.url
-                response = (fetcher if fetcher is not None else Fetcher()).fetch(
+                response = attempt.fetch(
                     source_url, validators=validators, credentials=None,
                     timeout=options.timeout, max_bytes=options.max_bytes)
                 if response.status == 304:
@@ -168,7 +170,7 @@ def run(fs, settings, *, fetcher=None, now=None):
                 record.update(before_attempt)
         if outcome != "failed" and (marker is not None or valid_existing):
             record["successful_at"] = now
-        record["last_outcome"] = outcome
+        finish(record, now, outcome, message, attempt)
         label = (refresh_all(old_label, state, settings, now,
                              append_product="volcano" if marker is not None or valid_existing else None)
                  if settings.labels_enabled else None)

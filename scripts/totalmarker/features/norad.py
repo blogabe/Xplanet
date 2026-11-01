@@ -7,6 +7,7 @@ import json
 import re
 import time
 
+from ..diagnostics import Attempt, finish
 from ..errors import DownloadError, FeedError, StorageError
 from ..config import NoradStyle
 from ..http import Fetcher
@@ -272,6 +273,7 @@ def run(fs, settings, *, fetcher=None, now=None):
         except UnicodeError:
             raise StorageError("Existing labels are not valid UTF-8") from None
         record["checked_at"] = now
+        attempt = Attempt(fetcher if fetcher is not None else Fetcher())
         existing_sat = fs.read(options.satellite, PairPublisher.LIMIT)
         existing_tle = fs.read(options.satellite + ".tle", PairPublisher.LIMIT)
         valid_existing = (
@@ -334,7 +336,7 @@ def run(fs, settings, *, fetcher=None, now=None):
             # run cannot immediately repeat the same provider request.
             fs.write(settings.state, json_bytes(validate_state(copy.deepcopy(state))))
             try:
-                client = fetcher if fetcher is not None else Fetcher()
+                client = attempt
                 selectors, elements, epochs = [], [], []
                 selection, skipped_unsupported = _selections(client, options)
                 for catalog_id, style, name_contains in selection:
@@ -382,7 +384,7 @@ def run(fs, settings, *, fetcher=None, now=None):
                 message += "; " + warning + "; group coverage is partial"
         if not deferred_refresh and outcome != "failed" and (satellite is not None or valid_existing):
             record["successful_at"] = now
-        record["last_outcome"] = outcome
+        finish(record, now, outcome, message, attempt)
         label = (refresh_all(old_label, state, settings, now,
                              append_product="norad" if satellite is not None or valid_existing else None)
                  if settings.labels_enabled else None)

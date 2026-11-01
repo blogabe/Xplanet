@@ -8,7 +8,7 @@ import sys
 import shutil
 import subprocess
 
-from .support import PROJECT, Sandbox
+from .support import copy_launcher, PROJECT, Sandbox
 
 
 class LauncherRenderTests(Sandbox):
@@ -17,7 +17,7 @@ class LauncherRenderTests(Sandbox):
         scripts = self.root / "scripts"
         scripts.mkdir()
         self.wrapper = scripts / "xplanet.sh"
-        shutil.copy2(PROJECT / "scripts/xplanet.sh", self.wrapper)
+        copy_launcher(self.wrapper)
         self.capture = self.root / "dev/preview/capture.json"
         self.mock = scripts / "mock-xplanet"
         self.mock.write_text(

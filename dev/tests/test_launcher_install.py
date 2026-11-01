@@ -4,7 +4,7 @@ import shutil
 import subprocess
 import sys
 
-from .support import PROJECT, Sandbox, wait_for_prompt
+from .support import copy_launcher, PROJECT, Sandbox, wait_for_prompt
 
 
 class LauncherInstallTests(Sandbox):
@@ -51,7 +51,7 @@ class LauncherInstallTests(Sandbox):
         scripts = self.root / "scripts"
         scripts.mkdir()
         self.launcher = scripts / "xplanet.sh"
-        shutil.copy2(PROJECT / "scripts/xplanet.sh", self.launcher)
+        copy_launcher(self.launcher)
         self.bin = self.base / "bin"
         self.bin.mkdir()
         self.prefix = self.base / "formula"

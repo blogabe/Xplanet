@@ -1,6 +1,7 @@
 from pathlib import Path
 import os
 import select
+import shutil
 import struct
 import tempfile
 import time
@@ -12,6 +13,12 @@ from totalmarker.paths import RootFS
 
 PROJECT = Path(__file__).resolve().parents[2]
 TEMP = PROJECT / "dev" / "tests" / ".tmp"
+
+
+def copy_launcher(destination):
+    """Copy the checkout CLI and its private macOS workflows into a sandbox."""
+    shutil.copy2(PROJECT / "scripts/xplanet.sh", destination)
+    shutil.copytree(PROJECT / "scripts/lib", destination.parent / "lib", dirs_exist_ok=True)
 
 
 def wait_for_prompt(process, phrase, timeout=5):

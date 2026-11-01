@@ -5,6 +5,7 @@ import hashlib
 import json
 import time
 
+from ..diagnostics import Attempt, finish
 from ..errors import DownloadError, FeedError, StorageError
 from ..http import Fetcher
 from ..labels import refresh_all, storm_timestamp
@@ -53,6 +54,7 @@ def run(fs, settings, *, fetcher=None, now=None):
             if legacy is not None:
                 record["legacy_label_at"] = legacy  # Existing row is unverified.
         record["checked_at"] = now
+        attempt = Attempt(fetcher if fetcher is not None else Fetcher())
         existing_marker = fs.read(options.marker, StormPublisher.LIMIT)
         existing_arc = fs.read(options.arc, StormPublisher.LIMIT)
         valid_existing = (existing_marker is not None and existing_arc is not None
@@ -69,7 +71,7 @@ def run(fs, settings, *, fetcher=None, now=None):
             before_attempt = copy.deepcopy(record)
             try:
                 snapshot = collect_snapshot(
-                    fetcher if fetcher is not None else Fetcher(), now=now,
+                    attempt, now=now,
                     timeout=options.timeout, max_bytes=options.max_bytes)
                 marker_body, arc_body = render_bodies(
                     snapshot, options, required_groups=REQUIRED_GROUPS)
@@ -96,7 +98,7 @@ def run(fs, settings, *, fetcher=None, now=None):
                 record.update(before_attempt)
         if outcome != "failed" and (marker is not None or valid_existing):
             record["successful_at"] = now
-        record["last_outcome"] = outcome
+        finish(record, now, outcome, message, attempt)
         label = (refresh_all(old_label, state, settings, now,
                              append_product="storm" if marker is not None or valid_existing else None)
                  if settings.labels_enabled else None)

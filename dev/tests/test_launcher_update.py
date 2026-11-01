@@ -6,7 +6,7 @@ import shutil
 import subprocess
 import sys
 
-from .support import PROJECT, Sandbox
+from .support import copy_launcher, PROJECT, Sandbox
 
 
 class LauncherUpdateTests(Sandbox):
@@ -16,7 +16,7 @@ class LauncherUpdateTests(Sandbox):
         self.publisher = self.base / "publisher"
         self.launcher = self.root / "scripts/xplanet.sh"
         self.launcher.parent.mkdir()
-        shutil.copy2(PROJECT / "scripts/xplanet.sh", self.launcher)
+        copy_launcher(self.launcher)
         (self.root / ".gitignore").write_text("cache/\n")
         (self.root / "tracked.txt").write_text("original\n")
         self.environment = {

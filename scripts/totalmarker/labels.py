@@ -1,4 +1,5 @@
 """Legacy local-time product labels; preserve unrelated records verbatim."""
+from .diagnostics import success_at
 import re
 from datetime import datetime
 import time
@@ -141,10 +142,7 @@ def render_norad(existing, successful_at, now, warning, colors, *, append=True):
 
 
 def marker_timestamp(record):
-    # Older state has no successful-at field. A confirmed publication is a
-    # conservative lower bound; poll and legacy-label times are not proof.
-    successful_at = record.get("successful_at")
-    return successful_at if successful_at is not None else record.get("installed_at")
+    return success_at(record)
 
 
 def refresh_all(existing, state, settings, now, *, append_product=None):
