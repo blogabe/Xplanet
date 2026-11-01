@@ -17,7 +17,8 @@ class HealthLauncherTests(Sandbox):
         runner.write_text('#!/bin/sh\nprintf "%s\\n" "$@" > "$HEALTH_TRACE"\n'
                           'printf \'{"mode":"live"}\\n\'\nexit 1\n')
         runner.chmod(0o755)
-        for args in [('health',), ('health', '--live', '--json')]:
+        for args in [('health',), ('health', '--live', '--json'),
+                     ('health', '--verbose'), ('health', '--live', '--verbose')]:
             result = subprocess.run([str(launcher), *args], cwd=self.base,
                                     env={**os.environ, 'HEALTH_TRACE': str(trace)},
                                     text=True, capture_output=True, timeout=5)
@@ -30,6 +31,7 @@ class HealthLauncherTests(Sandbox):
         self.assertIn('--live', help_result.stdout)
 
     def test_health_options_stay_invalid_for_refresh_commands(self):
-        result = subprocess.run([str(PROJECT / 'scripts/xplanet.sh'), 'volcano', '--live'],
-                                cwd=self.base, text=True, capture_output=True, timeout=5)
-        self.assertEqual(result.returncode, 2)
+        for option in ('--live', '--verbose'):
+            result = subprocess.run([str(PROJECT / 'scripts/xplanet.sh'), 'volcano', option],
+                                    cwd=self.base, text=True, capture_output=True, timeout=5)
+            self.assertEqual(result.returncode, 2)
