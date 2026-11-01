@@ -225,35 +225,129 @@ def exit_status(report):
                    for row in report['products']))
 
 
-def format_report(report):
-    def stamp(value):
-        if not isinstance(value, (int, float)) or isinstance(value, bool):
-            return 'unknown'
-        try:
-            return datetime.fromtimestamp(value, timezone.utc).strftime('%Y-%m-%d %H:%MZ')
-        except (OverflowError, ValueError, OSError):
-            return 'unknown'
-    lines = [f"TotalMarker health ({report['mode']}; " +
-             ('no network)' if report['mode'] == 'saved' else 'normal refresh state unchanged)')]
+_TITLES = {'clouds': 'Clouds', 'quake': 'Earthquakes', 'storm': 'Storms',
+           'volcano': 'Volcanoes', 'norad': 'Satellites', 'eclipse': 'Eclipses',
+           'santa': 'Santa'}
+
+
+def _stamp(value):
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        return 'unknown'
+    try:
+        return datetime.fromtimestamp(value, timezone.utc).strftime('%Y-%m-%d %H:%MZ')
+    except (OverflowError, ValueError, OSError):
+        return 'unknown'
+
+
+def _success_age(value, now):
+    if value is None:
+        return 'no successful refresh recorded'
+    age = now - value
+    if age < 0:
+        return 'last success ' + _stamp(value)
+    if age < 60:
+        age_text = 'just now'
+    elif age < 3600:
+        age_text = f'{int(age // 60)}m ago'
+    elif age < 86400:
+        age_text = f'{int(age // 3600)}h ago'
+    else:
+        age_text = f'{int(age // 86400)}d ago'
+    return 'last success ' + age_text
+
+
+def _brief(message):
+    # HTTP diagnostics append headers after a semicolon. Keep them in verbose
+    # output, along with the complete provider message and recorded timestamps.
+    text = ' '.join((message or '').splitlines()[:1]).split(';', 1)[0].strip()
+    return text if len(text) <= 110 else text[:107] + '...'
+
+
+def _current_error(row):
+    error = row['last_error']
+    success = row['last_success_at']
+    return (error is not None and isinstance(error.get('at'), (int, float))
+            and (success is None or error['at'] >= success)
+            and row['last_outcome'] == 'failed')
+
+
+def _summary(row, live):
+    status, freshness = row['status'], row['freshness']
+    if status == 'unsupported':
+        return 'not supported', _brief(row.get('message'))
+    if live:
+        if status == 'access_failed':
+            return 'access failed', _brief(row.get('message'))
+        if status in {'invalid_content', 'error'}:
+            return ('invalid content' if status == 'invalid_content' else 'probe failed',
+                    _brief(row.get('message')))
+        if status == 'stale':
+            if row['product'] == 'volcano' and row['access'] == 'ok':
+                return 'reachable; report parsed; coverage stale', ''
+            return 'stale data', _brief(row.get('message'))
+        if row['content'] == 'valid':
+            detail = ('no events' if status == 'no_events' else
+                      'current' if freshness == 'current' else 'freshness not assessed')
+            return 'validation passed; ' + detail, ''
+        return 'not probed', _brief(row.get('message'))
+    detail = _brief(row['last_error']['message']) if _current_error(row) else ''
+    if freshness == 'stale':
+        return ('coverage stale' if row['product'] == 'volcano' else 'saved data stale'), detail
+    if row['last_outcome'] == 'failed':
+        return 'refresh failed', detail
+    if not row['output']['present']:
+        return 'no saved output', ''
+    if not row['output']['verified']:
+        return 'saved output unverified', ''
+    return ('saved output current' if freshness == 'current' else
+            'saved output; freshness not assessed'), ''
+
+
+def format_report(report, *, verbose=False):
+    live = report['mode'] == 'live'
+    lines = [('TotalMarker live check (normal output unchanged)' if live else
+              'TotalMarker saved status (no network check)')]
+    disabled = []
     for row in report['products']:
-        lines.append(f"{row['product']}: {row['status']} | access {row['access']} | "
-                     f"content {row['content']} | freshness {row['freshness']}")
+        title = _TITLES[row['product']]
         if row['status'] == 'disabled':
+            disabled.append(title)
             continue
-        lines.append('  source: ' + (', '.join(row['sources']) or 'none'))
-        lines.append(f"  saved check {stamp(row['last_check_at'])}; attempt {stamp(row['last_attempt_at'])}; "
-                     f"success {stamp(row['last_success_at'])}; source date {stamp(row.get('probe_source_at', row['source_at']))}")
-        coverage = row.get('probe_coverage', row['coverage'])
-        if coverage['report_period_start']:
-            lines.append(f"  coverage {coverage['report_period_start']} through {coverage['report_period_end']}")
-        if row.get('message'):
-            lines.append('  ' + row['message'])
-        if row['last_outcome']:
-            lines.append('  saved result: ' + row['last_outcome'])
-        if row['last_error'] and row['last_error']['message'] != row.get('message'):
-            lines.append('  last error: ' + row['last_error']['message'])
-        if row['output']['retained']:
-            lines.append('  prior output retained')
+        summary, detail = _summary(row, live)
+        line = f"{title}: {summary}; {_success_age(row['last_success_at'], report['checked_at'])}"
+        if detail:
+            line += ' — ' + detail
+        if row['output']['retained'] and (live or row['last_outcome'] == 'failed' or row['status'] == 'stale'):
+            line += '; prior output retained'
+        lines.append(line)
+    if disabled:
+        lines.append('Disabled: ' + ', '.join(disabled))
     if report['warning']:
         lines.append(report['warning'])
+    if verbose:
+        lines.append('\nDetails:')
+        for row in report['products']:
+            if row['status'] == 'disabled':
+                continue
+            lines.append(f"{_TITLES[row['product']]}: status {row['status']}; access {row['access']}; "
+                         f"content {row['content']}; freshness {row['freshness']}")
+            lines.append('  source: ' + (', '.join(row['sources']) or 'none'))
+            lines.append(f"  saved check {_stamp(row['last_check_at'])}; attempt {_stamp(row['last_attempt_at'])}; "
+                         f"success {_stamp(row['last_success_at'])}; source date {_stamp(row['source_at'])}")
+            for label, coverage in [('saved coverage', row['coverage']),
+                                    ('probe coverage', row.get('probe_coverage', {}))]:
+                if coverage.get('report_period_start'):
+                    lines.append(f"  {label}: {coverage['report_period_start']} through {coverage['report_period_end']}")
+            if row.get('probe_source_at') is not None:
+                lines.append('  probe source date: ' + _stamp(row['probe_source_at']))
+            if row.get('message'):
+                lines.append('  probe result: ' + row['message'])
+            if row['last_outcome']:
+                lines.append('  saved result: ' + row['last_outcome'])
+            error = row['last_error']
+            if error:
+                note = ('; before last success' if error.get('at') is not None
+                        and row['last_success_at'] is not None
+                        and error['at'] < row['last_success_at'] else '')
+                lines.append(f"  recorded error {_stamp(error.get('at'))}{note}: {error['message']}")
     return '\n'.join(lines)

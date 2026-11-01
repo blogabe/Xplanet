@@ -62,9 +62,10 @@ launcher's interpreter selection. No global `PATH` change is required.
 ## Source health
 
 `./scripts/xplanet.sh health` reads saved state without fetching or writing.
-It lists configured sources, saved check/attempt/success times, source dates or
-coverage, the last recorded error, and retained output. A check time can include
-an offline cache check; an unknown attempt time is not inferred from it. Cloud
+The default is one line per enabled product with saved status and last success.
+`--verbose` adds source URLs, check/attempt times, coverage and dated errors.
+Errors recorded before the last success are omitted from the default summary.
+A check time can include an offline cache check; an unknown attempt time is not inferred from it. Cloud
 success falls back to its last confirmed publication when no successful-refresh
 time was saved. Missing state or unsupported freshness remains unknown.
 

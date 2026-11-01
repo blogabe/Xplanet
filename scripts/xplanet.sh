@@ -395,7 +395,7 @@ Usage: scripts/xplanet.sh COMMAND [OPTIONS]
   storm      Fetch worldwide tropical-cyclone markers and tracks
   label      Refresh product update labels without fetching (alias: labels)
   health     Read saved source health; --live probes without updating outputs
-             Use health --json for structured results
+             Use --verbose for details or --json for structured results
 
   norad      Update optional, explicitly selected NORAD satellite files
   eclipse    Update optional NASA central eclipse markers and arcs
