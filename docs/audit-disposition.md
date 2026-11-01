@@ -20,7 +20,7 @@ inferred from offline tests. Original audit remains unchanged.
 | XP-015 | Addressed | CI full macOS suite plus explicit portable data/publication subset. No broad skip batch applied; hosted checks await publication. |
 | XP-017, XP-019, XP-020, XP-021, XP-022, XP-039, XP-042, XP-091, XP-092, XP-096, XP-098, XP-099, XP-106, XP-108, XP-116, XP-117, XP-153, XP-160 | Boundary tests added; live evidence required | Keep strict source/date/forecast/season/type rules and renderer assumptions. Missing authentic empty/current/final/renewal/boundary captures or renderer validation not fabricated. Fixture limits clarified; temporal error messages improved. |
 | XP-023, XP-026, XP-151 | Deferred | Mixed fixture attribute strategy and GVP byte-exact policy remain; structural fixture valid, current autocrlf differs from audit. No blanket capture-byte conversion. |
-| XP-025 | Not current | Canonical checkout clean; alleged 533 mode changes absent. Sync cause unproven; no Git settings changed. |
+| XP-025 | Not current | No Git mode diff on canonical recheck; 533 files had filesystem 0655 versus tracked100644, with owner execute bit unchanged. Cause unproven; permissions/settings left untouched. |
 | XP-027, XP-101, XP-103, XP-149 | Fixed | README health verbose option and volcano access wording aligned. |
 | XP-029 | Retained | Quoted filenames with spaces have no demonstrated breakage. |
 | XP-031 | Deferred cosmetic | Small config fixtures remain explicit; no need to generate them from product examples. |
@@ -120,3 +120,34 @@ Test renderers/jobs were stopped/unloaded; original five guest jobs and old chec
 were preserved. Test-only launchctl enable-override entries and isolated test roots
 remain for inspection. Real login/reboot, future provider availability and hosted
 Python 3.11/3.13 checks remain unverified.
+
+## Follow-on lifecycle simplification
+
+The original native audit validation above describes the merged audit branch,
+not the replacement lifecycle. The user has explicitly chosen broad stop/restart:
+all current-user Xplanet instances, including finite renders and other checkouts.
+XP-080/081/082/086/087/135/138/139 now use a launchd-owned foreground renderer and
+zsh lifecycle. Exact executable/argv/birth adoption and narrow restart are removed.
+The old login trigger remains separate; explicit restart migrates unmanaged -fork
+processes. Setup uses on-disk plutil validation and registered-label presence only;
+loaded settings are not reverified. No Python registration-display parser remains.
+Validation of this follow-on is recorded separately; old ABI tests are removed
+with their implementation rather than retained as misleading coverage.
+
+Follow-on validation (`15b935b`): host and disposable macOS guest each ran 528 tests,
+zero failures, two existing unavailable-capture skips, plus 77 passing non-UTC
+checks. Removed 34 tests of the deleted identity/parser implementation and added
+five behavior regressions; no new skips. Native checks covered repeated start with
+Python unavailable, foreground job ownership, monthly catch-up, broad restart of
+another checkout and finite render, stopped-stays-stopped, explicit unmanaged
+migration, configured executable symlink, setup rerun and the old-shaped login
+trigger without recursion. Only test labels were namespaced; original jobs and
+snapshots were preserved. Test processes/jobs were removed afterwards.
+
+An initial native harness counted only the normal process name and missed a long
+symlink alias; execution now resolves configured symlinks before exec and the final
+run passed. No arbitrary executable/argv discovery was reintroduced. macOS's
+19-character process-name lookup limit for unmanaged physically renamed binaries
+is documented. Start acknowledges launchd acceptance; renderer errors remain in
+its error log. No fresh Homebrew build, actual login/reboot, hosted CI for this
+unpublished branch, or future provider validation is claimed.

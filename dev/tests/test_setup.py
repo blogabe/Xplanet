@@ -414,7 +414,7 @@ class SetupTests(Sandbox):
         for job in jobs:
             local = examples / f"local.xplanet.{job}.plist"
             self.assertEqual((home / "Library/LaunchAgents" / local.name).readlink(), local)
-        # A rerun verifies the loaded arguments/working root, then leaves every
+        # A rerun validates on-disk files and leaves every
         # registered job alone. In particular RunAtLoad is not fired again.
         calls.write_text("")
         again = subprocess.run(command, cwd=PROJECT, env=env,
@@ -432,11 +432,9 @@ class SetupTests(Sandbox):
                                  text=True, check=False)
         self.assertEqual(omitted.returncode, 0, omitted.stderr)
         self.assertEqual(calls.read_text().splitlines(), [f"list local.xplanet.{job}" for job in jobs])
-        self.assertEqual(omitted.stdout.count("installation identity matched"), len(jobs))
-        self.assertEqual(omitted.stdout.count("those settings were not verified"), len(jobs))
-        self.assertIn("working directory, selected Python", omitted.stdout)
-        # A same-label job with different arguments must be reported, not
-        # reloaded, unloaded or replaced.
+        self.assertEqual(omitted.stdout.count("loaded settings were not reverified"), len(jobs))
+        # A same-label loaded definition is not parsed or reverified;
+        # it remains untouched even if its settings differ.
         state_file = launchctl.with_suffix(".json")
         state = json.loads(state_file.read_text())
         state["local.xplanet.start"]["ProgramArguments"][0] = "/other/xplanet.sh"
@@ -446,8 +444,8 @@ class SetupTests(Sandbox):
         mismatch = subprocess.run(command, cwd=PROJECT, env=env,
                                   input="y\n\ny\ny\ny\ny\ny\n", capture_output=True,
                                   text=True, check=False)
-        self.assertEqual(mismatch.returncode, 1, mismatch.stderr)
-        self.assertIn("differs from this installation", mismatch.stderr)
+        self.assertEqual(mismatch.returncode, 0, mismatch.stderr)
+        self.assertIn("loaded settings were not reverified", mismatch.stdout)
         self.assertFalse(any(line.startswith("load ") for line in calls.read_text().splitlines()))
         self.assertEqual(state_file.read_bytes(), before)
 

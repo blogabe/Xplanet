@@ -8,8 +8,7 @@ requested workflow:
 - `lib/xplanet/install.zsh`: Homebrew installation and setup handoff.
 - `lib/xplanet/update.zsh`: Git fast-forward and formula comparison/rebuild.
 - `lib/xplanet/display.zsh`: render, process lifecycle and monthly map selection.
-- `lib/xplanet/display_process.py`: private macOS executable/argv/birth identity.
-- `lib/xplanet/launchd_registration.py`: bounded literal registration verification.
+- `lib/xplanet/desktop.zsh`: private foreground renderer entrypoint for launchd.
 - `xp-setup.sh`: preserve/prepare personal configuration and launchd jobs.
 - `run-totalmarker`: select compatible Python and invoke the data CLI.
 
@@ -75,17 +74,15 @@ commands. Calendar fixtures use fixed dates and cover all twelve months plus the
 same instant in UTC and a non-UTC timezone, preserving host-local month selection.
 The normal suite runs in UTC. These tests verify contracts, publication recovery,
 source/packaged file boundaries and live-probe isolation; live installation,
-Homebrew builds, native process inspection, launchd execution and rendered output
-require guest validation. The audit guest exercised native identity/start/restart
-and explicit launchd load/rerun on macOS27; this is not a fresh Homebrew build or
-login/reboot test. Desktop identity uses macOS executable/argv/start facts; offline
-fixtures inject the process API and do not inspect or signal host processes.
-Identity is rechecked before SIGTERM; signaling is still PID-based, not an atomic
-kernel identity-conditional operation.
+Homebrew builds, launchd execution and rendered output require guest validation.
+The desktop is a foreground process owned by `local.xplanet.desktop`; the separate
+existing login trigger calls public start. There is no KeepAlive. Public start
+selects the current map even when the job is already running. Stop first removes
+the desktop job, then stops all current-user Xplanet processes; restart uses the
+same broad stop before start. No process-identity database or native ABI is used.
 
-The smaller dispatcher improves workflow ownership rather than reducing total
-code volume. Native process identity and legacy launchd verification use small
-private Python helpers alongside the shell workflows; data policy stays in
-TotalMarker. This avoids ambiguous process-string matching and evaluation of
-human-readable launchd output. Product-specific validation and setup remain explicit; no provider plugin
-framework, configuration migration, GUI or Python-management change is added.
+Setup validates on-disk plists with plutil and leaves registered labels alone.
+Loaded settings are explicitly unverified; presence is not configuration equality.
+Python remains behind run-totalmarker for data commands, not desktop lifecycle.
+Product-specific validation and setup remain explicit; no provider plugin framework,
+configuration migration, GUI or Python-management change is added.

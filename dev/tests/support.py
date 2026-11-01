@@ -98,56 +98,37 @@ class Sandbox(unittest.TestCase):
         import json
         return json.loads(self.fs.read(settings.state))
 
-def stub_display_process(scripts):
-    """Stub desktop process control in shell tests; no native host inspection.
-
-    Real lifecycle policy is covered with an injected API in test_display_process.
-    These fixtures exercise shell routing, map catch-up and rebuild orchestration.
-    """
-    shutil.copy2(PROJECT / 'scripts/run-totalmarker', scripts / 'run-totalmarker')
-    helper = scripts / 'lib/xplanet/display_process.py'
-    helper.write_text(r'''import json, os, subprocess, sys
+def stub_desktop_launchctl(scripts, binaries):
+    """A fixture launchd owns only fixture processes; never invokes host launchctl."""
+    path = binaries / 'launchctl'
+    path.write_text('#!' + sys.executable + '\n' + r'''import json, os, plistlib, subprocess, sys
 from pathlib import Path
-root, mode = Path(sys.argv[1]), sys.argv[2]
-argv = sys.argv[3:]
-is_update = 'TM_RUNNING_PIDS' in os.environ
-state = Path(os.environ.get('TM_RUNNING_PIDS') or os.environ.get('MOCK_PROCESS_TABLE') or str(root / '.state/mockprocess.json'))
-state.parent.mkdir(parents=True, exist_ok=True)
-table = json.loads(state.read_text()) if state.exists() else {}
-if os.environ.get('MOCK_PGREP_ERROR') == '1' or os.environ.get('TM_PGREP_FAIL') == '1':
-    print('could not inspect desktop process identity', file=sys.stderr)
-    raise SystemExit(2)
-if isinstance(table, list):
-    desktop = json.loads(os.environ.get('TM_DESKTOP_PIDS', json.dumps(table)))
-else:
-    desktop = [pid for pid, kind in table.items() if kind not in ('preview', 'other')]
-if mode == 'status':
-    if desktop: print('\n'.join(map(str, desktop)))
+args=sys.argv[1:]
+state=Path(__file__).with_suffix('.json')
+doc=json.loads(state.read_text()) if state.exists() else None
+if os.environ.get('MOCK_LAUNCHCTL_TRACE'):
+    with open(os.environ['MOCK_LAUNCHCTL_TRACE'],'a') as stream: stream.write(' '.join(args)+'\n')
+if args[0]=='list': raise SystemExit(0 if doc else 3)
+if args[0]=='bootstrap':
+    if doc: raise SystemExit(5)
+    doc=plistlib.loads(Path(args[2]).read_bytes())
+    state.write_text(json.dumps(doc)); raise SystemExit(0)
+if args[0]=='bootout':
+    if os.environ.get('MOCK_BOOTOUT_FAIL')=='1': raise SystemExit(5)
+    state.unlink(missing_ok=True); raise SystemExit(0)
+if args[0]=='kickstart':
+    if not doc: raise SystemExit(3)
+    tablefile=os.environ.get('MOCK_PROCESS_TABLE')
+    table=json.loads(Path(tablefile).read_text()) if tablefile else {}
+    if not doc.get('_running') or (tablefile and '909' not in table):
+        subprocess.run(doc['ProgramArguments'], check=False)
+        doc['_running']=True; state.write_text(json.dumps(doc))
+        if tablefile:
+            table['909']='desktop'; Path(tablefile).write_text(json.dumps(table))
     raise SystemExit(0)
-if desktop and mode == 'start':
-    if sys.stdout.isatty(): print('Xplanet display already running; use restart to replace it.')
-    raise SystemExit(0)
-if mode == 'restart':
-    denied = os.environ.get('TM_KILL_FAIL') == '1' or os.environ.get('MOCK_KILL_EXIT', '0') != '0'
-    if denied:
-        print('could not stop desktop', file=sys.stderr); raise SystemExit(2)
-    if os.environ.get('MOCK_STAY_RUNNING') == '1':
-        print('Xplanet desktop is still running after stop', file=sys.stderr); raise SystemExit(2)
-    for pid in desktop:
-        trace = os.environ.get('TM_EVENT_TRACE') or os.environ.get('MOCK_KILL_TRACE')
-        if trace:
-            with open(trace, 'a') as stream: stream.write(('TERM ' if is_update else '-TERM ') + str(pid) + '\n')
-        if isinstance(table, list): table.remove(pid)
-        else: table.pop(str(pid), None)
-    state.write_text(json.dumps(table))
-result = subprocess.run(argv, check=False).returncode
-if not result:
-    if not is_update:
-        table['909'] = 'desktop'
-        state.write_text(json.dumps(table))
-    if sys.stdout.isatty(): print('Xplanet display running.' if mode == 'restart' else 'Xplanet display started.')
-raise SystemExit(result)
+raise SystemExit(4)
 ''')
+    path.chmod(0o700)
 
 def stub_launchctl(path):
     """Registered-job dictionaries and load state live only beside this stub."""

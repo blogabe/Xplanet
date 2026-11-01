@@ -83,10 +83,22 @@ any directory.
 `start` uses `XPLANET_GEOMETRY` from `xp.def` when nonempty; otherwise Xplanet
 sizes the desktop automatically. `render` saves a frame at the configured
 dimensions, while `preview` uses a fixed 1920×1080 size. `stop` signals
-this user's Xplanet processes and succeeds when none is running. `start` catches
-up a configured monthly map and leaves this checkout's verified desktop running.
-`restart` replaces that desktop; preview/render and other checkouts are excluded.
-Ambiguous desktop identity stops the command for inspection.
+ALL of this user's Xplanet processes, including finite renders and other checkouts,
+and succeeds when none is running. It first removes the managed desktop job.
+`restart` performs that same broad stop, then starts one display. `start` catches up
+a configured monthly map and asks launchd to run one foreground desktop, without
+`KeepAlive` or automatic respawn after stop. Python is used only for TotalMarker.
+
+On the first start after upgrading from the old `-fork` launcher, an existing
+unmanaged Xplanet process produces a request to use `restart`; setup never kills
+it automatically. The existing login trigger stays compatible and can start the
+display on a later login. Stopping a display does not disable login automation.
+Start reports launchd's acceptance, not proof that the renderer produced an image;
+renderer errors go to `logs/xplanet-error.log`. Normal and configured executable
+names (including a resolved symlink target) are included in broad stop. Desktop
+launch resolves executable symlinks. macOS name lookup cannot reliably discover
+unmanaged, physically renamed binaries with names longer than 19 characters; use
+the normal Xplanet binary name for those older manual launches.
 
 To update your checkout:
 
@@ -97,8 +109,8 @@ To update your checkout:
 `update` needs a configured upstream and fast-forwards only when local changes
 allow it. It then updates Homebrew tap metadata and rebuilds the tap's Xplanet
 formula from source only when its recipe differs from the installed build,
-keeping the installed build options. If this checkout's verified desktop was running
-before a successful reinstall, `update` restarts it; otherwise it stays stopped. If the
+keeping the installed build options. If this user's Xplanet processes were running
+before a successful reinstall, `update` performs the same broad restart; otherwise it stays stopped. If the
 Homebrew check fails, the Git checkout may already be updated; rerun `update`
 after resolving the reported issue.
 It does not run setup.
