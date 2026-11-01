@@ -63,9 +63,11 @@ launcher's interpreter selection. No global `PATH` change is required.
 
 `./scripts/xplanet.sh health` reads saved state without fetching or writing.
 The default is one line per enabled product with saved status and last success.
-`--verbose` adds source URLs, check/attempt times, coverage and dated errors.
+`--verbose` adds source URLs, check/attempt/success/publication times, coverage
+and dated errors. Disabled products share one summary line.
 Errors recorded before the last success are omitted from the default summary.
-A check time can include an offline cache check; an unknown attempt time is not inferred from it. Cloud
+A check time can include an offline cache check; an unknown attempt time is not
+inferred from it. Cloud
 success falls back to its last confirmed publication when no successful-refresh
 time was saved. Missing state or unsupported freshness remains unknown.
 
@@ -79,8 +81,10 @@ a new cooldown: avoid repeated live requests. No provider restriction is bypasse
 Use `--json` for structured results. Exit status is 1 for an access failure,
 invalid content or stale data, 2 for configuration/storage/probe errors, and 0 otherwise;
 0 can include unknown health and is not an all-sources-current guarantee.
-Last-error details may be unavailable when logging was disabled or its file
-exceeds the bounded diagnostic read. Saved results can predate config changes;
+New checks persist bounded historical last-error facts alongside the product
+result, even without logging. Older records fall back to the event log, which
+may be unavailable or exceed the bounded diagnostic read. Health also exposes
+last publication separately from last successful refresh. Saved results can predate config changes;
 use `--live` to check the current configuration.
 
 ## Logs

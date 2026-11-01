@@ -10,6 +10,7 @@ import re
 import time
 from urllib.parse import urljoin, urlsplit
 
+from ..diagnostics import Attempt, finish
 from ..errors import DownloadError, FeedError, StorageError
 from ..http import Fetcher
 from ..labels import refresh_all
@@ -335,6 +336,7 @@ def run(fs, settings, *, fetcher=None, now=None):
         except UnicodeError:
             raise StorageError("Existing labels are not valid UTF-8") from None
         record["checked_at"] = now
+        attempt = Attempt(fetcher if fetcher is not None else Fetcher())
         existing_marker = fs.read(options.marker, PairPublisher.LIMIT)
         existing_arc = fs.read(options.arc, PairPublisher.LIMIT)
         valid_existing = (
@@ -413,7 +415,7 @@ def run(fs, settings, *, fetcher=None, now=None):
         elif not cached:
             before = copy.deepcopy(record)
             try:
-                client = fetcher if fetcher is not None else Fetcher()
+                client = attempt
                 path = _fetch_selected_path(client, options, now)
                 active = path.start_at - options.notify_hours * 3600 <= now <= path.end_at + 3600
                 new_marker, new_arc = render(path, options, now, active)
@@ -460,7 +462,7 @@ def run(fs, settings, *, fetcher=None, now=None):
                  and now > record["end_at"] + 3600)
                 and (marker is not None or valid_existing)):
             record["successful_at"] = now
-        record["last_outcome"] = outcome
+        finish(record, now, outcome, message, attempt)
         label = (refresh_all(old_label, state, settings, now)
                  if settings.labels_enabled else None)
         if label == old_label:

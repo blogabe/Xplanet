@@ -2,10 +2,9 @@
 import os
 import pty
 import select
-import shutil
 import subprocess
 
-from .support import PROJECT, Sandbox
+from .support import copy_launcher, PROJECT, Sandbox
 
 
 PRODUCTS = ("clouds", "quake", "storm", "volcano")
@@ -17,7 +16,7 @@ class LauncherWiringTests(Sandbox):
         scripts = self.root / "scripts"
         scripts.mkdir()
         self.launcher = scripts / "xplanet.sh"
-        shutil.copy2(PROJECT / "scripts/xplanet.sh", self.launcher)
+        copy_launcher(self.launcher)
         runner = scripts / "run-totalmarker"
         runner.write_text(
             '#!/bin/sh\n'

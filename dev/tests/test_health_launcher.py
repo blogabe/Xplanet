@@ -1,9 +1,8 @@
 """The normal shell entry point delegates health options and exit status."""
 import os
-import shutil
 import subprocess
 
-from .support import PROJECT, Sandbox
+from .support import copy_launcher, PROJECT, Sandbox
 
 
 class HealthLauncherTests(Sandbox):
@@ -11,7 +10,7 @@ class HealthLauncherTests(Sandbox):
         scripts = self.root / 'scripts'
         scripts.mkdir()
         launcher = scripts / 'xplanet.sh'
-        shutil.copy2(PROJECT / 'scripts/xplanet.sh', launcher)
+        copy_launcher(launcher)
         runner = scripts / 'run-totalmarker'
         trace = self.base / 'arguments'
         runner.write_text('#!/bin/sh\nprintf "%s\\n" "$@" > "$HEALTH_TRACE"\n'

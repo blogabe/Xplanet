@@ -112,6 +112,7 @@ stale source coverage does not replace the last good pair. See the command resul
 before treating any layer as current.
 
 For timestamp, cache, and log details, see [Technical notes](docs/technical-notes.md).
+For internal boundaries and file ownership, see [Architecture](docs/architecture.md).
 
 Optional NORAD and eclipse products require deliberate configuration and
 corresponding Xplanet display settings. Santa has no live provider or production

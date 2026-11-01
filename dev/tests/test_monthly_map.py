@@ -1,11 +1,9 @@
 """Monthly Earth map selection uses only isolated shell fixtures."""
-from datetime import datetime
 from pathlib import Path
 import shlex
-import shutil
 import subprocess
 
-from .support import PROJECT, Sandbox
+from .support import PROJECT, Sandbox, copy_launcher
 
 
 class MonthlyMapTests(Sandbox):
@@ -24,8 +22,19 @@ class MonthlyMapTests(Sandbox):
         (self.root / "config").mkdir()
         scripts = self.root / "scripts"
         scripts.mkdir()
-        shutil.copy2(PROJECT / "scripts/xplanet.sh", scripts / "xplanet.sh")
-        self.current = datetime.now().month
+        copy_launcher(scripts / "xplanet.sh")
+        # A fixed command clock keeps fixture choice independent of host month/TZ.
+        self.bin = self.base / "bin"
+        self.bin.mkdir()
+        date = self.bin / "date"
+        date.write_text('#!/bin/sh\n'
+                        'if [ -n "${TEST_DATE_EPOCH:-}" ]; then\n'
+                        '  exec /bin/date -r "$TEST_DATE_EPOCH" "$@"\n'
+                        'fi\n'
+                        '[ "$1" = +%m ] || exit 97\n'
+                        'printf "%s\\n" "$TEST_MONTH"\n')
+        date.chmod(0o700)
+        self.current = 6
         self.filename = f"world.2004{self.current:02d}.3x5400x2700.png"
         self.chosen = self.root / "assets/maps/world" / self.filename
         self.chosen.write_bytes(b"selected map fixture")
@@ -40,9 +49,11 @@ class MonthlyMapTests(Sandbox):
         self.definition.write_text("XPLANET_HOME=" + shlex.quote(str(self.root)) +
                                    "\nEARTH_MAP_PRE=" + shlex.quote(prefix) + "\n")
 
-    def run_earth(self):
+    def run_earth(self, *, month=None, timezone="UTC", epoch=""):
         return subprocess.run([str(self.root / "scripts/xplanet.sh"), "earth"],
-                              cwd=PROJECT, env={"PATH": "/usr/bin:/bin"},
+                              cwd=PROJECT, env={"PATH": f"{self.bin}:/usr/bin:/bin", "TZ": timezone,
+                                   "TEST_MONTH": f"{month or self.current:02d}",
+                                   "TEST_DATE_EPOCH": str(epoch)},
                               capture_output=True, text=True, check=False)
 
     def test_switches_current_map_and_preserves_source_bytes(self):
@@ -52,6 +63,27 @@ class MonthlyMapTests(Sandbox):
         self.assertEqual(self.link.readlink(), Path("../assets/maps/world/" + self.filename))
         self.assertEqual(self.chosen.read_bytes(), before)
         self.assertIn("Earth map unchanged", self.run_earth().stdout)
+
+    def test_all_calendar_months_select_their_own_map(self):
+        for month in range(1, 13):
+            with self.subTest(month=month):
+                filename = f"world.2004{month:02d}.3x5400x2700.png"
+                image = self.root / "assets/maps/world" / filename
+                image.write_bytes(f"month {month}".encode())
+                result = self.run_earth(month=month)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(self.link.readlink(), Path("../assets/maps/world/" + filename))
+                self.assertEqual(image.read_bytes(), f"month {month}".encode())
+
+    def test_map_month_follows_local_calendar_at_utc_year_boundary(self):
+        # 2024-01-01 00:30 UTC is still December on the US Pacific coast.
+        for timezone, month in (("UTC", 1), ("America/Los_Angeles", 12)):
+            with self.subTest(timezone=timezone):
+                filename = f"world.2004{month:02d}.3x5400x2700.png"
+                (self.root / "assets/maps/world" / filename).write_bytes(b"boundary map")
+                result = self.run_earth(timezone=timezone, epoch=1704069000)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(self.link.readlink(), Path("../assets/maps/world/" + filename))
 
     def test_configured_topographic_pattern_and_missing_month(self):
         selected = self.root / "assets/maps/world.topo.bathy"

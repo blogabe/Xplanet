@@ -7,10 +7,11 @@ from pathlib import Path
 import tempfile
 import time
 
+from .diagnostics import observation
 from .errors import StorageError, TotalMarkerError
 from .features import clouds, eclipse, norad, quake, storm, volcano
 from .http import Fetcher
-from .labels import color_for, marker_timestamp
+from .labels import color_for
 from .paths import RootFS
 from .state import load_state
 from .storm_sources import JTWC_RSS, NHC_INDEX
@@ -191,18 +192,16 @@ def check(fs, settings, *, live=False, now=None, fetcher_factory=Fetcher):
     rows = []
     for product, sources in _sources(settings).items():
         record = state['products'].get(product, {})
+        facts = observation(record)
         enabled = product not in {'norad', 'eclipse', 'santa'} or getattr(settings, product).enabled
         row = {'product': product, 'sources': sources, 'status': 'unknown' if enabled else 'disabled',
                'access': 'not_checked', 'content': 'unknown', 'freshness': 'unknown',
-               'last_check_at': record.get('checked_at'), 'last_attempt_at': record.get('attempted_at'),
-               'last_success_at': (None if product == 'clouds' and record.get('timestamp_origin') == 'legacy-label'
-                                   else marker_timestamp(record)),
-               'last_outcome': record.get('last_outcome'),
-               'source_at': record.get('source_created_at', record.get('source_report_at',
-                    record.get('source_at', record.get('feed_generated_at', record.get('oldest_epoch_at'))))),
-               'coverage': {key: record.get(key) for key in
-                            ('report_period_start', 'report_period_end', 'coverage_end_at')},
-               'last_error': errors.get(product), 'count': record.get('count'),
+               'last_check_at': facts['checked_at'], 'last_attempt_at': facts['attempted_at'],
+               'last_success_at': facts['successful_at'],
+               'last_publication_at': facts['published_at'],
+               'last_outcome': facts['last_outcome'], 'source_at': facts['source_at'],
+               'coverage': facts['coverage'],
+               'last_error': facts['last_error'] or errors.get(product), 'count': record.get('count'),
                'output': _output_summary(fs, settings, product, record)}
         if enabled:
             row['freshness'] = _freshness(product, record, settings, now)
@@ -333,7 +332,8 @@ def format_report(report, *, verbose=False):
                          f"content {row['content']}; freshness {row['freshness']}")
             lines.append('  source: ' + (', '.join(row['sources']) or 'none'))
             lines.append(f"  saved check {_stamp(row['last_check_at'])}; attempt {_stamp(row['last_attempt_at'])}; "
-                         f"success {_stamp(row['last_success_at'])}; source date {_stamp(row['source_at'])}")
+                         f"success {_stamp(row['last_success_at'])}; publication {_stamp(row.get('last_publication_at'))}; "
+                         f"source date {_stamp(row['source_at'])}")
             for label, coverage in [('saved coverage', row['coverage']),
                                     ('probe coverage', row.get('probe_coverage', {}))]:
                 if coverage.get('report_period_start'):
