@@ -1,9 +1,7 @@
 """The local release builder runs only against isolated Git and asset fixtures."""
 import json
 import os
-from pathlib import Path
 import subprocess
-import unittest
 from unittest.mock import patch
 
 from dev.release import build_candidate as release
@@ -41,6 +39,7 @@ class ReleaseBuilderTests(Sandbox):
         self.git("config", "user.name", "Fixture")
         self.git("config", "user.email", "fixture@example.invalid")
         self.git("add", ".gitignore", "scripts/xplanet.sh")
+        self.git("add", "-f", "assets/maps/default/map.png")
         self.git("commit", "-q", "-m", "fixture")
         self.staging = self.root / "dev/release-staging"
         self.output = self.staging / "candidate-next"
@@ -58,6 +57,45 @@ class ReleaseBuilderTests(Sandbox):
              patch.dict(os.environ, {"GIT_CONFIG_GLOBAL": os.devnull,
                                      "GIT_CONFIG_NOSYSTEM": "1"}):
             release.build()
+
+    def test_current_committed_tree_matches_exporter_boundary(self):
+        # Exercise the actual repository model, not only a synthetic source tree.
+        from .support import PROJECT
+        entries = release.tree_entries(PROJECT, "HEAD")
+        release.check_source_paths(entries)
+        self.assertTrue(any(name.startswith("assets/") for name in entries))
+
+    def test_untracked_regular_asset_is_not_exported(self):
+        (self.root / "assets/maps/default/personal.png").write_bytes(b"not committed")
+        self.build()
+        self.assertFalse((self.output / "assets/maps/default/personal.png").exists())
+        manifest = json.loads(next(self.staging.glob("candidate-manifest-*.json")).read_text())
+        self.assertIn("assets/maps/default/personal.png", manifest["asset_exclusions"])
+
+    def test_tracked_private_asset_is_rejected_before_staging(self):
+        self.git("add", "-f", "assets/private.toml")
+        self.git("commit", "-q", "-m", "unsafe tracked asset")
+        with self.assertRaisesRegex(RuntimeError, "unsafe source entry"):
+            self.build()
+        self.assertFalse(self.output.exists())
+
+    def test_hidden_working_asset_change_is_not_exported_as_committed(self):
+        self.git("update-index", "--assume-unchanged", "assets/maps/default/map.png")
+        (self.root / "assets/maps/default/map.png").write_bytes(b"uncommitted bytes")
+        with self.assertRaisesRegex(RuntimeError, "asset bytes differ from source HEAD"):
+            self.build()
+        self.assertFalse((self.output / ".git").exists())
+        self.assertEqual(list(self.staging.glob("candidate-manifest-*.json")), [])
+
+    def test_committed_asset_mode_is_preserved(self):
+        self.git("update-index", "--chmod=+x", "assets/maps/default/map.png")
+        (self.root / "assets/maps/default/map.png").chmod(0o755)
+        self.git("commit", "-q", "-m", "executable fixture asset")
+        self.build()
+        self.assertTrue(self.git("ls-tree", "HEAD", "assets/maps/default/map.png").startswith("100755"))
+        self.assertTrue(subprocess.check_output(
+            ["git", "-C", str(self.output), "ls-tree", "HEAD", "assets/maps/default/map.png"],
+            text=True).startswith("100755"))
 
     def test_clean_export_checks_assets_privacy_history_and_package_tests(self):
         self.build()

@@ -83,6 +83,66 @@ altcirc = 0
         self.assertEqual(again.outcome, "unchanged")
         self.assertEqual(len(transport.calls), 3)
 
+    def test_group_identity_accepts_sanitized_fallback_tle_name(self):
+        settings = self.native_options('''
+[[norad.groups]]
+source = "stations"
+name_contains = "ISS"
+''', catalog_ids="")
+        discovery = json.dumps([{"OBJECT_NAME": "ISS DISCOVERY NAME", "NORAD_CAT_ID": 25544}]).encode()
+        for index, name in enumerate(('ISS "UNSAFE"', 'X' * 65)):
+            transport = ScriptedTransport(Response(200, {}, discovery),
+                                          Response(200, {}, sample_for(25544, name)))
+            result = run(self.fs, settings, fetcher=Fetcher(transport), now=EPOCH + 10 + index * 8000)
+            self.assertIn(result.outcome, ('changed', 'unchanged'))
+            self.assertEqual(result.count, 1)
+            self.assertEqual(len(transport.calls), 2)
+            if index == 0:
+                self.assertIn(b'25544 "NORAD 25544"', self.fs.read(settings.norad.satellite))
+
+    def test_oversized_discovery_retains_complete_previous_pair(self):
+        old = self.options()
+        run(self.fs, old, fetcher=Fetcher(ScriptedTransport(Response(200, {}, SAMPLE))),
+            now=EPOCH + 10)
+        before = (self.fs.read(old.norad.satellite), self.fs.read(old.norad.satellite + ".tle"))
+        settings = self.native_options('''
+[[norad.groups]]
+source = "stations"
+name_contains = "ISS"
+''', catalog_ids="")
+        rows = [{"OBJECT_NAME": "ISS TEST", "NORAD_CAT_ID": 10000 + index} for index in range(17)]
+        transport = ScriptedTransport(Response(200, {}, json.dumps(rows).encode()))
+        result = run(self.fs, settings, fetcher=Fetcher(transport), now=EPOCH + 8000)
+        self.assertEqual(result.outcome, "failed")
+        self.assertIn("exceeds 16", result.message)
+        self.assertEqual(len(transport.calls), 1)
+        self.assertEqual((self.fs.read(old.norad.satellite), self.fs.read(old.norad.satellite + ".tle")), before)
+
+    def test_cooldown_after_failure_keeps_provider_error_and_success_time(self):
+        settings = self.options()
+        run(self.fs, settings, fetcher=Fetcher(ScriptedTransport(Response(200, {}, SAMPLE))),
+            now=EPOCH + 10)
+        failed = run(self.fs, settings, fetcher=Fetcher(ScriptedTransport(Response(503, {}))),
+                     now=EPOCH + 8000)
+        self.assertEqual(failed.outcome, "failed")
+        before = self.read_state(settings)["products"]["norad"]
+        transport = ScriptedTransport()
+        result = run(self.fs, settings, fetcher=Fetcher(transport), now=EPOCH + 8100)
+        self.assertEqual(result.outcome, "unchanged")
+        self.assertEqual(transport.calls, [])
+        after = self.read_state(settings)["products"]["norad"]
+        for key in ("last_outcome", "last_error", "successful_at", "attempted_at"):
+            self.assertEqual(after[key], before[key], key)
+        self.assertEqual(after["checked_at"], EPOCH + 8100)
+
+    def test_cooldown_message_uses_configured_interval(self):
+        settings = self.config("NoradEnabled=On\nNoradCatalogIds=25544\nNoradCheckIntervalSeconds=14400\n")
+        run(self.fs, settings, fetcher=Fetcher(ScriptedTransport(Response(503, {}))), now=EPOCH + 10)
+        transport = ScriptedTransport()
+        result = run(self.fs, settings, fetcher=Fetcher(transport), now=EPOCH + 8000)
+        self.assertEqual(transport.calls, [])
+        self.assertIn("14400-second", result.message)
+
     def test_incomplete_group_and_all_unsupported_ids_retain_last_good_pair(self):
         old = self.options()
         self.assertEqual(run(self.fs, old, fetcher=Fetcher(ScriptedTransport(

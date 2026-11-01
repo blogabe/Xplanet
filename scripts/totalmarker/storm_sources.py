@@ -12,6 +12,7 @@ from html.parser import HTMLParser
 from io import BytesIO
 import json
 import re
+import zlib
 from urllib.parse import urlsplit
 from zipfile import BadZipFile, ZipFile
 import xml.etree.ElementTree as ET
@@ -107,7 +108,7 @@ def parse_nhc_forecast(body, identity, current_at):
     try:
         with gzip.GzipFile(fileobj=BytesIO(body)) as stream:
             raw = stream.read(32 * 1024 * 1024 + 1)
-    except (OSError, EOFError):
+    except (OSError, EOFError, zlib.error):
         raise FeedError("Storm official forecast gzip is invalid") from None
     if len(raw) > 32 * 1024 * 1024:
         raise FeedError("Storm official forecast exceeds the size limit")
@@ -195,9 +196,13 @@ class _Anchors(HTMLParser):
 
 
 def _jtwc_url(url):
-    parsed = urlsplit(url)
+    try:
+        parsed = urlsplit(url)
+        port = parsed.port
+    except ValueError:
+        raise FeedError("Storm RSS linked an invalid JTWC product URL") from None
     if (parsed.scheme != "https" or parsed.hostname != "www.metoc.navy.mil"
-            or parsed.port is not None or parsed.query or parsed.fragment
+            or port is not None or parsed.query or parsed.fragment
             or not parsed.path.startswith("/jtwc/products/")):
         raise FeedError("Storm RSS linked outside official JTWC products")
     return parsed.path.rsplit("/", 1)[-1]
@@ -442,7 +447,8 @@ def parse_jtwc_kmz(body, current, identity, name):
             if member.file_size > 4 * 1024 * 1024:
                 raise FeedError("Storm JTWC KML exceeds the size limit")
             root = ET.fromstring(archive.read(member))
-    except (BadZipFile, KeyError, ET.ParseError, OSError):
+    except (BadZipFile, KeyError, ET.ParseError, OSError, zlib.error,
+            NotImplementedError, RuntimeError):
         raise FeedError("Storm JTWC KMZ is invalid") from None
     documents = root.findall("k:Document", KML_NS)
     storm_folders = documents[0].findall("k:Folder", KML_NS) if len(documents) == 1 else []
@@ -495,8 +501,10 @@ def _fresh(at, now, max_age, label):
 
 
 def _fresh_advisory(advisory, now, kind):
-    if advisory.issued_at > now + 3600 or now > advisory.valid_until_at:
-        raise FeedError("Storm JTWC " + kind.upper() + " advisory is stale or future-dated")
+    if advisory.issued_at > now + 3600:
+        raise FeedError("Storm JTWC " + kind.upper() + " advisory is future-dated")
+    if now > advisory.valid_until_at:
+        raise FeedError("Storm JTWC " + kind.upper() + " advisory is stale")
 
 
 def collect_snapshot(fetcher, *, now, timeout=30, max_bytes=16 * 1024 * 1024):
@@ -584,6 +592,8 @@ def collect_snapshot(fetcher, *, now, timeout=30, max_bytes=16 * 1024 * 1024):
         source_times[product.group] = min(source_times[product.group], current.at)
     advisory_codes = set()
     advisory_invests = []
+    advisory_promotions = {}
+    advisory_invest_sources = {}
     for kind, (url, rss_issue) in advisory_urls.items():
         advisory = parse_advisory(get(url, 256 * 1024).body, kind)
         if advisory.issued_at != advisory.issue_at:
@@ -594,25 +604,42 @@ def collect_snapshot(fetcher, *, now, timeout=30, max_bytes=16 * 1024 * 1024):
         _fresh_advisory(advisory, now, kind)
         deadlines.append(advisory.valid_until_at)
         for area in advisory.areas:
+            advisory_promotions.update(area.promotions)
             source_times[area.group] = min(source_times[area.group], advisory.issue_at)
             for code in area.warned_codes:
                 if code in advisory_codes:
                     raise FeedError("Storm JTWC advisories repeat a warning code")
                 advisory_codes.add(code)
         advisory_invests.extend(advisory.invests)
+        advisory_invest_sources.update((invest.id, kind.upper()) for invest in advisory.invests)
     if advisory_codes != warning_codes:
         raise FeedError("Storm JTWC warnings disagree with significant advisories")
     for identity, (alert, code) in formation_alerts.items():
         matching = [invest for invest in advisory_invests if invest.id == identity]
-        if len(matching) != 1 or matching[0].name != "Invest " + code:
-            raise FeedError("Storm JTWC formation alert disagrees with significant advisories")
+        disagreement = f"Storm JTWC formation alert disagrees with significant advisories: {identity} ({code}) "
+        if not matching:
+            promoted = advisory_promotions.get(code)
+            if promoted is not None:
+                # Retain fail-closed behavior until a captured source sequence
+                # establishes when a residual alert can safely be superseded.
+                raise FeedError(disagreement + f"still listed after promotion to {promoted}")
+            raise FeedError(disagreement + "has no active advisory invest")
+        if len(matching) != 1:
+            raise FeedError(disagreement + "matches multiple advisory invests")
+        if matching[0].name != "Invest " + code:
+            raise FeedError(disagreement + "has a different advisory invest code")
         current = matching[0].current
         # A newer advisory can update the observed fix; no position is inferred
         # between the alert and advisory. Same-time observations must agree.
-        if (current.at < alert.at or
-                (current.at == alert.at and
-                 (current.lat, current.lon) != (alert.lat, alert.lon))):
-            raise FeedError("Storm JTWC formation alert disagrees with significant advisories")
+        if current.at < alert.at:
+            alert_time = datetime.fromtimestamp(alert.at, timezone.utc).isoformat()
+            advisory_time = datetime.fromtimestamp(current.at, timezone.utc).isoformat()
+            kind = advisory_invest_sources[identity]
+            raise FeedError(disagreement + f"is newer than {kind} advisory fix "
+                            f"({alert_time} > {advisory_time})")
+        if (current.at == alert.at and
+                (current.lat, current.lon) != (alert.lat, alert.lon)):
+            raise FeedError(disagreement + "has a conflicting same-time position")
     storms.extend(advisory_invests)
     snapshot = StormSnapshot(tuple(storms), tuple(sorted(source_times.items())),
                              True, min(deadlines))

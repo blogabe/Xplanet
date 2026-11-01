@@ -23,7 +23,7 @@ class RootFS:
         if not self.root.is_dir() or self.root.resolve() != self.root:
             raise StorageError("Root must be an existing directory without symlink ancestors")
 
-    def resolve(self, path, *, write=False):
+    def resolve(self, path, *, write=False, follow_symlinks=True):
         path = Path(path)
         if ".." in path.parts:
             raise StorageError("Parent traversal is not allowed")
@@ -48,6 +48,8 @@ class RootFS:
                 except FileNotFoundError:
                     break
                 if stat.S_ISLNK(mode):
+                    if not follow_symlinks:
+                        raise StorageError("Symlink aliases are not allowed for this write")
                     target = Path(os.readlink(current))
                     target = target if target.is_absolute() else current.parent / target
                     target = Path(os.path.normpath(target))
@@ -62,8 +64,8 @@ class RootFS:
         raise StorageError("Symlink loop or excessive indirection")
 
     @contextmanager
-    def parent(self, path, *, create=False, write=False):
-        path = self.resolve(path, write=write)
+    def parent(self, path, *, create=False, write=False, follow_symlinks=True):
+        path = self.resolve(path, write=write, follow_symlinks=follow_symlinks)
         parts = path.relative_to(self.root).parts
         fd = os.open(self.root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
         try:
@@ -109,10 +111,12 @@ class RootFS:
         except OSError:
             raise StorageError("Contained file metadata read failed") from None
 
-    def write(self, path, data, *, mtime=None):
+    def write(self, path, data, *, mtime=None, follow_symlinks=True):
+        """Atomically publish; diagnostics may opt out of all symlink aliases."""
         temporary = ".totalmarker-" + uuid.uuid4().hex + ".tmp"
         try:
-            with self.parent(path, create=True, write=True) as (parent, name):
+            with self.parent(path, create=True, write=True,
+                             follow_symlinks=follow_symlinks) as (parent, name):
                 fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL |
                              os.O_NOFOLLOW, 0o600, dir_fd=parent)
                 try:

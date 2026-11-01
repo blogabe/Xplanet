@@ -1,6 +1,7 @@
 # Example only. Keep personal config/totalmarker.toml separate; never overwrite it.
 # The selected .invalid custom source cannot be fetched; choose sources deliberately.
 # All check and warning intervals are seconds; max_bytes limits response size.
+# Fetch intervals leave a margin below the example launchd periods for start jitter.
 
 [paths]
 # Relative paths resolve against --root, not this file or the current directory.
@@ -32,7 +33,7 @@ error = "Red"
 provider = "custom"
 resolution = 4096
 local_image_name_template = "clouds-{resolution}.jpg"
-check_interval_seconds = 3600
+check_interval_seconds = 3300
 timeout_seconds = 30
 max_bytes = 33554432
 
@@ -62,7 +63,7 @@ reporting_size = "All"
 minimum_magnitude = 6.0
 output = "markers/quake"
 journal = ".state/totalmarker/quake-pending.json"
-check_interval_seconds = 1200
+check_interval_seconds = 1100
 timeout_seconds = 30
 max_bytes = 33554432
 circle_color = "Multi"
@@ -81,15 +82,15 @@ detail_align = "Above"
 [volcano]
 # CAP is selected; this example URL is deliberately invalid. "weekly_html"
 # uses the fixed official GVP weekly page and ignores the retained CAP URL.
-# GVP currently may return HTTP 403 to programmatic requests; no equivalent
-# global weekly replacement has been verified. Setup warns on failed product
+# CAP access resumed in late October 2026 after HTTP 403 failures; ongoing
+# availability is not guaranteed. Setup warns on failed product
 # refreshes while preserving prior markers and the last successful refresh time.
 # Check source access before a deliberate live request.
 provider = "cap"
 url = "https://volcano.example.invalid/WeeklyVolcanoCAP.xml"
 output = "markers/volcano"
 journal = ".state/totalmarker/volcano-pending.json"
-check_interval_seconds = 86400
+check_interval_seconds = 82800
 timeout_seconds = 30
 max_bytes = 8388608
 circle_size_inner = 4
@@ -130,6 +131,7 @@ track_enabled = true
 
 [norad]
 # Optional CelesTrak GP TLE product. Select up to 16 one-to-five-digit IDs.
+# catalog_ids is a comma-separated string, not a TOML array.
 # Explicit IDs lead; enabled group matches follow in configuration/source order.
 # Duplicate IDs use the first selection, and an ID profile overrides group style.
 # Invalid group responses fail. Unsupported six-digit group IDs are skipped

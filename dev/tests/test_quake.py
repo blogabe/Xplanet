@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 from totalmarker.config import QuakeOptions
-from totalmarker.errors import FeedError
+from totalmarker.errors import FeedError, StorageError
 from totalmarker.features.quake import run
 from totalmarker.http import Fetcher, Response
 from totalmarker.labels import legacy_time
@@ -40,6 +40,29 @@ class QuakeTests(Sandbox):
         transport = ScriptedTransport(*responses)
         result = run(self.fs, settings, fetcher=Fetcher(transport), now=now)
         return result, transport
+
+    def test_unmatched_304_fails_without_inventing_output(self):
+        result, transport = self.run_with(self.config(), Response(304, {}))
+        self.assertEqual(result.outcome, "failed")
+        self.assertEqual(len(transport.calls), 1)
+        self.assertIsNone(self.fs.read("markers/quake"))
+        record = load_state(self.fs, self.config().state)["products"]["quake"]
+        self.assertEqual(record["last_outcome"], "failed")
+        self.assertNotIn("successful_at", record)
+
+    def test_invalid_saved_validator_refuses_before_fetch_and_preserves_output(self):
+        settings = self.config("QuakeCheckIntervalSeconds=0\n")
+        self.run_with(settings, response(feed(feature()), etag='"good"'))
+        original = self.fs.read(settings.quake.marker)
+        state = load_state(self.fs, settings.state)
+        state["products"]["quake"]["etag"] = "invalid\r\nheader"
+        self.fs.write(settings.state, json_bytes(state))
+        transport = ScriptedTransport()
+        with self.assertRaises(StorageError):
+            run(self.fs, settings, fetcher=Fetcher(transport), now=NOW + 1)
+        self.assertEqual(transport.calls, [])
+        self.assertEqual(self.fs.read(settings.quake.marker), original)
+        self.assertFalse(self.fs.file_stat(settings.quake.journal))
 
     def test_config_selects_all_duration_and_size_feeds(self):
         settings = self.config()

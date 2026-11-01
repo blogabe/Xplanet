@@ -11,7 +11,7 @@ from .errors import ConfigError, DownloadError
 
 def https_url(value, *, allow_query=False):
     try:
-        if any(ord(c) <= 32 for c in value):
+        if any(ord(c) <= 32 or ord(c) == 127 for c in value):
             raise ValueError
         url = urlsplit(value)
         if (url.scheme.lower() != "https" or not url.hostname or url.username is not None
@@ -430,7 +430,7 @@ def _toml_values(raw):
                 else:
                     valid_type = isinstance(value, str)
                 if not valid_type:
-                    raise ConfigError("A native TOML configuration setting has the wrong type")
+                    raise ConfigError("Native TOML setting " + dotted + " has the wrong type")
                 add(canonical, value, dotted)
             elif prefix == "legacy":
                 # Preserve every old setting; only current supported keys are applied.

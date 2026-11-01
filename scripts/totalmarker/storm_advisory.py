@@ -65,6 +65,7 @@ class AdvisoryArea:
     cyclone_none: bool
     warned_codes: tuple[str, ...]
     invests: tuple[Storm, ...]
+    promotions: tuple[tuple[str, str], ...] = ()  # Invest code -> numbered warning code.
 
 
 @dataclass(frozen=True)
@@ -260,6 +261,7 @@ def parse_advisory(raw, kind):
         disturbance = disturbance.strip()
         invests = []
         promoted_warnings = set()
+        promotions = []
         if not re.fullmatch(r"NONE\.?,?", disturbance):
             blocks = list(BLOCK.finditer(disturbance))
             if not blocks or [int(m[1]) for m in blocks] != list(range(1, len(blocks) + 1)):
@@ -284,6 +286,7 @@ def parse_advisory(raw, kind):
                     if promoted in promoted_warnings:
                         raise FeedError("Storm JTWC promoted invests repeat a warning")
                     promoted_warnings.add(promoted)
+                    promotions.append((code, promoted))
                     continue
                 lat, lon = _current_position(paragraph)
                 year = datetime.fromtimestamp(issue_at, timezone.utc).year
@@ -295,5 +298,5 @@ def parse_advisory(raw, kind):
         if len({storm.id for storm in invests}) != len(invests):
             raise FeedError("Storm JTWC advisory repeats an invest")
         result.append(AdvisoryArea(area_name, group, cyclone_none, warned_codes,
-                                   tuple(invests)))
+                                   tuple(invests), tuple(promotions)))
     return Advisory(issue_at, valid_until_at, tuple(result), issued_at, reissued)

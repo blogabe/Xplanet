@@ -1,12 +1,13 @@
 """Preparation writes only to isolated project fixture roots."""
 from pathlib import Path
 import plistlib
+import json
 import shlex
 import shutil
 import subprocess
 import sys
 
-from .support import PROJECT, Sandbox, wait_for_prompt, copy_launcher
+from .support import PROJECT, Sandbox, wait_for_prompt, copy_launcher, stub_launchctl
 
 
 class SetupTests(Sandbox):
@@ -390,10 +391,7 @@ class SetupTests(Sandbox):
         bin_dir.mkdir()
         calls = self.base / "launchctl-calls.txt"
         launchctl = bin_dir / "launchctl"
-        launchctl.write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "$TM_LAUNCHCTL_CALLS"\n'
-                             '[ "$1" = list ] && [ "$2" = "$TM_LIST_FAIL_LABEL" ] && exit 3\n'
-                             'exit 0\n')
-        launchctl.chmod(0o700)
+        stub_launchctl(launchctl)
         env.update(HOME=str(home), PATH=f"{bin_dir}:/usr/bin:/bin",
                    TM_LAUNCHCTL_CALLS=str(calls), TM_LIST_FAIL_LABEL="")
         command = [str(scripts / "xplanet.sh"), "setup"]
@@ -410,11 +408,48 @@ class SetupTests(Sandbox):
                          ["quake", "storm", "volcano", "clouds"])
         jobs = ("start", "earth-map", "quake", "storm", "volcano", "clouds")
         self.assertEqual(calls.read_text().splitlines(), [line for job in jobs for line in (
+            f"list local.xplanet.{job}",
             f"load -w {home}/Library/LaunchAgents/local.xplanet.{job}.plist",
             f"list local.xplanet.{job}")])
         for job in jobs:
             local = examples / f"local.xplanet.{job}.plist"
             self.assertEqual((home / "Library/LaunchAgents" / local.name).readlink(), local)
+        # A rerun verifies the loaded arguments/working root, then leaves every
+        # registered job alone. In particular RunAtLoad is not fired again.
+        calls.write_text("")
+        again = subprocess.run(command, cwd=PROJECT, env=env,
+                               input="y\n\ny\ny\ny\ny\ny\n", capture_output=True,
+                               text=True, check=False)
+        self.assertEqual(again.returncode, 0, again.stderr)
+        self.assertEqual(calls.read_text().splitlines(), [f"list local.xplanet.{job}" for job in jobs])
+        self.assertEqual(again.stdout.count("left unchanged"), len(jobs))
+        # macOS 27 reports identity but omits cwd/environment. Preserve the job
+        # without falsely claiming those missing settings were verified.
+        calls.write_text("")
+        omitted = subprocess.run(command, cwd=PROJECT,
+                                 env={**env, "TM_LIST_OMIT_SETTINGS": "1"},
+                                 input="y\n\ny\ny\ny\ny\ny\n", capture_output=True,
+                                 text=True, check=False)
+        self.assertEqual(omitted.returncode, 0, omitted.stderr)
+        self.assertEqual(calls.read_text().splitlines(), [f"list local.xplanet.{job}" for job in jobs])
+        self.assertEqual(omitted.stdout.count("installation identity matched"), len(jobs))
+        self.assertEqual(omitted.stdout.count("those settings were not verified"), len(jobs))
+        self.assertIn("working directory, selected Python", omitted.stdout)
+        # A same-label job with different arguments must be reported, not
+        # reloaded, unloaded or replaced.
+        state_file = launchctl.with_suffix(".json")
+        state = json.loads(state_file.read_text())
+        state["local.xplanet.start"]["ProgramArguments"][0] = "/other/xplanet.sh"
+        state_file.write_text(json.dumps(state))
+        before = state_file.read_bytes()
+        calls.write_text("")
+        mismatch = subprocess.run(command, cwd=PROJECT, env=env,
+                                  input="y\n\ny\ny\ny\ny\ny\n", capture_output=True,
+                                  text=True, check=False)
+        self.assertEqual(mismatch.returncode, 1, mismatch.stderr)
+        self.assertIn("differs from this installation", mismatch.stderr)
+        self.assertFalse(any(line.startswith("load ") for line in calls.read_text().splitlines()))
+        self.assertEqual(state_file.read_bytes(), before)
 
     def test_selected_homebrew_python_is_written_to_new_launchd_jobs(self):
         scripts, env, _ = self._shell_fixture()
@@ -442,8 +477,7 @@ class SetupTests(Sandbox):
                         'printf "%s\\n" "$TM_BREW_PREFIX"\n')
         brew.chmod(0o700)
         launchctl = bin_dir / "launchctl"
-        launchctl.write_text('#!/bin/sh\nexit 0\n')
-        launchctl.chmod(0o700)
+        stub_launchctl(launchctl)
         env.pop("TOTALMARKER_PYTHON")
         env.update(HOME=str(home), PATH=f"{bin_dir}:/bin",
                    TM_BREW_PREFIX=str(prefix))
@@ -470,9 +504,7 @@ class SetupTests(Sandbox):
         bin_dir.mkdir()
         calls = self.base / "launchctl-calls.txt"
         launchctl = bin_dir / "launchctl"
-        launchctl.write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "$TM_LAUNCHCTL_CALLS"\n'
-                             'exit 0\n')
-        launchctl.chmod(0o700)
+        stub_launchctl(launchctl)
         env.update(HOME=str(home), PATH=f"{bin_dir}:/usr/bin:/bin",
                    TM_LAUNCHCTL_CALLS=str(calls))
         done = subprocess.run([str(scripts / "xplanet.sh"), "setup"],
@@ -480,6 +512,7 @@ class SetupTests(Sandbox):
                               capture_output=True, text=True, check=False)
         self.assertEqual(done.returncode, 1)
         self.assertIn("launchd file preparation failed", done.stderr)
+        self.assertIn("Invalid launchd plist", done.stderr)
         self.assertEqual(personal.read_bytes(), b"custom local plist")
         self.assertFalse(calls.exists())
         self.assertEqual(products.read_text().splitlines(), ["quake", "storm", "volcano"])
@@ -497,9 +530,7 @@ class SetupTests(Sandbox):
         bin_dir.mkdir()
         calls = self.base / "launchctl-calls.txt"
         launchctl = bin_dir / "launchctl"
-        launchctl.write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "$TM_LAUNCHCTL_CALLS"\n'
-                             'exit 0\n')
-        launchctl.chmod(0o700)
+        stub_launchctl(launchctl)
         env.update(HOME=str(home), PATH=f"{bin_dir}:/usr/bin:/bin",
                    TM_LAUNCHCTL_CALLS=str(calls))
         done = subprocess.run([str(scripts / "xplanet.sh"), "setup"],
@@ -709,10 +740,8 @@ class SetupTests(Sandbox):
         bin_dir.mkdir()
         calls = self.base / "launchctl-calls.txt"
         launchctl = bin_dir / "launchctl"
-        launchctl.write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "$TM_LAUNCHCTL_CALLS"\n'
-                             '[ "$1" = list ] && [ "$2" = local.xplanet.storm ] && exit 3\n'
-                             'exit 0\n')
-        launchctl.chmod(0o700)
+        stub_launchctl(launchctl)
+        env["TM_LIST_FAIL_LABEL"] = "local.xplanet.storm"
         env.update(HOME=str(home), PATH=f"{bin_dir}:/usr/bin:/bin",
                    TM_LAUNCHCTL_CALLS=str(calls), TM_FAIL_PRODUCT="storm")
         done = self._inspect(scripts, env, input="y\n\nn\ny\nn\nn\ny\n")
@@ -753,10 +782,7 @@ class SetupTests(Sandbox):
         bin_dir.mkdir()
         calls = self.base / "launchctl-calls.txt"
         launchctl = bin_dir / "launchctl"
-        launchctl.write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "$TM_LAUNCHCTL_CALLS"\n'
-                             '[ "$1" = list ] && [ "$2" = "$TM_LIST_FAIL_LABEL" ] && exit 3\n'
-                             'exit 0\n')
-        launchctl.chmod(0o700)
+        stub_launchctl(launchctl)
         env.update(HOME=str(home), PATH=f"{bin_dir}:/usr/bin:/bin",
                    TM_LAUNCHCTL_CALLS=str(calls),
                    TM_LIST_FAIL_LABEL="local.xplanet.volcano")

@@ -32,8 +32,12 @@ select_earth_map() (
             fail "$directory must be a real directory"
     done
     lockdir="$project_root/.state/totalmarker/map.lock.d"
-    mkdir -- "$lockdir" 2>/dev/null || fail "Earth map selection is locked"
+    mkdir -- "$lockdir" 2>/dev/null ||
+        fail "Earth map selection is locked at $lockdir; another earth command may be running. If none is running after an interruption, remove that empty lock directory with rmdir and retry."
     trap 'rmdir -- "$lockdir"' EXIT
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
+    trap 'exit 129' HUP
     cd "$project_root/images" || fail "Cannot enter images directory"
     if [[ -e earth.png || -L earth.png ]]; then
         [[ -L earth.png ]] || fail "images/earth.png is not a symlink; refusing to replace it"
@@ -68,6 +72,7 @@ load_render_config() {
     XPLANET_LONGITUDE=''
     XPLANET_LATITUDE=''
     XPLANET_GEOMETRY=''
+    EARTH_MAP_PRE=''
     source "$project_root/config/xp.def"
     [[ "$XPLANET_HOME" == "$project_root" ]] || fail "xp.def XPLANET_HOME must match this project root"
     [[ -x "$XPLANET_BIN" ]] || fail "xp.def XPLANET_BIN must be executable"
@@ -97,27 +102,37 @@ render_frame() {
         -num_times 1
 }
 
-start_xplanet() {
-    local -a geometry_args
+desktop_command() {
     load_render_config
     [[ "$XPLANET_CONFIG" == "$project_root/config" ]] ||
         fail "xp.def XPLANET_CONFIG must match this project's config directory"
-    geometry_args=()
+    desktop_args=("-searchdir=$XPLANET_HOME" "-config=$XPLANET_CONFIG/xp.conf"
+                  "-projection=$XPLANET_PROJECTION" "${latitude_args[@]}"
+                  "-longitude=$XPLANET_LONGITUDE" -labelpos=+10-45
+                  '-date_format=%D at %r' -color=green2)
     if [[ -n "$XPLANET_GEOMETRY" ]]; then
-        geometry_args=("-geometry=$XPLANET_GEOMETRY")
+        desktop_args+=("-geometry=$XPLANET_GEOMETRY")
     fi
-    "$XPLANET_BIN" \
-        "-searchdir=$XPLANET_HOME" \
-        "-config=$XPLANET_CONFIG/xp.conf" \
-        "-projection=$XPLANET_PROJECTION" \
-        "${latitude_args[@]}" \
-        "-longitude=$XPLANET_LONGITUDE" \
-        -labelpos=+10-45 \
-        '-date_format=%D at %r' \
-        -color=green2 \
-        "${geometry_args[@]}" \
-        -fork || return $?
-    [[ "${1:-}" == quiet ]] || interactive_note "Xplanet display started."
+}
+
+start_xplanet() {
+    local -a desktop_args
+    local map_note
+    desktop_command
+    # Catch up after a powered-off monthly calendar event, including idempotent
+    # starts. Keep normal noninteractive lifecycle output quiet.
+    if [[ -n "${EARTH_MAP_PRE:-}" ]]; then
+        map_note=$(select_earth_map) || return $?
+    fi
+    "$script_dir/run-totalmarker" --display-process "$project_root" "${1:-start}" \
+        "$XPLANET_BIN" "${desktop_args[@]}" -fork
+}
+
+desktop_status() {
+    local -a desktop_args
+    desktop_command
+    "$script_dir/run-totalmarker" --display-process "$project_root" status \
+        "$XPLANET_BIN" "${desktop_args[@]}" -fork
 }
 
 xplanet_pids() {
@@ -159,7 +174,5 @@ stop_xplanet() {
 }
 
 restart_xplanet() {
-    stop_xplanet quiet || return $?
-    start_xplanet quiet || return $?
-    interactive_note "Xplanet display running."
+    start_xplanet restart
 }

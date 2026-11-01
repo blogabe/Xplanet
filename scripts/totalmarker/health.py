@@ -47,13 +47,28 @@ def _outputs(settings, product):
 
 
 def _output_summary(fs, settings, product, record):
-    present, verified = [], []
+    present, verified, errors = [], [], []
     for path, key in _outputs(settings, product):
-        raw = fs.read(path, settings.max_bytes if product == 'clouds' else 32 * 1024 * 1024)
-        present.append(raw is not None)
-        verified.append(raw is not None and hashlib.sha256(raw).hexdigest() == record.get(key))
-    return {'present': all(present), 'verified': all(verified),
-            'retained': all(present) and record.get('last_outcome') == 'failed'}
+        try:
+            raw = fs.read(path, settings.max_bytes if product == 'clouds' else 32 * 1024 * 1024)
+        except StorageError as error:
+            # A read limit or one broken output must not hide the other products.
+            # Metadata establishes presence without reading unbounded contents.
+            try:
+                exists = fs.file_stat(path) is not None
+            except StorageError:
+                exists = False
+            present.append(exists)
+            verified.append(False)
+            errors.append(str(error))
+        else:
+            present.append(raw is not None)
+            verified.append(raw is not None and hashlib.sha256(raw).hexdigest() == record.get(key))
+    summary = {'present': all(present), 'verified': all(verified),
+               'retained': all(present) and record.get('last_outcome') == 'failed'}
+    if errors:
+        summary['error'] = '; '.join(dict.fromkeys(errors))
+    return summary
 
 
 def _last_errors(fs, settings):
@@ -205,13 +220,33 @@ def check(fs, settings, *, live=False, now=None, fetcher_factory=Fetcher):
                'output': _output_summary(fs, settings, product, record)}
         if enabled:
             row['freshness'] = _freshness(product, record, settings, now)
+            if not live and row['last_outcome'] == 'failed':
+                row['status'] = 'refresh_failed'
             if row['freshness'] == 'stale':
                 row['status'] = 'stale'
                 row['output']['retained'] = row['output']['present']
             if product == 'santa':
                 row.update(status='unsupported', message='Santa has no live provider')
             elif live:
-                _live(fs, settings, product, row, record, now, fetcher_factory)
+                try:
+                    _live(fs, settings, product, row, record, now, fetcher_factory)
+                except TotalMarkerError as error:
+                    row.update(status='error', message=str(error))
+                except Exception:
+                    row.update(status='error', message='Unexpected probe setup failure')
+        # Inspect journal presence only: health must never replay or alter one.
+        journal = settings.journal if product == 'clouds' else getattr(settings, product).journal
+        try:
+            pending = fs.file_stat(journal) is not None
+        except StorageError as error:
+            row.update(status='error', recovery_error=str(error))
+        else:
+            if pending:
+                row.update(status='error', recovery_error=(
+                    'Pending publication requires recovery with its original configuration; '
+                    'preserve the journal and inspect normal command errors'))
+        if row['output'].get('error'):
+            row['status'] = 'error'
         rows.append(row)
     return {'mode': 'live' if live else 'saved', 'checked_at': now,
             'warning': warning, 'products': rows}
@@ -220,7 +255,7 @@ def check(fs, settings, *, live=False, now=None, fetcher_factory=Fetcher):
 def exit_status(report):
     if any(row['status'] == 'error' for row in report['products']):
         return 2
-    return int(any(row['status'] in {'access_failed', 'invalid_content', 'stale'}
+    return int(any(row['status'] in {'access_failed', 'invalid_content', 'stale', 'refresh_failed'}
                    for row in report['products']))
 
 
@@ -272,6 +307,12 @@ def _current_error(row):
 
 def _summary(row, live):
     status, freshness = row['status'], row['freshness']
+    if row['output'].get('error'):
+        return 'saved output unreadable', _brief(row['output']['error'])
+    if row.get('recovery_error'):
+        return 'publication recovery required', _brief(row['recovery_error'])
+    if status == 'error' and not live:
+        return 'saved status unavailable', _brief(row.get('message'))
     if status == 'unsupported':
         return 'not supported', _brief(row.get('message'))
     if live:
@@ -340,6 +381,10 @@ def format_report(report, *, verbose=False):
                     lines.append(f"  {label}: {coverage['report_period_start']} through {coverage['report_period_end']}")
             if row.get('probe_source_at') is not None:
                 lines.append('  probe source date: ' + _stamp(row['probe_source_at']))
+            if row['output'].get('error'):
+                lines.append('  saved output error: ' + row['output']['error'])
+            if row.get('recovery_error'):
+                lines.append('  publication recovery: ' + row['recovery_error'])
             if row.get('message'):
                 lines.append('  probe result: ' + row['message'])
             if row['last_outcome']:

@@ -1,5 +1,6 @@
 """Launcher display and finite renders use fixture executables only."""
 import json
+from pathlib import Path
 import os
 import pty
 import select
@@ -8,7 +9,7 @@ import sys
 import shutil
 import subprocess
 
-from .support import copy_launcher, PROJECT, Sandbox
+from .support import copy_launcher, PROJECT, Sandbox, stub_display_process
 
 
 class LauncherRenderTests(Sandbox):
@@ -18,6 +19,7 @@ class LauncherRenderTests(Sandbox):
         scripts.mkdir()
         self.wrapper = scripts / "xplanet.sh"
         copy_launcher(self.wrapper)
+        stub_display_process(scripts)
         self.capture = self.root / "dev/preview/capture.json"
         self.mock = scripts / "mock-xplanet"
         self.mock.write_text(
@@ -73,7 +75,12 @@ class LauncherRenderTests(Sandbox):
                                    "XPLANET_PROJECTION=orthographic\nXPLANET_LATITUDE=12.5"))
         result = self.invoke("preview")
         self.assertEqual(result.returncode, 0, result.stderr)
-        args = json.loads(self.capture.read_text())["args"]
+        recorded = json.loads(self.capture.read_text())
+        args = recorded["args"]
+        self.assertEqual(args[args.index("-tmpdir") + 1], str(self.root / "dev/preview/tmp"))
+        self.assertEqual(recorded["tmp"], str(self.root / "dev/preview/tmp"))
+        self.assertEqual(recorded["cache"], str(self.root / "dev/preview/cache"))
+        self.assertFalse((self.root / ".state").exists())
         self.assertEqual(args[args.index("-longitude") + 1], "-21.91")
         self.assertEqual(args[args.index("-latitude") + 1], "12.5")
         self.assertEqual(args[args.index("-projection") + 1], "orthographic")
@@ -213,10 +220,30 @@ class LauncherRenderTests(Sandbox):
             "-geometry=1600x900+12-34", "-fork",
         ])
         self.assertFalse((spaced / "dev/preview").exists())
-        failed = subprocess.run([str(wrapper), "start"], cwd=self.base,
+        failed = subprocess.run([str(wrapper), "restart"], cwd=self.base,
                                 env={**environment, "MOCK_EXIT": "37"},
                                 capture_output=True, text=True, check=False)
         self.assertEqual(failed.returncode, 37, failed.stderr)
+
+    def test_start_catches_up_monthly_map_even_when_display_already_running(self):
+        env, table, trace, capture = self.lifecycle_env()
+        (self.root / "images").mkdir()
+        maps = self.root / "assets/maps/world"
+        maps.mkdir(parents=True)
+        for month in (1, 6, 7):
+            (maps / f"world.2004{month:02d}.3x5400x2700.png").write_bytes(b"map")
+        link = self.root / "images/earth.png"
+        link.symlink_to("../assets/maps/world/world.200401.3x5400x2700.png")
+        definition = self.root / "config/xp.def"
+        definition.write_text(definition.read_text() + "EARTH_MAP_PRE=world/world\n")
+        date = Path(env["PATH"].split(":")[0]) / "date"
+        for month in (6, 7):
+            date.write_text(f'#!/bin/sh\nprintf "%s\\n" "{month:02d}"\n')
+            date.chmod(0o700)
+            result = self.invoke("start", env)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(link.readlink(), Path(f"../assets/maps/world/world.2004{month:02d}.3x5400x2700.png"))
+        self.assertFalse(trace.exists())
 
     def test_start_without_geometry_leaves_size_to_xplanet(self):
         config = self.root / "config/xp.def"
@@ -337,13 +364,13 @@ sys.exit(4)
         self.assertFalse(trace.exists())
         self.assertEqual(json.loads(capture.read_text())["args"][-1], "-fork")
 
-    def test_restart_stops_all_current_user_processes_then_starts_once(self):
+    def test_restart_replaces_desktop_but_leaves_unrelated_renderers(self):
         env, table, trace, capture = self.lifecycle_env()
-        table.write_text(json.dumps({"101": "first", "202": "second"}))
+        table.write_text(json.dumps({"101": "desktop", "202": "preview", "303": "other"}))
         result = self.invoke("restart", env)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(trace.read_text(), "-TERM 101\n-TERM 202\n")
-        self.assertEqual(json.loads(table.read_text()), {})
+        self.assertEqual(trace.read_text(), "-TERM 101\n")
+        self.assertEqual(json.loads(table.read_text()), {"202": "preview", "303": "other", "909": "desktop"})
         self.assertEqual(json.loads(capture.read_text())["args"][-1], "-fork")
 
     def test_stop_failure_or_process_inspection_error_prevents_restart(self):

@@ -257,7 +257,7 @@ class Publisher:
             return False
         if not isinstance(intent, dict) or intent.get("schema") != 1 or intent.get(
                 "paths") != self.paths():
-            raise StorageError("Pending publication paths differ; recover with the original configuration")
+            raise StorageError("Pending publication paths differ; preserve the journal and recover with the original configuration")
         next_state = validate_state(intent.get("state"))
         label = intent.get("label")
         if label is not None and not isinstance(label, str):
@@ -319,7 +319,7 @@ class MarkerPublisher:
         if intent is None:
             return False
         if not isinstance(intent, dict) or intent.get("schema") != 1 or intent.get("paths") != self.paths():
-            raise StorageError("Pending marker paths differ; recover with the original configuration")
+            raise StorageError("Pending marker paths differ; preserve the journal and recover with the original configuration")
         next_state = validate_state(intent.get("state"))
         label = intent.get("label")
         if label is not None and not isinstance(label, str):
@@ -398,7 +398,7 @@ class StormPublisher:
             return False
         if (not isinstance(intent, dict) or intent.get("schema") != 1
                 or intent.get("paths") != self.paths()):
-            raise StorageError("Pending storm paths differ; recover with the original configuration")
+            raise StorageError("Pending storm paths differ; preserve the journal and recover with the original configuration")
         next_state = validate_state(intent.get("state"))
         label = intent.get("label")
         if label is not None and not isinstance(label, str):
@@ -479,7 +479,7 @@ class PairPublisher:
             return False
         if (not isinstance(intent, dict) or intent.get("schema") != 1
                 or intent.get("product") != self.product or intent.get("paths") != self.paths()):
-            raise StorageError("Pending paired paths differ; recover with the original configuration")
+            raise StorageError("Pending paired paths differ; preserve the journal and recover with the original configuration")
         next_state = validate_state(intent.get("state"))
         label = intent.get("label")
         if label is not None and not isinstance(label, str):
@@ -522,7 +522,7 @@ def recover_pending(fs, settings):
     santa_pending = fs.read(settings.santa.journal, 2 * 1024 * 1024) is not None
     if sum([cloud_pending, volcano_pending, quake_pending, storm_pending,
             norad_pending, eclipse_pending, santa_pending]) > 1:
-        raise StorageError("Multiple pending product journals require explicit inspection")
+        raise StorageError("Multiple pending product journals require explicit inspection; preserve all journals before recovery")
     if cloud_pending:
         Publisher(fs, settings).recover()
     if volcano_pending:

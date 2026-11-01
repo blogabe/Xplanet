@@ -5,6 +5,10 @@
 !/docs/
 !/docs/technical-notes.md
 !/docs/architecture.md
+!/docs/audit-disposition.md
+!/.github/
+!/.github/workflows/
+!/.github/workflows/offline-tests.yml
 !/scripts/
 !/scripts/totalmarker/
 !/scripts/totalmarker/**
@@ -15,6 +19,8 @@
 !/scripts/lib/
 !/scripts/lib/xplanet/
 !/scripts/lib/xplanet/*.zsh
+!/scripts/lib/xplanet/display_process.py
+!/scripts/lib/xplanet/launchd_registration.py
 !/scripts/launchd/
 !/scripts/launchd/*.plist.example
 /scripts/launchd/*.plist
@@ -25,6 +31,8 @@
 !/dev/examples/*.example.toml
 !/dev/release/
 !/dev/release/build_candidate.py
+# Existing assets stay tracked; adding assets requires deliberate git add -f.
+# Unknown imagery/configuration under assets remains excluded by default.
 !/config/
 !/config/totalmarker.example.toml
 !/config/earth.example

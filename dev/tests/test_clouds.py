@@ -53,6 +53,44 @@ class CloudTests(Sandbox):
         self.assertEqual(state["checked_at"], NOW + 1200)
         self.assertEqual(state["fetched_at"], NOW)
 
+    def test_failed_fetch_and_offline_labels_do_not_invent_recovery(self):
+        settings = self.config("CloudCheckIntervalSeconds=3600\n")
+        self.run_with(settings, image_response(ETag='"edition-1"'))
+        failed_at = NOW + 3600
+        result, _ = self.run_with(settings, Response(503, {}), now=failed_at)
+        self.assertEqual(result.outcome, "failed")
+        failed = self.read_state(settings)["products"]["clouds"]
+        self.assertEqual(failed["fetched_at"], NOW)
+        self.assertEqual(failed["attempted_at"], failed_at)
+        self.assertEqual(failed["successful_at"], NOW)
+        result, transport = self.run_with(settings, now=failed_at + 10, label_only=True)
+        self.assertEqual(result.outcome, "unchanged")
+        self.assertEqual(transport.calls, [])
+        aged = self.read_state(settings)["products"]["clouds"]
+        for key in ("last_outcome", "last_error", "attempted_at", "successful_at", "fetched_at"):
+            self.assertEqual(aged[key], failed[key], key)
+        self.assertEqual(aged["checked_at"], failed_at + 10)
+        recovered, transport = self.run_with(settings, Response(304, {}), now=failed_at + 100)
+        self.assertEqual(recovered.outcome, "unchanged")
+        self.assertEqual(len(transport.calls), 1)
+        self.assertEqual(transport.calls[0][1]["If-None-Match"], '"edition-1"')
+        state = self.read_state(settings)["products"]["clouds"]
+        self.assertEqual(state["successful_at"], failed_at + 100)
+        self.assertEqual(state["fetched_at"], failed_at + 100)
+        self.assertEqual(state["last_error"], failed["last_error"])
+
+    def test_legacy_failed_attempt_time_cannot_become_cached_success(self):
+        settings = self.config("CloudCheckIntervalSeconds=3600\n")
+        self.run_with(settings, image_response())
+        self.run_with(settings, Response(503, {}), now=NOW + 3600)
+        state = self.read_state(settings)
+        state["products"]["clouds"]["fetched_at"] = NOW + 3600
+        self.fs.write(settings.state, (json.dumps(state) + "\n").encode())
+        result, transport = self.run_with(settings, Response(503, {}), now=NOW + 3700)
+        self.assertEqual(result.outcome, "failed")
+        self.assertEqual(len(transport.calls), 1)
+        self.assertEqual(self.read_state(settings)["products"]["clouds"]["successful_at"], NOW)
+
     def test_304_uses_validators_and_keeps_last_update(self):
         settings = self.config()
         modified = formatdate(NOW - 5000, usegmt=True)

@@ -90,7 +90,7 @@ if not os.environ.get("NO_INSTALLER"):
         self.assertEqual(result.returncode, 37, result.stderr)
         self.assertEqual((self.home / "install-command").read_text(), "install\n")
         self.assertEqual((self.home / "install-answer").read_text(), "interactive answer\n")
-        self.assertIn("/main/scripts/xp-bootstrap.sh", self.calls()[0][-1])
+        self.assertIn("/main/scripts/xp-bootstrap.sh", [call for call in self.calls() if call[0] == "curl"][0][-1])
         self.assertEqual(self.calls()[-1], ["git", "clone", "--single-branch", "--branch", "main", "--",
                                           "https://github.com/blogabe/Xplanet.git", str(self.home / ".xplanet")])
         self.assertEqual(list(self.downloads.iterdir()), [])
@@ -134,7 +134,7 @@ raise SystemExit(subprocess.call(
         self.assertEqual(result.returncode, 37, result.stderr)
         calls = self.calls()
         self.assertIn("/main/scripts/xplanet.sh", calls[0][-1])
-        self.assertIn("/main/scripts/xp-bootstrap.sh", calls[1][-1])
+        self.assertIn("/main/scripts/xp-bootstrap.sh", [call for call in calls if call[0] == "curl"][1][-1])
         self.assertIn("main", calls[-1])
         self.assertEqual((self.home / "install-answer").read_text(), "from docs\n")
         self.assertEqual(list(self.downloads.iterdir()), [])
@@ -147,7 +147,7 @@ raise SystemExit(subprocess.call(
                                 env=self.env, input="branch answer\n", text=True,
                                 capture_output=True, timeout=10)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("/feature/bootstrap-install/scripts/xp-bootstrap.sh", self.calls()[0][-1])
+        self.assertIn("/feature/bootstrap-install/scripts/xp-bootstrap.sh", [call for call in self.calls() if call[0] == "curl"][0][-1])
         self.assertIn("feature/bootstrap-install", self.calls()[-1])
         self.assertEqual((self.home / "install-answer").read_text(), "branch answer\n")
 
@@ -158,7 +158,7 @@ raise SystemExit(subprocess.call(
                                 env={**self.env, "CURL_EXIT": "22"},
                                 input="", text=True, capture_output=True, timeout=10)
         self.assertEqual(result.returncode, 22)
-        self.assertEqual(len(self.calls()), 1)
+        self.assertEqual(sum(call[0] == "curl" for call in self.calls()), 1)
         self.assertFalse((self.home / ".xplanet").exists())
         self.assertEqual(list(self.downloads.iterdir()), [])
 
@@ -173,7 +173,7 @@ raise SystemExit(subprocess.call(
     def test_partial_failed_download_never_executes_helper(self):
         result = self.run_bootstrap(CURL_EXIT="22")
         self.assertNotEqual(result.returncode, 0)
-        self.assertEqual(len(self.calls()), 1)
+        self.assertEqual(sum(call[0] == "curl" for call in self.calls()), 1)
         self.assertFalse((self.home / ".xplanet").exists())
         self.assertEqual(list(self.downloads.iterdir()), [])
 
@@ -188,7 +188,7 @@ raise SystemExit(subprocess.call(
                 result = self.run_bootstrap()
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn("already exists", result.stderr)
-                self.assertEqual(len(self.calls()), 1)
+                self.assertEqual(sum(call[0] == "curl" for call in self.calls()), 1)
                 if kind == "directory": destination.rmdir()
                 else:
                     if kind == "file": self.assertEqual(destination.read_text(), "keep")
@@ -201,7 +201,7 @@ raise SystemExit(subprocess.call(
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("Homebrew is required", result.stderr)
         self.assertFalse((self.home / ".xplanet").exists())
-        self.assertEqual(len(self.calls()), 1)
+        self.assertEqual(sum(call[0] == "curl" for call in self.calls()), 1)
 
     def test_clone_failure_leaves_destination_without_installing(self):
         result = self.run_bootstrap(CLONE_EXIT="17")
@@ -225,11 +225,16 @@ raise SystemExit(subprocess.call(
                 self.assertEqual(result.returncode, 2)
                 self.assertEqual(self.calls(), [])
 
-    def test_invalid_git_ref_stops_before_destination_creation(self):
-        result = self.run_bootstrap(XPLANET_BOOTSTRAP_REF="feature/../main")
-        self.assertEqual(result.returncode, 2)
-        self.assertIn("invalid repository", result.stderr)
-        self.assertFalse((self.home / ".xplanet").exists())
+    def test_invalid_git_refs_stop_before_download_or_destination_creation(self):
+        for ref in ("feature/../main", "x/../../../evil/repo/main", "foo//bar",
+                    "foo/.hidden", "foo.lock/bar", "main/", "main."):
+            with self.subTest(ref=ref):
+                self.trace.unlink(missing_ok=True)
+                result = self.run_bootstrap(XPLANET_BOOTSTRAP_REF=ref)
+                self.assertEqual(result.returncode, 2)
+                self.assertIn("invalid repository", result.stderr)
+                self.assertFalse(any(call[0] == "curl" for call in self.calls()))
+                self.assertFalse((self.home / ".xplanet").exists())
 
     def test_missing_local_setup_does_not_trigger_bootstrap(self):
         result = self.run_bootstrap("setup", "--check")

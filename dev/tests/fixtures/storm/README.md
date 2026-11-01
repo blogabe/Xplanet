@@ -47,3 +47,17 @@ followed by a valid dated interval; its manifest records the exact response
 hash and retrieval metadata. The earlier rejected production response was not
 saved, so this fixture establishes the current format failure, not byte
 identity with the first failed poll.
+
+`live-20261020-interval-wrap/` holds the raw ABIO response retrieved
+2026-10-20 at 19:39 UTC. Its issue interval wraps after the hyphen; the
+manifest preserves the retrieval metadata and byte hash.
+
+`jtwc-abpw-20261026-2230.txt` and `jtwc-rss-20261027-reissue.xml` exercise
+ABPW's distinct reissue header and validity start, plus the matching RSS
+reissue link. Their byte hashes are pinned in `test_storm_sources.py`.
+No retrieval manifest is retained for these two files, so their original
+retrieval times and response metadata are unverified.
+
+The residual-TCFA promotion regression deliberately combines the older
+captured alert with an injected link in the later promotion RSS. This is
+synthetic source sequencing, not evidence that JTWC published that sequence.

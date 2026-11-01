@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Build an unpublished, fresh-history local candidate with checkout assets.
+"""Build an unpublished, fresh-history local candidate from committed inputs.
 
-Only committed source and regular files under assets/ are exported. This does
+Only committed source and committed regular assets are exported. This does
 not modify the source index, live configuration, services, or map choices.
 """
 
@@ -74,6 +74,9 @@ def export_committed_source(destination):
                 if (name.is_absolute() or not name.parts or
                         any(part in {"..", ".git"} for part in name.parts)):
                     raise ValueError(f"unsafe source archive path: {member.name}")
+                # Assets are copied separately with regular-file and hash checks.
+                if name.parts[0] == "assets":
+                    continue
                 target = destination.joinpath(*name.parts)
                 if member.isdir():
                     target.mkdir(parents=True, exist_ok=True)
@@ -128,7 +131,9 @@ def check_source_paths(entries):
     allowed_dev = ("dev/tests/", "dev/examples/", "dev/release/")
     for name, metadata in entries.items():
         if (metadata.startswith("120000 ") or name.startswith(runtime) or
-                name.startswith("assets/") or
+                (name.startswith("assets/") and
+                 (not metadata.startswith(("100644 ", "100755 ")) or
+                  any(excluded_name(part) for part in PurePosixPath(name).parts[1:]))) or
                 (name.startswith("config/") and name not in allowed_config) or
                 (name.startswith("dev/") and not name.startswith(allowed_dev)) or
                 (name.startswith("scripts/launchd/") and
@@ -136,12 +141,15 @@ def check_source_paths(entries):
             raise RuntimeError(f"unsafe source entry: {name}")
 
 
-def check_candidate(source_entries, asset_records):
+def check_candidate(source_entries, asset_records, asset_entries):
     """Verify the fresh checkout before publishing its local manifest."""
     entries = tree_entries(OUTPUT, "HEAD")
     if {name: entry for name, entry in entries.items()
         if not name.startswith("assets/")} != source_entries:
         raise RuntimeError("candidate committed source differs from source HEAD")
+    if {name: entry for name, entry in entries.items()
+        if name.startswith("assets/")} != asset_entries:
+        raise RuntimeError("candidate committed assets differ from source HEAD")
     if set(entries) - set(source_entries) != {r["path"] for r in asset_records}:
         raise RuntimeError("candidate asset index differs from copied assets")
     if git("rev-list", "--count", "HEAD", cwd=OUTPUT,
@@ -196,21 +204,43 @@ def build():
     source_commit = git("rev-parse", "HEAD", stdout=subprocess.PIPE).stdout.decode().strip()
     source_tree = git("rev-parse", "HEAD^{tree}",
                       stdout=subprocess.PIPE).stdout.decode().strip()
-    source_entries = tree_entries(ROOT, source_commit)
-    check_source_paths(source_entries)
+    committed_entries = tree_entries(ROOT, source_commit)
+    check_source_paths(committed_entries)
+    source_entries = {name: entry for name, entry in committed_entries.items()
+                      if not name.startswith("assets/")}
+    asset_entries = {name: entry for name, entry in committed_entries.items()
+                     if name.startswith("assets/")}
+    asset_names = set(asset_entries)
     manifest_path = STAGING / f"candidate-manifest-{source_commit[:7]}.json"
     if OUTPUT.exists() or OUTPUT.is_symlink() or manifest_path.exists():
         raise FileExistsError(f"release staging already exists: {OUTPUT} or {manifest_path}")
     if not (ROOT / "assets").is_dir() or (ROOT / "assets").is_symlink():
         raise RuntimeError("assets must be a real directory")
-    included, excluded = asset_inventory(ROOT / "assets")
+    regular, excluded = asset_inventory(ROOT / "assets")
+    included = [path for path in regular if path.relative_to(ROOT).as_posix() in asset_names]
+    excluded.extend(path.relative_to(ROOT).as_posix() for path in regular if path not in included)
+    excluded.sort()
+    if {path.relative_to(ROOT).as_posix() for path in included} != asset_names:
+        raise RuntimeError("committed assets must be regular safe files")
     if not included:
-        raise RuntimeError("assets has no regular files to include")
+        raise RuntimeError("commit the assets to include before exporting")
     STAGING.mkdir(parents=True, exist_ok=True)
     OUTPUT.mkdir()
     export_committed_source(OUTPUT)
-    asset_records = [copy_asset(path, OUTPUT / path.relative_to(ROOT))
-                     for path in included]
+    asset_records = []
+    for path in included:
+        name = path.relative_to(ROOT).as_posix()
+        mode, _, expected_blob = asset_entries[name].split()
+        destination = OUTPUT / name
+        record = copy_asset(path, destination)
+        # A clean index can hide assume-unchanged/skip-worktree modifications.
+        # Verify bytes against HEAD before putting the asset in candidate history.
+        copied_blob = git("hash-object", "--no-filters", str(destination),
+                          stdout=subprocess.PIPE).stdout.decode().strip()
+        if copied_blob != expected_blob:
+            raise RuntimeError(f"asset bytes differ from source HEAD: {name}")
+        destination.chmod(int(mode, 8) & 0o777)
+        asset_records.append(record)
     git("init", "-q", "-b", "main", cwd=OUTPUT)
     git("add", "-A", cwd=OUTPUT)
     git("add", "-f", "--", "assets", cwd=OUTPUT)
@@ -218,10 +248,10 @@ def build():
         "-c", "user.email=release-candidate@localhost",
         "-c", "core.hooksPath=/dev/null",
         "commit", "-q", "-m", "Local unpublished candidate", cwd=OUTPUT)
-    records = check_candidate(source_entries, asset_records)
+    records = check_candidate(source_entries, asset_records, asset_entries)
     test_candidate()
     # A test must not leave even Git-ignored files inside the exported package.
-    if check_candidate(source_entries, asset_records) != records:
+    if check_candidate(source_entries, asset_records, asset_entries) != records:
         raise RuntimeError("candidate files changed during offline tests")
     if git("rev-parse", "HEAD", stdout=subprocess.PIPE).stdout.decode().strip() != source_commit or \
             git("status", "--porcelain", "--untracked-files=normal",

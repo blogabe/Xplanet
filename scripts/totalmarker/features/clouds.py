@@ -98,11 +98,13 @@ def run(fs, settings, *, label_only=False, fetcher=None, now=None, environment=N
                         and record.get("fetch_source_key") == source_key
                         and record.get("image_sha256") == existing_hash)
             elapsed = now - record.get("fetched_at", -1e20)
-            cached = matching and 0 <= elapsed < settings.interval
+            cached = (matching and record.get("last_outcome") != "failed"
+                      and 0 <= elapsed < settings.interval)
             if cached:
                 message = "Cached image retained"
             else:
-                record["fetched_at"] = now
+                # An attempted source switch invalidates the old request identity,
+                # but only a validated response advances the fetch time.
                 record["fetch_source_key"] = source_key
                 validators = {}
                 if matching:
@@ -149,6 +151,7 @@ def run(fs, settings, *, label_only=False, fetcher=None, now=None, environment=N
                             record.pop(key, None)
                     source_mtime = modified_time(record.get("last_modified"))
                     record["source_modified_at"] = source_mtime
+                    record["fetched_at"] = now
                 except (DownloadError, ImageError) as error:
                     outcome, message = "failed", str(error)
                     new_image = None
@@ -157,7 +160,8 @@ def run(fs, settings, *, label_only=False, fetcher=None, now=None, environment=N
                     record.update(previous_record)
         if not label_only and outcome != "failed" and (new_image is not None or valid_existing):
             record["successful_at"] = now
-        finish(record, now, outcome, message, attempt)
+        if not label_only:
+            finish(record, now, outcome, message, attempt)
         label = (refresh_all(old_label, state, settings, now, append_product="clouds")
                  if settings.labels_enabled else None)
         publisher.publish(state, label, image=new_image, source_mtime=source_mtime)

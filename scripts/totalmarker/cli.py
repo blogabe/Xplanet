@@ -13,22 +13,33 @@ from .features.norad import run as run_norad
 from .features.eclipse import run as run_eclipse
 from .features.santa import run as run_santa
 from .paths import RootFS
+from .log_trim import trim as trim_log
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="totalmarker")
     parser.add_argument("--root", required=True, help="Existing isolated project root")
     parser.add_argument("--config", help="INI or TOML path within root (never rewritten)")
-    parser.add_argument("command", choices=["clouds", "labels", "quake", "storm", "volcano", "norad", "eclipse", "santa", "health"])
+    parser.add_argument("command", choices=["clouds", "labels", "quake", "storm", "volcano", "norad", "eclipse", "santa", "health", "log-trim"])
     parser.add_argument("--live", action="store_true", help="Health: validate sources in a temporary root")
     parser.add_argument("--json", action="store_true", help="Health: output structured JSON")
     parser.add_argument("--verbose", action="store_true", help="Health: include source and diagnostic details")
+    parser.add_argument("--days", type=int, help="Log trim: retain this many days (default 30)")
+    parser.add_argument("--dry-run", action="store_true", help="Log trim: report without writing")
     args = parser.parse_args(argv)
+    if args.command != "log-trim" and (args.days is not None or args.dry_run):
+        parser.error("--days and --dry-run are log-trim options")
+    if args.days is not None and args.days < 1:
+        parser.error("--days must be a positive integer")
     if args.command != "health" and (args.live or args.json or args.verbose):
         parser.error("--live, --json and --verbose are health options")
     try:
         fs = RootFS(args.root)
         settings = load(fs, args.config)
+        if args.command == "log-trim":
+            result = trim_log(fs, settings, days=args.days or 30, dry_run=args.dry_run)
+            print(json.dumps(result))
+            return 0
         if args.command == "health":
             report = check_health(fs, settings, live=args.live)
             print(json.dumps(report) if args.json else format_report(report, verbose=args.verbose))

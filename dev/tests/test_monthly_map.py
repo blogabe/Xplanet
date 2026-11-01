@@ -2,6 +2,7 @@
 from pathlib import Path
 import shlex
 import subprocess
+import sys
 
 from .support import PROJECT, Sandbox, copy_launcher
 
@@ -27,12 +28,12 @@ class MonthlyMapTests(Sandbox):
         self.bin = self.base / "bin"
         self.bin.mkdir()
         date = self.bin / "date"
-        date.write_text('#!/bin/sh\n'
-                        'if [ -n "${TEST_DATE_EPOCH:-}" ]; then\n'
-                        '  exec /bin/date -r "$TEST_DATE_EPOCH" "$@"\n'
-                        'fi\n'
-                        '[ "$1" = +%m ] || exit 97\n'
-                        'printf "%s\\n" "$TEST_MONTH"\n')
+        date.write_text(f"#!{sys.executable}\n"
+                        "import os, sys, time\n"
+                        "if sys.argv[1:] != ['+%m']: raise SystemExit(97)\n"
+                        "if hasattr(time, 'tzset'): time.tzset()\n"
+                        "epoch = os.environ.get('TEST_DATE_EPOCH')\n"
+                        "print(time.strftime('%m', time.localtime(int(epoch))) if epoch else os.environ['TEST_MONTH'])\n")
         date.chmod(0o700)
         self.current = 6
         self.filename = f"world.2004{self.current:02d}.3x5400x2700.png"
@@ -55,6 +56,28 @@ class MonthlyMapTests(Sandbox):
                                    "TEST_MONTH": f"{month or self.current:02d}",
                                    "TEST_DATE_EPOCH": str(epoch)},
                               capture_output=True, text=True, check=False)
+
+    def test_existing_lock_is_preserved_with_recovery_guidance(self):
+        lock = self.root / ".state/totalmarker/map.lock.d"
+        lock.mkdir(parents=True)
+        before = self.link.readlink()
+        result = self.run_earth()
+        self.assertEqual(result.returncode, 2)
+        self.assertIn(str(lock), result.stderr)
+        self.assertIn("If none is running", result.stderr)
+        self.assertIn("rmdir", result.stderr)
+        self.assertTrue(lock.is_dir())
+        self.assertEqual(self.link.readlink(), before)
+
+    def test_term_releases_owned_lock_without_changing_map(self):
+        ln = self.bin / "ln"
+        ln.write_text('#!/bin/sh\nkill -TERM "$PPID"\nexit 0\n')
+        ln.chmod(0o700)
+        before = self.link.readlink()
+        result = self.run_earth()
+        self.assertEqual(result.returncode, 143, result.stderr)
+        self.assertFalse((self.root / ".state/totalmarker/map.lock.d").exists())
+        self.assertEqual(self.link.readlink(), before)
 
     def test_switches_current_map_and_preserves_source_bytes(self):
         before = self.chosen.read_bytes()

@@ -31,16 +31,24 @@ class Node:
         self.parent = parent
 
     def walk(self):
-        yield self
-        for child in self.children:
-            if isinstance(child, Node):
-                yield from child.walk()
+        pending = [self]
+        while pending:
+            node = pending.pop()
+            yield node
+            pending.extend(child for child in reversed(node.children)
+                           if isinstance(child, Node))
 
     def text(self, *, skip_citation=False):
-        if skip_citation and "varCiteLink" in self.attrs.get("class", "").split():
-            return ""
-        return "".join(child.text(skip_citation=skip_citation)
-                       if isinstance(child, Node) else child for child in self.children)
+        pieces, pending = [], [self]
+        while pending:
+            child = pending.pop()
+            if isinstance(child, Node):
+                if skip_citation and "varCiteLink" in child.attrs.get("class", "").split():
+                    continue
+                pending.extend(reversed(child.children))
+            else:
+                pieces.append(child)
+        return "".join(pieces)
 
 
 def _clean(text):
@@ -52,6 +60,7 @@ class _Tree(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.root = Node("root")
         self.stack = [self.root]
+        self.nodes = 0
 
     def handle_starttag(self, tag, attrs):
         tag = tag.lower()
@@ -61,6 +70,9 @@ class _Tree(HTMLParser):
                      "th": {"th", "td"}}[tag]
             while len(self.stack) > 1 and self.stack[-1].tag in stops:
                 self.stack.pop()
+        self.nodes += 1
+        if len(self.stack) >= 256 or self.nodes > 100000:
+            raise FeedError("GVP weekly HTML exceeds structural limits")
         node = Node(tag, attrs, self.stack[-1])
         self.stack[-1].children.append(node)
         if tag not in VOID:
@@ -108,7 +120,10 @@ def _cite_id_and_period(heading, expected_id, expected_start):
         if child.tag != "a":
             continue
         url = child.attrs.get("href", "")
-        params = parse_qs(urlsplit(url).query)
+        try:
+            params = parse_qs(urlsplit(url).query)
+        except ValueError:
+            raise FeedError("GVP weekly citation URL is malformed") from None
         references.extend(params.get("gvpvar", []))
     if len(references) != 1:
         raise FeedError("GVP weekly detail lacks one citation identifier")

@@ -88,6 +88,17 @@ class LauncherWiringTests(Sandbox):
                 self.assertEqual(result.returncode, 37, result.stderr)
                 self.assertEqual(trace.read_text().splitlines(), list(options))
 
+    def test_log_trim_forwards_options_and_status_without_loading_mac_helpers(self):
+        trace = self.base / 'trim-trace.txt'
+        result = subprocess.run([str(self.launcher), 'log-trim', '--dry-run', '--days', '12'],
+            cwd=self.base, env={**os.environ, 'TM_TEST_TRACE': str(trace), 'TM_TEST_EXIT': '37',
+                               'TM_TEST_OUTPUT': '{"would_remove":4}', 'TM_TEST_STDERR': ''},
+            text=True, capture_output=True, timeout=5)
+        self.assertEqual(result.returncode, 37, result.stderr)
+        self.assertEqual(trace.read_text().splitlines(), ['log-trim', '--dry-run', '--days', '12'])
+        self.assertEqual(result.stdout, '{"would_remove":4}\n')
+        self.assertFalse((self.root / '.state').exists())
+
     def test_other_commands_still_reject_extra_arguments(self):
         result = subprocess.run(
             [str(self.launcher), "clouds", "--check"], cwd=self.base,
