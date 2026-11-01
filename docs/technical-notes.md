@@ -59,6 +59,29 @@ launcher's interpreter selection. No global `PATH` change is required.
 
 `./scripts/xplanet.sh test` runs offline tests with mocked HTTP, saved fixtures, and stubbed system commands. Passing tests do not establish future provider availability, a Homebrew build, or desktop and scheduled-job behavior on another Mac.
 
+## Source health
+
+`./scripts/xplanet.sh health` reads saved state without fetching or writing.
+It lists configured sources, saved check/attempt/success times, source dates or
+coverage, the last recorded error, and retained output. A check time can include
+an offline cache check; an unknown attempt time is not inferred from it. Cloud
+success falls back to its last confirmed publication when no successful-refresh
+time was saved. Missing state or unsupported freshness remains unknown.
+
+`health --live` runs the normal product validators in disposable output roots.
+Normal markers, labels, state, caches and timestamps remain unchanged. It reports
+access separately from content and freshness; valid content alone is not proof
+of current coverage. Disabled optional products are skipped; Santa has no live
+provider. NORAD respects the saved provider cooldown, but probes do not persist
+a new cooldown: avoid repeated live requests. No provider restriction is bypassed.
+
+Use `--json` for structured results. Exit status is 1 for an access failure,
+invalid content or stale data, 2 for configuration/storage/probe errors, and 0 otherwise;
+0 can include unknown health and is not an all-sources-current guarantee.
+Last-error details may be unavailable when logging was disabled or its file
+exceeds the bounded diagnostic read. Saved results can predate config changes;
+use `--live` to check the current configuration.
+
 ## Logs
 
 The example launchd jobs send normal command output, including TotalMarker's JSON result, to `logs/xplanet.log`. Their stderr goes to separate files such as `logs/xplanet-clouds.log` or `logs/xplanet-storm.log`; an empty stderr file does not mean the refresh succeeded. TotalMarker also appends product outcome events to `logs/totalmarker/events.jsonl` when logging is configured. These paths are relative to the installation root in the supplied examples and can be changed by configuration or plist customization.

@@ -40,9 +40,12 @@ def _source_key(fs, options):
 
 
 def _validate_weekly_coverage(coverage_end_at, now):
-    if (coverage_end_at is None or coverage_end_at > now + 3600
-            or now - coverage_end_at > 14 * 86400):
-        raise FeedError("GVP weekly reporting period is stale or future-dated")
+    if coverage_end_at is None:
+        raise FeedError("GVP weekly reporting period is missing")
+    if coverage_end_at > now + 3600:
+        raise FeedError("GVP weekly reporting period is future-dated")
+    if now - coverage_end_at > 14 * 86400:
+        raise FeedError("GVP weekly reporting period is stale")
 
 
 def run(fs, settings, *, fetcher=None, now=None):

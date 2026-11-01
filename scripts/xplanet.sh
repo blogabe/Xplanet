@@ -375,7 +375,7 @@ restart_xplanet() {
 
 usage() {
     cat <<'USAGE'
-Usage: scripts/xplanet.sh COMMAND [SETUP_OPTION]
+Usage: scripts/xplanet.sh COMMAND [OPTIONS]
 
   bootstrap  Clone into ~/.xplanet, then run install (Homebrew required)
   install    Install Xplanet and Python, offer approval run, then run setup
@@ -394,6 +394,8 @@ Usage: scripts/xplanet.sh COMMAND [SETUP_OPTION]
   volcano    Refresh volcano markers from configured CAP or GVP weekly HTML
   storm      Fetch worldwide tropical-cyclone markers and tracks
   label      Refresh product update labels without fetching (alias: labels)
+  health     Read saved source health; --live probes without updating outputs
+             Use health --json for structured results
 
   norad      Update optional, explicitly selected NORAD satellite files
   eclipse    Update optional NASA central eclipse markers and arcs
@@ -417,7 +419,7 @@ the display only if Xplanet was running before the rebuild.
 USAGE
 }
 
-if (( $# > 1 )) && [[ "$1" != setup ]]; then
+if (( $# > 1 )) && [[ "$1" != setup && "$1" != health ]]; then
     fail "expected exactly one command; use --help"
 fi
 if (( $# == 0 )); then
@@ -468,6 +470,10 @@ case "$switch" in
         ;;
     earth)
         select_earth_map
+        ;;
+    health)
+        shift
+        "$script_dir/run-totalmarker" health "$@"
         ;;
     label|labels)
         "$script_dir/run-totalmarker" labels

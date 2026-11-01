@@ -3,6 +3,7 @@ import argparse
 from dataclasses import asdict
 import json
 from .config import load
+from .health import check as check_health, exit_status as health_status, format_report
 from .errors import TotalMarkerError
 from .features.clouds import run
 from .features.volcano import run as run_volcano
@@ -18,11 +19,19 @@ def main(argv=None):
     parser = argparse.ArgumentParser(prog="totalmarker")
     parser.add_argument("--root", required=True, help="Existing isolated project root")
     parser.add_argument("--config", help="INI or TOML path within root (never rewritten)")
-    parser.add_argument("command", choices=["clouds", "labels", "quake", "storm", "volcano", "norad", "eclipse", "santa"])
+    parser.add_argument("command", choices=["clouds", "labels", "quake", "storm", "volcano", "norad", "eclipse", "santa", "health"])
+    parser.add_argument("--live", action="store_true", help="Health: validate sources in a temporary root")
+    parser.add_argument("--json", action="store_true", help="Health: output structured JSON")
     args = parser.parse_args(argv)
+    if args.command != "health" and (args.live or args.json):
+        parser.error("--live and --json are health options")
     try:
         fs = RootFS(args.root)
         settings = load(fs, args.config)
+        if args.command == "health":
+            report = check_health(fs, settings, live=args.live)
+            print(json.dumps(report) if args.json else format_report(report))
+            return health_status(report)
         if args.command == "volcano":
             result = run_volcano(fs, settings)
         elif args.command == "quake":

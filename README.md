@@ -74,6 +74,7 @@ any directory.
 | `earth` | Select the current seasonal Earth map |
 | `clouds`, `quake`, `storm`, `volcano` | Refresh that product and its labels |
 | `label` | Refresh update labels without fetching a product |
+| `health [--live] [--json]` | Read saved health, or validate sources without updating outputs |
 | `norad`, `eclipse` | Run an explicitly configured optional product |
 | `test` | Run the offline test suite |
 
