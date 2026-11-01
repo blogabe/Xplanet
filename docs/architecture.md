@@ -86,3 +86,12 @@ Loaded settings are explicitly unverified; presence is not configuration equalit
 Python remains behind run-totalmarker for data commands, not desktop lifecycle.
 Product-specific validation and setup remain explicit; no provider plugin framework,
 configuration migration, GUI or Python-management change is added.
+
+## Asset and license boundary
+
+Finished runtime textures, including all planetary maps, remain committed and
+bundled. Source tiles, stitching work, a duplicate composite and source archives
+are preserved locally under ignored `dev/`; they are not runtime inputs or export
+inputs. The exporter continues to use only committed regular assets. See
+[asset credits](asset-credits.md) for third-party terms separate from the project's
+MIT license. Old Git history is preserved; this is a current-tree cleanup.

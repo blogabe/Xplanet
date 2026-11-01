@@ -65,6 +65,37 @@ class ReleaseBuilderTests(Sandbox):
         release.check_source_paths(entries)
         self.assertTrue(any(name.startswith("assets/") for name in entries))
 
+    def test_license_notices_export_but_local_working_sources_do_not(self):
+        (self.root / 'LICENSE').write_text('fixture license notice\n')
+        (self.root / 'docs').mkdir()
+        (self.root / 'docs/asset-credits.md').write_text('fixture third-party notice\n')
+        with (self.root / '.gitignore').open('a') as stream:
+            stream.write('dev/asset-sources-test/\n')
+        local = self.root / 'dev/asset-sources-test'
+        local.mkdir(parents=True)
+        (local / 'source-tile.png').write_bytes(b'local working fixture')
+        (local / 'manifest.json').write_text('local restore fixture')
+        self.git('add', '.gitignore', 'LICENSE', 'docs/asset-credits.md')
+        self.git('commit', '-q', '-m', 'notices and local working-source boundary')
+        self.build()
+        self.assertEqual((self.output / 'LICENSE').read_bytes(),
+                         (self.root / 'LICENSE').read_bytes())
+        self.assertEqual((self.output / 'docs/asset-credits.md').read_bytes(),
+                         (self.root / 'docs/asset-credits.md').read_bytes())
+        self.assertFalse((self.output / 'dev/asset-sources-test').exists())
+        self.assertEqual((local / 'source-tile.png').read_bytes(), b'local working fixture')
+
+    def test_force_tracked_local_working_sources_are_rejected(self):
+        local = self.root / 'dev/asset-sources-test'
+        local.mkdir(parents=True)
+        (local / 'manifest.json').write_text('local restore fixture')
+        self.git('add', '-f', 'dev/asset-sources-test/manifest.json')
+        self.git('commit', '-q', '-m', 'unsafe local preservation material')
+        with self.assertRaisesRegex(RuntimeError, 'unsafe source entry'):
+            self.build()
+        self.assertFalse(self.output.exists())
+        self.assertEqual((self.fallback / 'KEEP').read_bytes(), b'known good candidate')
+
     def test_untracked_regular_asset_is_not_exported(self):
         (self.root / "assets/maps/default/personal.png").write_bytes(b"not committed")
         self.build()
