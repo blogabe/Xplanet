@@ -3,6 +3,7 @@ import os
 import select
 import shutil
 import struct
+import sys
 import tempfile
 import time
 import unittest
@@ -96,3 +97,90 @@ class Sandbox(unittest.TestCase):
     def read_state(self, settings):
         import json
         return json.loads(self.fs.read(settings.state))
+
+def stub_display_process(scripts):
+    """Stub desktop process control in shell tests; no native host inspection.
+
+    Real lifecycle policy is covered with an injected API in test_display_process.
+    These fixtures exercise shell routing, map catch-up and rebuild orchestration.
+    """
+    shutil.copy2(PROJECT / 'scripts/run-totalmarker', scripts / 'run-totalmarker')
+    helper = scripts / 'lib/xplanet/display_process.py'
+    helper.write_text(r'''import json, os, subprocess, sys
+from pathlib import Path
+root, mode = Path(sys.argv[1]), sys.argv[2]
+argv = sys.argv[3:]
+is_update = 'TM_RUNNING_PIDS' in os.environ
+state = Path(os.environ.get('TM_RUNNING_PIDS') or os.environ.get('MOCK_PROCESS_TABLE') or str(root / '.state/mockprocess.json'))
+state.parent.mkdir(parents=True, exist_ok=True)
+table = json.loads(state.read_text()) if state.exists() else {}
+if os.environ.get('MOCK_PGREP_ERROR') == '1' or os.environ.get('TM_PGREP_FAIL') == '1':
+    print('could not inspect desktop process identity', file=sys.stderr)
+    raise SystemExit(2)
+if isinstance(table, list):
+    desktop = json.loads(os.environ.get('TM_DESKTOP_PIDS', json.dumps(table)))
+else:
+    desktop = [pid for pid, kind in table.items() if kind not in ('preview', 'other')]
+if mode == 'status':
+    if desktop: print('\n'.join(map(str, desktop)))
+    raise SystemExit(0)
+if desktop and mode == 'start':
+    if sys.stdout.isatty(): print('Xplanet display already running; use restart to replace it.')
+    raise SystemExit(0)
+if mode == 'restart':
+    denied = os.environ.get('TM_KILL_FAIL') == '1' or os.environ.get('MOCK_KILL_EXIT', '0') != '0'
+    if denied:
+        print('could not stop desktop', file=sys.stderr); raise SystemExit(2)
+    if os.environ.get('MOCK_STAY_RUNNING') == '1':
+        print('Xplanet desktop is still running after stop', file=sys.stderr); raise SystemExit(2)
+    for pid in desktop:
+        trace = os.environ.get('TM_EVENT_TRACE') or os.environ.get('MOCK_KILL_TRACE')
+        if trace:
+            with open(trace, 'a') as stream: stream.write(('TERM ' if is_update else '-TERM ') + str(pid) + '\n')
+        if isinstance(table, list): table.remove(pid)
+        else: table.pop(str(pid), None)
+    state.write_text(json.dumps(table))
+result = subprocess.run(argv, check=False).returncode
+if not result:
+    if not is_update:
+        table['909'] = 'desktop'
+        state.write_text(json.dumps(table))
+    if sys.stdout.isatty(): print('Xplanet display running.' if mode == 'restart' else 'Xplanet display started.')
+raise SystemExit(result)
+''')
+
+def stub_launchctl(path):
+    """Registered-job dictionaries and load state live only beside this stub."""
+    path.write_text('#!' + sys.executable + '\n' + r'''import json, os, plistlib, sys
+from pathlib import Path
+args = sys.argv[1:]
+if os.environ.get('TM_LAUNCHCTL_CALLS'):
+    with open(os.environ['TM_LAUNCHCTL_CALLS'], 'a') as stream: stream.write(' '.join(args) + '\n')
+state_file = Path(__file__).with_suffix('.json')
+state = json.loads(state_file.read_text()) if state_file.exists() else {}
+if args[:2] == ['load', '-w']:
+    doc = plistlib.loads(Path(args[2]).read_bytes())
+    state[doc['Label']] = doc
+    state_file.write_text(json.dumps(state))
+    raise SystemExit(0)
+if args[0] == 'list':
+    label = args[1]
+    if label == os.environ.get('TM_LIST_FAIL_LABEL') or label not in state: raise SystemExit(3)
+    doc = state[label]
+    # launchctl list LABEL emits an OpenStep-style dictionary, not XML/JSON.
+    q = json.dumps
+    values = ['"Label" = ' + q(doc['Label']) + ';',
+              '"Program" = ' + q(doc['ProgramArguments'][0]) + ';',
+              '"ProgramArguments" = (' + '; '.join(q(v) for v in doc['ProgramArguments']) + ';);',
+              '"WorkingDirectory" = ' + q(doc['WorkingDirectory']) + ';',
+              '"PID" = 123;', '"LastExitStatus" = 0;']
+    env = doc.get('EnvironmentVariables', {})
+    if env:
+        values.append('"EnvironmentVariables" = {' + ''.join(q(k) + ' = ' + q(v) + ';' for k, v in env.items()) + '};')
+    if os.environ.get('TM_LIST_OMIT_SETTINGS') == '1':
+        values = [value for value in values if not value.startswith(('"WorkingDirectory"', '"EnvironmentVariables"'))]
+    print('{' + ''.join(values) + '};')
+    raise SystemExit(0)
+raise SystemExit(4)
+''')
+    path.chmod(0o700)

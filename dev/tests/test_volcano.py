@@ -104,6 +104,25 @@ class VolcanoParserTests(Sandbox):
             with self.subTest(raw=raw[:70]), self.assertRaises(FeedError):
                 parse_cap(raw)
 
+    def test_encoded_xml_declarations_cannot_bypass_dtd_rejection(self):
+        body = synthetic_info(name="&volcano;").decode()
+        for encoding in ("utf-8", "utf-16", "utf-16-le", "utf-16-be"):
+            raw = ('<!DOCTYPE alert [<!ENTITY volcano "Ambrym">]>' + body).encode(encoding)
+            with self.subTest(encoding=encoding), self.assertRaisesRegex(
+                    FeedError, "unsupported XML declarations"):
+                parse_cap(raw)
+        # Alternate encodings themselves remain supported, including the
+        # existing ISO-8859-1 CAP 1.1 fixture; only declarations are rejected.
+        self.assertEqual(parse_cap(synthetic_info(name="Ambrym").decode().encode("utf-16"))[0].name,
+                         "Ambrym")
+
+    def test_marker_text_normalises_non_whitespace_controls(self):
+        event = parse_cap(synthetic_info(name="Ambrym"))[0]
+        body = render_body([replace(event, name="Am\x01brym\x7f")], VolcanoOptions())
+        self.assertNotIn(b"\x01", body)
+        self.assertNotIn(b"\x7f", body)
+        self.assertIn(b'"Am brym "', body)
+
     def test_foreign_namespace_cannot_masquerade_as_cap_info(self):
         raw = (b'<alert xmlns="urn:oasis:names:tc:emergency:cap:1.2" '
                b'xmlns:x="urn:wrong"><x:info><x:eventCode><x:valueName>Volcano Name'

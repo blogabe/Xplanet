@@ -1,5 +1,4 @@
 import base64
-from dataclasses import replace
 import io
 import ssl
 from urllib.error import HTTPError
@@ -101,6 +100,15 @@ class ConfigurationTests(Sandbox):
                 else:
                     self.assertTrue(settings.url.startswith("https://cloud.example.invalid/"))
 
+    def test_del_url_is_rejected_and_native_type_error_names_only_known_key(self):
+        from totalmarker.config import https_url
+        with self.assertRaises(ConfigError):
+            https_url('https://example.invalid/a\x7f.jpg')
+        (self.root / 'config.toml').write_text('[norad]\ncatalog_ids = ["DUMMY_PRIVATE_VALUE"]\n')
+        with self.assertRaisesRegex(ConfigError, 'norad.catalog_ids') as error:
+            load(self.fs, 'config.toml')
+        self.assertNotIn('DUMMY_PRIVATE_VALUE', str(error.exception))
+
 
 class FetchTests(Sandbox):
     def test_verified_tls_context(self):
@@ -160,7 +168,7 @@ class FetchTests(Sandbox):
                                403, "Forbidden", headers, io.BytesIO(body))
         transport = HTTPTransport()
         with patch.object(transport.opener, "open", side_effect=wire_error):
-            response = transport.request("https://cloud.example.invalid/map.jpg", {}, 1, 10000)
+            response = transport._request("https://cloud.example.invalid/map.jpg", {}, 1, 10000)
         self.assertEqual(response.status, 403)
         self.assertLessEqual(len(response.body), 4096)
         with self.assertRaises(DownloadError) as error:
@@ -179,18 +187,18 @@ class FetchTests(Sandbox):
         large = HTTPError("https://cloud.example.invalid/map.jpg", 503, "Service Unavailable",
                           {"Content-Type": "text/plain"}, io.BytesIO(b"Access denied " + b"x" * 10000))
         with patch.object(transport.opener, "open", side_effect=large):
-            response = transport.request("https://cloud.example.invalid/map.jpg", {}, 1, 10000)
+            response = transport._request("https://cloud.example.invalid/map.jpg", {}, 1, 10000)
         self.assertEqual(len(response.body), 4096)
         small = HTTPError("https://cloud.example.invalid/map.jpg", 503, "Service Unavailable",
                           {"Content-Type": "text/plain"}, io.BytesIO(b"Access denied " * 100))
         with patch.object(transport.opener, "open", side_effect=small):
-            response = transport.request("https://cloud.example.invalid/map.jpg", {}, 1, 16)
+            response = transport._request("https://cloud.example.invalid/map.jpg", {}, 1, 16)
         self.assertEqual(len(response.body), 16)
         nontext = HTTPError("https://cloud.example.invalid/map.jpg", 403, "Forbidden",
                             {"Content-Type": "application/octet-stream"},
                             io.BytesIO(b"Access denied DUMMY_BINARY_SECRET"))
         with patch.object(transport.opener, "open", side_effect=nontext):
-            response = transport.request("https://cloud.example.invalid/map.jpg", {}, 1, 10000)
+            response = transport._request("https://cloud.example.invalid/map.jpg", {}, 1, 10000)
         self.assertEqual(response.body, b"")
         bad = Response(403, {"Server": "cloudflare DUMMY_PASSWORD",
                              "Content-Type": "text/html; token=DUMMY_HEADER",
@@ -223,7 +231,7 @@ class FetchTests(Sandbox):
             transport = HTTPTransport()
             with patch.object(transport.opener, "open", return_value=Wire(body, length)):
                 with self.assertRaises(DownloadError):
-                    transport.request("https://cloud.example.invalid/map.jpg", {}, 1, limit)
+                    transport._request("https://cloud.example.invalid/map.jpg", {}, 1, limit)
 
     def test_response_and_settings_representations_do_not_reveal_sensitive_fields(self):
         response = Response(200, {"Authorization": "Basic DUMMY_HEADER"},
@@ -232,3 +240,36 @@ class FetchTests(Sandbox):
         settings = self.config("CustomUsername=DUMMY_USER\nCustomPassword=DUMMY_PASSWORD\n")
         self.assertNotIn(settings.url, repr(settings))
         self.assertNotIn("DUMMY", repr(settings))
+
+
+    def test_real_opener_surfaces_redirect_and_not_modified_without_following(self):
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+        import threading
+        calls = []
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                calls.append(self.path)
+                code = 302 if self.path == '/redirect' else 304
+                self.send_response(code)
+                if code == 302:
+                    self.send_header('Location', '/must-not-be-requested')
+                self.send_header('Content-Length', '0')
+                self.end_headers()
+            def log_message(self, *args):
+                pass
+        server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+        worker = threading.Thread(target=server.serve_forever, daemon=True)
+        worker.start()
+        try:
+            transport = HTTPTransport()
+            base = 'http://127.0.0.1:' + str(server.server_port)
+            # Plain loopback HTTP exercises urllib's opener only; Fetcher still
+            # rejects HTTP sources and production requests retain verified TLS.
+            for path, code in (('/redirect', 302), ('/not-modified', 304)):
+                self.assertEqual(transport.request(base + path, {}, 2, 1024).status, code)
+            self.assertEqual(calls, ['/redirect', '/not-modified'])
+        finally:
+            server.shutdown()
+            server.server_close()
+            worker.join(timeout=2)
+        self.assertFalse(worker.is_alive())

@@ -11,6 +11,7 @@ from totalmarker import health
 from totalmarker.cli import main
 from totalmarker.errors import DownloadError
 from totalmarker.features.volcano import run as run_volcano
+from totalmarker.features.storm import run as run_storm, REJECT_CAPTURE
 from totalmarker.http import Fetcher, Response
 from totalmarker.state import json_bytes
 from .support import Sandbox, ScriptedTransport, image_response
@@ -148,6 +149,31 @@ class HealthTests(Sandbox):
         self.assertTrue(roots)
         self.assertTrue(all(not root.exists() for root in roots))
 
+    def test_live_rejected_storm_capture_stays_inside_disposable_probe(self):
+        # Keep normal evidence byte-for-byte intact while proving the real
+        # failing runner creates bounded evidence only inside its probe root.
+        original_capture = b'{"existing": "normal rejection evidence"}\n'
+        self.fs.write(REJECT_CAPTURE, original_capture)
+        captures = []
+        def observed_run(fs, settings, **kwargs):
+            result = run_storm(fs, settings, **kwargs)
+            raw = fs.read(REJECT_CAPTURE)
+            self.assertIsNotNone(raw)
+            self.assertLessEqual(len(raw), 384 * 1024)
+            data = json.loads(raw)
+            self.assertEqual(data['responses'][0]['source'], 'nhc/CurrentStorms.json')
+            self.assertEqual(data['responses'][0]['bytes'], len(b'not-json'))
+            captures.append(fs.root)
+            self.assertNotEqual(fs.root, self.root)
+            return result
+        with patch.dict(health.RUNNERS, {'storm': observed_run}):
+            report = self.live(lambda: Fetcher(ScriptedTransport(Response(200, {}, b'not-json'))))
+        self.assertEqual(report['storm']['status'], 'invalid_content')
+        self.assertEqual(report['storm']['message'], 'Storm NHC active index is invalid JSON')
+        self.assertTrue(captures)
+        self.assertTrue(all(not root.exists() for root in captures))
+        self.assertEqual(self.fs.read(REJECT_CAPTURE), original_capture)
+
     def test_disabled_optional_sources_and_norad_cooldown_are_not_probed(self):
         self.settings = replace(self.settings, norad=replace(self.settings.norad, enabled=True))
         self.fs.write(self.settings.state, json_bytes({'schema': 1, 'products': {
@@ -216,4 +242,87 @@ class HealthTests(Sandbox):
         self.assertEqual(code, 2)
         self.assertEqual(rows(json.loads(failure_output.getvalue()))['clouds']['status'], 'error')
         self.assertNotIn('PRIVATE', failure_output.getvalue())
+        self.assertEqual(snapshot(self.root), before)
+
+
+    def test_oversize_saved_cloud_is_a_per_product_error_in_saved_and_live_modes(self):
+        self.settings = replace(self.settings, max_bytes=1024)
+        self.fs.write(self.settings.image, b'x' * 1025)
+        for live in (False, True):
+            before = snapshot(self.root)
+            report = health.check(self.fs, self.settings, live=live, now=NOW,
+                                  fetcher_factory=lambda: Fetcher(ScriptedTransport(Response(403, {}))))
+            products = rows(report)
+            self.assertEqual(len(products), 7)
+            self.assertEqual(products['clouds']['status'], 'error')
+            self.assertTrue(products['clouds']['output']['present'])
+            self.assertFalse(products['clouds']['output']['verified'])
+            self.assertIn('size limit', products['clouds']['output']['error'])
+            self.assertIn('Clouds: saved output unreadable', health.format_report(report))
+            self.assertEqual(products['quake']['status'], 'access_failed' if live else 'unknown')
+            self.assertEqual(health.exit_status(report), 2)
+            self.assertEqual(snapshot(self.root), before)
+
+    def test_disabled_product_unreadable_output_does_not_abort_other_rows(self):
+        from totalmarker.errors import StorageError
+        original = self.fs.read
+        def read(path, *args, **kwargs):
+            if path == self.settings.norad.satellite:
+                raise StorageError('Contained file read failed')
+            return original(path, *args, **kwargs)
+        before = snapshot(self.root)
+        with patch.object(self.fs, 'read', side_effect=read):
+            report = health.check(self.fs, self.settings, now=NOW)
+        self.assertEqual(len(report['products']), 7)
+        self.assertEqual(rows(report)['norad']['status'], 'error')
+        self.assertEqual(rows(report)['quake']['status'], 'unknown')
+        self.assertIn('Satellites: saved output unreadable', health.format_report(report))
+        self.assertEqual(health.exit_status(report), 2)
+        self.assertEqual(snapshot(self.root), before)
+
+    def test_saved_failed_refresh_is_nonzero_until_an_actual_success(self):
+        for product in ('clouds', 'quake', 'storm', 'volcano', 'norad', 'eclipse'):
+            settings = self.settings
+            if product in ('norad', 'eclipse'):
+                settings = replace(settings, **{product: replace(getattr(settings, product), enabled=True)})
+            self.fs.write(settings.state, json_bytes({'schema': 1, 'products': {product: {
+                'successful_at': NOW - 100, 'last_outcome': 'failed',
+                'last_error': {'at': NOW - 1, 'message': 'Source unavailable'}}}}))
+            before = snapshot(self.root)
+            report = health.check(self.fs, settings, now=NOW)
+            self.assertEqual(rows(report)[product]['status'], 'refresh_failed')
+            self.assertEqual(health.exit_status(report), 1)
+            self.assertIn('refresh failed', health.format_report(report))
+            self.assertEqual(snapshot(self.root), before)
+        # A completed isolated live probe reports its own result, not the saved failure.
+        report = health.check(self.fs, settings, live=True, now=NOW,
+                              fetcher_factory=lambda: Fetcher(ScriptedTransport(Response(403, {}))))
+        self.assertEqual(rows(report)['eclipse']['status'], 'access_failed')
+
+    def test_pending_disabled_publication_is_visible_without_replaying_it(self):
+        self.fs.write(self.settings.eclipse.journal, b'preserve even an invalid journal')
+        before = snapshot(self.root)
+        report = health.check(self.fs, self.settings, now=NOW)
+        self.assertEqual(rows(report)['eclipse']['status'], 'error')
+        self.assertIn('original configuration', rows(report)['eclipse']['recovery_error'])
+        self.assertIn('publication recovery required', health.format_report(report))
+        self.assertIn('  publication recovery: Pending publication requires recovery',
+                      health.format_report(report, verbose=True))
+        self.assertEqual(health.exit_status(report), 2)
+        self.assertEqual(snapshot(self.root), before)
+
+    def test_one_live_probe_setup_error_does_not_hide_other_products(self):
+        from totalmarker.errors import StorageError
+        original = health._live
+        def probe(fs, settings, product, *args):
+            if product == 'quake':
+                raise StorageError('Contained file read failed')
+            return original(fs, settings, product, *args)
+        before = snapshot(self.root)
+        with patch('totalmarker.health._live', side_effect=probe):
+            report = health.check(self.fs, self.settings, live=True, now=NOW,
+                                  fetcher_factory=lambda: Fetcher(ScriptedTransport(Response(403, {}))))
+        self.assertEqual(rows(report)['quake']['status'], 'error')
+        self.assertEqual(rows(report)['clouds']['status'], 'access_failed')
+        self.assertEqual(len(report['products']), 7)
         self.assertEqual(snapshot(self.root), before)

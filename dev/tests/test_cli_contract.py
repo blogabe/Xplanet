@@ -1,7 +1,7 @@
 """Public CLI JSON and status contract; product execution is stubbed offline."""
 import io
 import json
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import replace
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -135,3 +135,39 @@ class CliContractTests(Sandbox):
         self.assertEqual(status, 2)
         self.assert_json_contract(json.loads(output.getvalue()),
                          {"outcome": "failed", "message": "Unexpected internal failure"})
+
+
+    def test_log_trim_forwards_age_and_dry_run_without_a_product_refresh(self):
+        output = io.StringIO()
+        with (patch('totalmarker.cli.load', return_value=SimpleNamespace()),
+              patch('totalmarker.cli.trim_log', return_value={'outcome': 'unchanged', 'would_remove': 4}) as trim,
+              patch('totalmarker.cli.run') as refresh, redirect_stdout(output)):
+            status = main(['--root', str(self.root), 'log-trim', '--days', '12', '--dry-run'])
+        self.assertEqual(status, 0)
+        self.assertEqual(trim.call_args.kwargs, {'days': 12, 'dry_run': True})
+        self.assertEqual(json.loads(output.getvalue())['would_remove'], 4)
+        refresh.assert_not_called()
+
+    def test_log_trim_default_and_invalid_options(self):
+        with (patch('totalmarker.cli.load', return_value=SimpleNamespace()),
+              patch('totalmarker.cli.trim_log', return_value={}) as trim,
+              redirect_stdout(io.StringIO())):
+            self.assertEqual(main(['--root', str(self.root), 'log-trim']), 0)
+        self.assertEqual(trim.call_args.kwargs, {'days': 30, 'dry_run': False})
+        for command, options in [('log-trim', ['--days', '0']), ('log-trim', ['--days', '-1']),
+                                 ('quake', ['--days', '30']), ('clouds', ['--dry-run'])]:
+            with self.subTest(command=command, options=options), patch('totalmarker.cli.load') as load:
+                with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as result:
+                    main(['--root', str(self.root), command, *options])
+                self.assertEqual(result.exception.code, 2)
+                load.assert_not_called()
+
+    def test_health_only_flags_are_rejected_before_loading_configuration(self):
+        for option in ('--live', '--json', '--verbose'):
+            with self.subTest(option=option), patch('totalmarker.cli.load') as load:
+                error = io.StringIO()
+                with redirect_stderr(error), self.assertRaises(SystemExit) as result:
+                    main(['--root', str(self.root), 'quake', option])
+                self.assertEqual(result.exception.code, 2)
+                self.assertIn('are health options', error.getvalue())
+                load.assert_not_called()

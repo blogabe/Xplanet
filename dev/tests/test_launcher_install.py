@@ -240,7 +240,11 @@ class LauncherInstallTests(Sandbox):
                      '  ln -sf "$TM_PYTHON" "$TM_BREW_PREFIX/bin/python3"\n'
                      'fi\n'
                      'exit 0\n')
-        self.environment.update(PATH=f"{self.bin}:/bin",
+        for name in ("ln", "cat", "mkdir", "chmod", "rm"):
+            tool = self.bin / name
+            if not tool.exists():
+                tool.symlink_to(shutil.which(name))
+        self.environment.update(PATH=str(self.bin),
                                 TM_BREW_PREFIX=str(brew_prefix), TM_PYTHON=sys.executable)
         self.environment.pop("TOTALMARKER_PYTHON", None)
         installed = self.run_install("n\ny\nq\n")

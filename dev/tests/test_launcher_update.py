@@ -6,7 +6,7 @@ import shutil
 import subprocess
 import sys
 
-from .support import copy_launcher, PROJECT, Sandbox
+from .support import copy_launcher, PROJECT, Sandbox, stub_display_process
 
 
 class LauncherUpdateTests(Sandbox):
@@ -17,6 +17,7 @@ class LauncherUpdateTests(Sandbox):
         self.launcher = self.root / "scripts/xplanet.sh"
         self.launcher.parent.mkdir()
         copy_launcher(self.launcher)
+        stub_display_process(self.launcher.parent)
         (self.root / ".gitignore").write_text("cache/\n")
         (self.root / "tracked.txt").write_text("original\n")
         self.environment = {
@@ -212,8 +213,22 @@ sys.exit(4)
         self.assertIn("Checking the blogabe/xplanet Homebrew formula", result.stdout)
         self.assertIn("formula unchanged", result.stdout)
         self.assertEqual(self.git(self.root, "rev-parse", "HEAD"), target)
+        self.assertEqual(self.git(self.root, "rev-parse", "@{upstream}"), target)
+        self.assertEqual(self.git(self.root, "rev-list", "--left-right", "--count", "HEAD...@{upstream}"), "0\t0")
         self.assertEqual((self.root / "new.txt").read_text(), "upstream\n")
         self.assertFalse(sentinel.exists())
+
+    def test_fetch_updates_custom_upstream_mapping_only(self):
+        original = self.git(self.root, "rev-parse", "refs/remotes/origin/main")
+        self.git(self.root, "config", "remote.origin.fetch",
+                 "+refs/heads/*:refs/remotes/origin/custom/*")
+        self.publish("new.txt", "upstream\n")
+        target = self.git(self.publisher, "rev-parse", "HEAD")
+        result = self.update()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.git(self.root, "rev-parse", "HEAD"), target)
+        self.assertEqual(self.git(self.root, "rev-parse", "@{upstream}"), target)
+        self.assertEqual(self.git(self.root, "rev-parse", "refs/remotes/origin/main"), original)
 
     def test_dirty_tracked_worktree_refuses_before_fetch(self):
         self.publish("new.txt", "upstream\n")
@@ -305,6 +320,8 @@ sys.exit(4)
         self.assertIn("checkout changed during fetch", result.stderr)
         self.assertEqual(self.git(self.root, "branch", "--show-current"), "main")
         self.assertEqual(self.git(self.root, "rev-parse", "HEAD"), target)
+        self.assertEqual(self.git(self.root, "rev-parse", "@{upstream}"), target)
+        self.assertEqual(self.git(self.root, "rev-list", "--left-right", "--count", "HEAD...@{upstream}"), "0\t0")
 
     def test_upstream_change_during_fetch_is_reported(self):
         self.publish("new.txt", "upstream\n")
@@ -362,18 +379,28 @@ sys.exit(4)
     def test_formula_change_restarts_only_a_previously_running_display(self):
         self.change_formula()
         self.running.write_text(json.dumps(["101", "202"]))
-        result = self.update()
+        result = self.update(TM_DESKTOP_PIDS='["101"]')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.events.read_text().splitlines(),
-                         ["reinstall", "TERM 101", "TERM 202", "start"])
-        self.assertEqual(json.loads(self.running.read_text()), [])
+                         ["reinstall", "TERM 101", "start"])
+        self.assertEqual(json.loads(self.running.read_text()), ["202"])
         self.assertIn("Restarting the running Xplanet display", result.stdout)
+
+    def test_formula_rebuild_with_only_preview_does_not_start_desktop(self):
+        self.change_formula()
+        self.running.write_text(json.dumps(["202"]))
+        result = self.update(TM_DESKTOP_PIDS='[]')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.events.read_text().splitlines(), ["reinstall"])
+        self.assertEqual(json.loads(self.running.read_text()), ["202"])
 
     def test_failed_reinstall_leaves_running_display_untouched(self):
         self.change_formula()
         self.running.write_text(json.dumps(["101"]))
         result = self.update(TM_BREW_REINSTALL_FAIL="1")
         self.assertEqual(result.returncode, 2)
+        self.assertIn("formula reinstall failed", result.stderr)
+        self.assertTrue(any(call[0] == "reinstall" for call in self.brew_calls()))
         self.assertEqual(json.loads(self.running.read_text()), ["101"])
         self.assertFalse(self.events.exists())
 

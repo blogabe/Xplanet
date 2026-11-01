@@ -97,12 +97,19 @@ def _coordinates(circle):
     return lat, lon
 
 
+class _NoDeclarations(ET.TreeBuilder):
+    def doctype(self, name, pubid, system):
+        # Parser callbacks also cover UTF-16 and other XML encodings; a raw
+        # ASCII byte search alone cannot enforce the no-DTD contract.
+        raise FeedError("Volcano CAP contains unsupported XML declarations")
+
+
 def parse_cap(raw):
     """Require complete named entries; a malformed/zero-match feed is never empty success."""
     if not raw or b"<!DOCTYPE" in raw.upper() or b"<!ENTITY" in raw.upper():
         raise FeedError("Volcano CAP response is empty or contains unsupported XML declarations")
     try:
-        root = ET.fromstring(raw)
+        root = ET.fromstring(raw, parser=ET.XMLParser(target=_NoDeclarations()))
     except ET.ParseError:
         raise FeedError("Volcano CAP XML is malformed") from None
     alerts = [node for node in root.iter()
@@ -160,6 +167,7 @@ def parse_cap(raw):
 
 
 def _quoted(text):
+    text = "".join(" " if ord(char) < 32 or ord(char) == 127 else char for char in text)
     return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 

@@ -1,7 +1,7 @@
 # Private zsh helpers, sourced by xplanet.sh after root discovery.
 
 update_repository() {
-    local git_bin branch remote source_ref current_root dirty target starting_head
+    local git_bin branch remote source_ref tracking_ref current_root dirty target starting_head
     git_bin=$(command -v git) || fail "Git is required for update"
     current_root=$("$git_bin" -C "$project_root" rev-parse --show-toplevel) ||
         fail "update requires a Git checkout"
@@ -22,16 +22,21 @@ update_repository() {
     dirty=$("$git_bin" -C "$project_root" status --porcelain=v1 --untracked-files=no) ||
         fail "could not inspect local changes"
     [[ -z "$dirty" ]] || fail "local tracked changes exist; commit or handle them before update"
+    tracking_ref=$("$git_bin" -C "$project_root" for-each-ref --format='%(upstream)' "refs/heads/$branch") ||
+        fail "could not inspect the configured upstream tracking ref"
+    [[ "$tracking_ref" == refs/remotes/* ]] ||
+        fail "update requires a remote-tracking upstream ref"
     print -- "Checking the configured Git upstream..."
     "$git_bin" -C "$project_root" fetch --no-tags --no-recurse-submodules \
-        --refmap= "$remote" "$source_ref" || fail "could not fetch configured upstream"
+        --refmap= "$remote" "$source_ref:$tracking_ref" || fail "could not fetch configured upstream"
     target=$("$git_bin" -C "$project_root" rev-parse --verify 'FETCH_HEAD^{commit}') ||
         fail "fetched upstream is not a commit"
     [[ "$("$git_bin" -C "$project_root" symbolic-ref --quiet --short HEAD)" == "$branch" &&
        "$("$git_bin" -C "$project_root" rev-parse --verify 'HEAD^{commit}')" == "$starting_head" ]] ||
         fail "checkout changed during fetch; update stopped"
     [[ "$("$git_bin" -C "$project_root" config --get "branch.$branch.remote")" == "$remote" &&
-       "$("$git_bin" -C "$project_root" config --get "branch.$branch.merge")" == "$source_ref" ]] ||
+       "$("$git_bin" -C "$project_root" config --get "branch.$branch.merge")" == "$source_ref" &&
+       "$("$git_bin" -C "$project_root" for-each-ref --format='%(upstream)' "refs/heads/$branch")" == "$tracking_ref" ]] ||
         fail "upstream changed during fetch; update stopped"
     dirty=$("$git_bin" -C "$project_root" status --porcelain=v1 --untracked-files=no) ||
         fail "could not recheck local changes"
@@ -108,8 +113,8 @@ update_tap_formula() {
             fail "installed Xplanet build option is not supported for automatic reinstall: $option"
         options+=("$option")
     done
-    running_before=$(xplanet_pids) ||
-        fail "could not inspect this user's Xplanet processes before reinstall"
+    running_before=$(desktop_status) ||
+        fail "could not verify this checkout's desktop display before reinstall"
     print -- "Xplanet tap formula changed; rebuilding from source with installed options."
     HOMEBREW_NO_AUTO_UPDATE=1 "$brew_bin" reinstall --formula --build-from-source \
         blogabe/xplanet/xplanet "${options[@]}" ||

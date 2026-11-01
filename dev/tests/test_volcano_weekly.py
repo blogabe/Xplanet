@@ -93,6 +93,31 @@ class WeeklyVolcanoTests(Sandbox):
         with self.assertRaisesRegex(FeedError, 'lacks a static coordinate'):
             join_coordinates(page, load_coordinate_catalogue())
 
+    def test_deep_or_excessive_structure_is_a_recorded_feed_failure(self):
+        settings = self.config('VolcanoProvider=weekly_html\nVolcanoCheckIntervalSeconds=0\n')
+        good = Response(200, {'content-type': 'text/html'}, weekly_html())
+        self.assertEqual(run(self.fs, settings, fetcher=Fetcher(ScriptedTransport(good)),
+                             now=NOW).outcome, 'changed')
+        marker = self.fs.read(settings.volcano.marker)
+        for index, raw in enumerate((b'<div>' * 20000 + b'</div>' * 20000,
+                                     b'<br>' * 100001)):
+            with self.subTest(index=index):
+                result = run(self.fs, settings, fetcher=Fetcher(ScriptedTransport(
+                    Response(200, {'content-type': 'text/html'}, raw))), now=NOW + index + 1)
+                self.assertEqual(result.outcome, 'failed')
+                self.assertIn('structural limits', result.message)
+                self.assertEqual(self.fs.read(settings.volcano.marker), marker)
+                record = self.read_state(settings)['products']['volcano']
+                self.assertEqual(record['last_outcome'], 'failed')
+                self.assertEqual(record['successful_at'], NOW)
+                self.assertEqual(record['checked_at'], NOW + index + 1)
+                self.assertIn('structural limits', record['last_error']['message'])
+
+    def test_invalid_citation_url_is_a_feed_error(self):
+        raw = weekly_html().replace(b'/citation?gvpvar=', b'http://[bad?gvpvar=')
+        with self.assertRaisesRegex(FeedError, 'citation URL is malformed'):
+            parse_weekly_html(raw)
+
     def test_weekly_cache_and_304_recheck_saved_report_expiry(self):
         settings = self.config('VolcanoProvider=weekly_html\n'
                                'VolcanoCheckIntervalSeconds=3600000\n')

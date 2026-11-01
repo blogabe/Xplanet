@@ -8,6 +8,8 @@ requested workflow:
 - `lib/xplanet/install.zsh`: Homebrew installation and setup handoff.
 - `lib/xplanet/update.zsh`: Git fast-forward and formula comparison/rebuild.
 - `lib/xplanet/display.zsh`: render, process lifecycle and monthly map selection.
+- `lib/xplanet/display_process.py`: private macOS executable/argv/birth identity.
+- `lib/xplanet/launchd_registration.py`: bounded literal registration verification.
 - `xp-setup.sh`: preserve/prepare personal configuration and launchd jobs.
 - `run-totalmarker`: select compatible Python and invoke the data CLI.
 
@@ -48,18 +50,23 @@ sampled clock identifies an attempt; it is not a per-request network audit trail
 | --- | --- |
 | Code, docs, tests, `config/*.example`, launchd examples | Shipped versioned inputs |
 | Personal config and `.plist` files | User-owned, preserved by setup, excluded from source |
-| `assets/` | Static imagery included by the separate release asset inventory |
+| `assets/` | Committed static imagery; optional map selection, shipped with the checkout |
 | `images/`, `markers/`, `arcs/`, `satellites/` | Generated display inputs; preserve last-good output on failure |
 | `.state/totalmarker/state.json` and pending journals | Persistent provenance/recovery, not disposable cache |
 | `.state/totalmarker/job.lock` | Installation-local coordination; not a cross-machine sync lock |
+| `.state/xplanet/display.json` and `display.lock` | Desktop process identity and crash-releasing lifecycle lock; separate from product journals |
+| `.state/totalmarker/storm-rejected.json` | Bounded latest rejected public-source evidence; preserve for diagnosis |
 | `logs/` | Diagnostic history; not required for new saved product error facts |
 | Preview, test temporary directories, release staging | Disposable development output |
 
 The existing self-contained installation paths remain. Stock maps come from the
-installed renderer; seasonal maps use the release's asset bundle. Source-only
-worktrees without tracked assets skip bundle presence; packages containing assets
-must still supply the documented map months. The release builder exports committed
-source plus its separately inventoried regular asset files.
+installed renderer; seasonal maps use the checkout's committed assets. Packages
+must supply the documented map months. The optional local release builder exports
+committed source and regular committed assets, excludes local-only files, and
+verifies a fresh one-commit candidate before publishing its local manifest. Unknown
+local asset files stay ignored; adding a shipped asset requires deliberate `git add -f`
+and provenance review. The builder verifies committed asset bytes and modes, not only
+working-tree cleanliness.
 
 ## Verification boundaries
 
@@ -68,9 +75,17 @@ commands. Calendar fixtures use fixed dates and cover all twelve months plus the
 same instant in UTC and a non-UTC timezone, preserving host-local month selection.
 The normal suite runs in UTC. These tests verify contracts, publication recovery,
 source/packaged file boundaries and live-probe isolation; live installation,
-Homebrew builds, launchd execution and rendered output require guest validation.
+Homebrew builds, native process inspection, launchd execution and rendered output
+require guest validation. The audit guest exercised native identity/start/restart
+and explicit launchd load/rerun on macOS27; this is not a fresh Homebrew build or
+login/reboot test. Desktop identity uses macOS executable/argv/start facts; offline
+fixtures inject the process API and do not inspect or signal host processes.
+Identity is rechecked before SIGTERM; signaling is still PID-based, not an atomic
+kernel identity-conditional operation.
 
 The smaller dispatcher improves workflow ownership rather than reducing total
-code volume. The cost is three private shell files plus one compact diagnostic
-module. Product-specific validation and setup remain explicit; no provider plugin
+code volume. Native process identity and legacy launchd verification use small
+private Python helpers alongside the shell workflows; data policy stays in
+TotalMarker. This avoids ambiguous process-string matching and evaluation of
+human-readable launchd output. Product-specific validation and setup remain explicit; no provider plugin
 framework, configuration migration, GUI or Python-management change is added.

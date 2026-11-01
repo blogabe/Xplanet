@@ -13,6 +13,14 @@ if [[ "${1:-}" == bootstrap ]]; then
         print -u2 -- "xplanet.sh: invalid XPLANET_BOOTSTRAP_REF"
         exit 2
     fi
+    bootstrap_git=$(command -v git) || {
+        print -u2 -- "xplanet.sh: Git is required for bootstrap"
+        exit 2
+    }
+    "$bootstrap_git" check-ref-format --branch "$bootstrap_ref" >/dev/null 2>&1 || {
+        print -u2 -- "xplanet.sh: invalid repository branch or tag in XPLANET_BOOTSTRAP_REF"
+        exit 2
+    }
     bootstrap_tmp=$(mktemp -d "${TMPDIR:-/tmp}/xplanet-bootstrap.XXXXXXXX") || exit 1
     trap 'rm -rf -- "$bootstrap_tmp"' EXIT
     trap 'exit 130' INT
@@ -58,6 +66,7 @@ Usage: scripts/xplanet.sh COMMAND [OPTIONS]
   volcano    Refresh volcano markers from configured CAP or GVP weekly HTML
   storm      Fetch worldwide tropical-cyclone markers and tracks
   label      Refresh product update labels without fetching (alias: labels)
+  log-trim   Trim recognized event logs older than 30 days; --dry-run, --days N
   health     Read saved source health; --live probes without updating outputs
              Use --verbose for details or --json for structured results
 
@@ -83,7 +92,7 @@ the display only if Xplanet was running before the rebuild.
 USAGE
 }
 
-if (( $# > 1 )) && [[ "$1" != setup && "$1" != health ]]; then
+if (( $# > 1 )) && [[ "$1" != setup && "$1" != health && "$1" != log-trim ]]; then
     fail "expected exactly one command; use --help"
 fi
 if (( $# == 0 )); then
@@ -125,10 +134,12 @@ case "$switch" in
         ;;
     preview)
         load_render_config
-        mkdir -p "$project_root/dev/preview" "$project_root/.state/totalmarker" ||
+        mkdir -p "$project_root/dev/preview/tmp" "$project_root/dev/preview/cache" ||
             fail "cannot create project-local preview directories"
+        TMPDIR="$project_root/dev/preview/tmp" \
+        XDG_CACHE_HOME="$project_root/dev/preview/cache" \
         render_frame 1920x1080 "$project_root/dev/preview/earth-manual.png" \
-            "$project_root/.state/totalmarker"
+            "$project_root/dev/preview/tmp"
         ;;
     render)
         load_render_config
@@ -151,6 +162,10 @@ case "$switch" in
         ;;
     earth)
         select_earth_map
+        ;;
+    log-trim)
+        shift
+        "$script_dir/run-totalmarker" log-trim "$@"
         ;;
     health)
         shift

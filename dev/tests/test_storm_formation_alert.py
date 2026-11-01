@@ -145,7 +145,7 @@ class FormationAlertTests(Sandbox):
             b"IS NOW LOCATED NEAR 3.9S 55.5E", b"IS NOW LOCATED NEAR 4.9S 55.5E")
         failed = run(self.fs, settings, fetcher=invalid, now=NOW + 60)
         self.assertEqual(failed.outcome, "failed")
-        self.assertIn("formation alert disagrees", failed.message)
+        self.assertIn("conflicting same-time position", failed.message)
         self.assertEqual((self.fs.read(settings.storm.marker), self.fs.read(settings.storm.arc),
                           self.fs.read(settings.labels)), saved)
         different_suffix = live_fetcher()
@@ -155,7 +155,7 @@ class FormationAlertTests(Sandbox):
                                            .replace(b"93S", b"93P"))
         failed = run(self.fs, settings, fetcher=different_suffix, now=NOW + 90)
         self.assertEqual(failed.outcome, "failed")
-        self.assertIn("formation alert disagrees", failed.message)
+        self.assertIn("has a different advisory invest code", failed.message)
         self.assertEqual((self.fs.read(settings.storm.marker), self.fs.read(settings.storm.arc),
                           self.fs.read(settings.labels)), saved)
         older_advisory = live_fetcher()
@@ -163,13 +163,15 @@ class FormationAlertTests(Sandbox):
             b"WTXS21 PGTW 192000", b"WTXS21 PGTW 200000")
         failed = run(self.fs, settings, fetcher=older_advisory, now=NOW + 100)
         self.assertEqual(failed.outcome, "failed")
-        self.assertIn("formation alert disagrees", failed.message)
+        self.assertIn("is newer than ABIO advisory fix", failed.message)
+        self.assertIn("SH932027 (93S)", failed.message)
+        self.assertIn("2026-10-20T00:00:00+00:00 > 2026-10-19T20:00:00+00:00", failed.message)
         missing = live_fetcher()
         path = JTWC + "abioweb.txt"
         missing.payloads[path] = missing.payloads[path].replace(b"INVEST 93S", b"INVEST 94S")
         failed = run(self.fs, settings, fetcher=missing, now=NOW + 120)
         self.assertEqual(failed.outcome, "failed")
-        self.assertIn("formation alert disagrees", failed.message)
+        self.assertIn("has no active advisory invest", failed.message)
         self.assertEqual((self.fs.read(settings.storm.marker), self.fs.read(settings.storm.arc),
                           self.fs.read(settings.labels)), saved)
         bad_advisory = (LIVE / "jtwc-abpw-advisory.txt").read_bytes().replace(

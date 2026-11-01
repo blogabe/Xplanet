@@ -86,6 +86,37 @@ class StormPromotionTests(Sandbox):
         with self.assertRaisesRegex(FeedError, "ABIO advisory is stale"):
             collect_snapshot(CapturedFetcher(), now=after_old_cutoff)
 
+    def test_residual_tcfa_after_captured_promotion_remains_fail_closed(self):
+        # Synthetic sequencing: inject an older captured TCFA into the later
+        # authentic promotion RSS. This proves rejection, not live recurrence.
+        jtwc = "https://www.metoc.navy.mil/jtwc/products/"
+        rss_url = "https://www.metoc.navy.mil/jtwc/rss/jtwc.rss"
+        original = CapturedFetcher()
+        rss = original.fetch(rss_url).body
+        anchor = ("<li><a href='" + jtwc + "sh0227web.txt'").encode()
+        self.assertEqual(rss.count(anchor), 1)
+        addition = ("<li><a href='" + jtwc + "sh9327web.txt'>TCFA Text</a></li>\n"
+                    "<li><a href='" + jtwc + "sh9327.kmz'>Google Earth Overlay</a></li>\n").encode()
+        modified = rss.replace(anchor, addition + anchor)
+        class ResidualFetcher:
+            def fetch(self, url, **kwargs):
+                if url == rss_url:
+                    return Response(200, {}, modified)
+                if url == jtwc + "sh9327web.txt":
+                    return Response(200, {}, (EARLIER / "sh932027-warning.txt").read_bytes())
+                return original.fetch(url, **kwargs)
+        advisory = parse_advisory((CAPTURE / "jtwc-abio-advisory.txt").read_bytes(), "abio")
+        self.assertEqual(advisory.areas[1].promotions, (("93S", "02S"),))
+        settings = self.config("StormCheckIntervalSeconds=0\n")
+        first = run(self.fs, settings, fetcher=CapturedFetcher(), now=NOW)
+        self.assertEqual(first.outcome, "changed")
+        saved = (self.fs.read(settings.storm.marker), self.fs.read(settings.storm.arc))
+        failed = run(self.fs, settings, fetcher=ResidualFetcher(), now=NOW + 60)
+        self.assertEqual(failed.outcome, "failed")
+        self.assertIn("SH932027 (93S) still listed after promotion to 02S", failed.message)
+        self.assertEqual(failed.successful_at, NOW)
+        self.assertEqual((self.fs.read(settings.storm.marker), self.fs.read(settings.storm.arc)), saved)
+
     def test_upgrade_rechecks_old_cached_deadline_before_successful_time_moves(self):
         settings = self.config("StormCheckIntervalSeconds=1800\n")
         old_abpw = (CAPTURE / "jtwc-abpw-advisory.txt").read_bytes()

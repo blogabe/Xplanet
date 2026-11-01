@@ -18,7 +18,8 @@ Requires [Homebrew](https://brew.sh/), Git, curl and zsh.
 /bin/zsh -c 's=$(curl -fsSL https://raw.githubusercontent.com/blogabe/Xplanet/main/scripts/xplanet.sh) && eval "$s"' -- bootstrap
 ```
 
-Follow the setup prompts. Set your cloud URL in
+The one-liner executes the current GitHub `main` scripts; review them before
+running if you need to verify that version. Follow the setup prompts. Set your cloud URL in
 `~/.xplanet/config/totalmarker.toml` before enabling cloud refreshes.
 
 Or clone and install manually:
@@ -74,15 +75,18 @@ any directory.
 | `earth` | Select the current seasonal Earth map |
 | `clouds`, `quake`, `storm`, `volcano` | Refresh that product and its labels |
 | `label` | Refresh update labels without fetching a product |
-| `health [--live] [--json]` | Read saved health, or validate sources without updating outputs |
+| `log-trim [--dry-run] [--days N]` | Trim recognized event logs older than 30 days by default |
+| `health [--live] [--json] [--verbose]` | Read saved health, or validate sources without updating outputs |
 | `norad`, `eclipse` | Run an explicitly configured optional product |
 | `test` | Run the offline test suite |
 
 `start` uses `XPLANET_GEOMETRY` from `xp.def` when nonempty; otherwise Xplanet
 sizes the desktop automatically. `render` saves a frame at the configured
 dimensions, while `preview` uses a fixed 1920×1080 size. `stop` signals
-this user's Xplanet processes and succeeds when none is running. `restart`
-waits for them to stop, then starts one display.
+this user's Xplanet processes and succeeds when none is running. `start` catches
+up a configured monthly map and leaves this checkout's verified desktop running.
+`restart` replaces that desktop; preview/render and other checkouts are excluded.
+Ambiguous desktop identity stops the command for inspection.
 
 To update your checkout:
 
@@ -93,8 +97,8 @@ To update your checkout:
 `update` needs a configured upstream and fast-forwards only when local changes
 allow it. It then updates Homebrew tap metadata and rebuilds the tap's Xplanet
 formula from source only when its recipe differs from the installed build,
-keeping the installed build options. If Xplanet was running before a successful
-reinstall, `update` restarts the display; otherwise it stays stopped. If the
+keeping the installed build options. If this checkout's verified desktop was running
+before a successful reinstall, `update` restarts it; otherwise it stays stopped. If the
 Homebrew check fails, the Git checkout may already be updated; rerun `update`
 after resolving the reported issue.
 It does not run setup.

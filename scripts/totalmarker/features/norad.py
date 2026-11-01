@@ -328,7 +328,7 @@ def run(fs, settings, *, fetcher=None, now=None):
                 and 0 <= now - attempted_at < options.interval):
             deferred_refresh = True
             outcome = "unchanged" if tle_valid and icons_valid else "failed"
-            message = "NORAD refresh waits for the two-hour provider interval"
+            message = f"NORAD refresh waits for the configured {options.interval:g}-second provider interval"
         elif not cached:
             before = copy.deepcopy(record)
             record["attempted_at"] = now
@@ -347,7 +347,11 @@ def run(fs, settings, *, fetcher=None, now=None):
                         raise FeedError("CelesTrak did not return a fresh TLE")
                     name, first, second, epoch_at = parse_tle(
                         response.body, catalog_id, now, options.max_age)
-                    if name_contains is not None and name_contains not in name.upper():
+                    # A sanitised/missing display name cannot recheck group
+                    # membership. Discovery selected the ID and parse_tle binds
+                    # both element lines to that same catalog identity.
+                    if (name_contains is not None and name != f"NORAD {catalog_id}"
+                            and name_contains not in name.upper()):
                         raise FeedError("CelesTrak group membership changed during refresh")
                     selectors.append(_selector(fs, catalog_id, name, style, options.color))
                     elements.extend((name + "\n", first + "\n", second + "\n"))
@@ -384,7 +388,10 @@ def run(fs, settings, *, fetcher=None, now=None):
                 message += "; " + warning + "; group coverage is partial"
         if not deferred_refresh and outcome != "failed" and (satellite is not None or valid_existing):
             record["successful_at"] = now
-        finish(record, now, outcome, message, attempt)
+        # Waiting out a failed request is not evidence of provider recovery.
+        if not (deferred_refresh and outcome == "unchanged"
+                and record.get("last_outcome") == "failed"):
+            finish(record, now, outcome, message, attempt)
         label = (refresh_all(old_label, state, settings, now,
                              append_product="norad" if satellite is not None or valid_existing else None)
                  if settings.labels_enabled else None)

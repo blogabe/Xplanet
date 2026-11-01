@@ -240,3 +240,45 @@ except StorageError:
         for name in ["README.md", ".gitignore"]:
             with self.assertRaises(StorageError):
                 self.fs.write(name, b"must not overwrite project work")
+
+
+    def test_component_symlink_swap_after_resolution_fails_without_outside_write(self):
+        self.fs.write('images/existing', b'last-good')
+        outside = self.base / 'outside-after-resolve'
+        outside.mkdir()
+        (outside / 'existing').write_bytes(b'outside-original')
+        original = self.fs.resolve
+        swapped = False
+        def resolve(path, **kwargs):
+            nonlocal swapped
+            result = original(path, **kwargs)
+            if kwargs.get('write') and not swapped:
+                (self.root / 'images').rename(self.root / 'original-images')
+                (self.root / 'images').symlink_to(outside, target_is_directory=True)
+                swapped = True
+            return result
+        with patch.object(self.fs, 'resolve', side_effect=resolve):
+            with self.assertRaises(StorageError):
+                self.fs.write('images/existing', b'must-not-publish')
+        self.assertTrue(swapped)
+        self.assertEqual((outside / 'existing').read_bytes(), b'outside-original')
+        self.assertEqual((self.root / 'original-images/existing').read_bytes(), b'last-good')
+        self.assertEqual(sorted(p.name for p in outside.iterdir()), ['existing'])
+
+
+    def test_no_alias_write_rejects_contained_leaf_and_parent_symlinks(self):
+        self.fs.write('markers/last-good', b'published')
+        (self.root / 'logs').mkdir(exist_ok=True)
+        (self.root / 'logs/totalmarker').symlink_to(self.root / 'markers', target_is_directory=True)
+        with self.assertRaisesRegex(StorageError, 'Symlink aliases'):
+            self.fs.write('logs/totalmarker/last-good', b'rejected', follow_symlinks=False)
+        self.assertEqual(self.fs.read('markers/last-good'), b'published')
+        (self.root / 'logs/totalmarker').unlink()
+        (self.root / 'logs/totalmarker').mkdir()
+        (self.root / 'logs/totalmarker/rejected.json').symlink_to(self.root / 'markers/last-good')
+        with self.assertRaisesRegex(StorageError, 'Symlink aliases'):
+            self.fs.write('logs/totalmarker/rejected.json', b'rejected', follow_symlinks=False)
+        self.assertEqual(self.fs.read('markers/last-good'), b'published')
+        self.assertTrue((self.root / 'logs/totalmarker/rejected.json').is_symlink())
+        self.fs.write('logs/totalmarker/plain/rejected.json', b'captured', follow_symlinks=False)
+        self.assertEqual(self.fs.read('logs/totalmarker/plain/rejected.json'), b'captured')

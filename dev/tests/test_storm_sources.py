@@ -5,20 +5,23 @@ import gzip
 import hashlib
 from io import BytesIO
 import json
+import zlib
 from pathlib import Path
 from unittest.mock import patch
 from xml.etree import ElementTree as ET
-from zipfile import ZipFile
+from zipfile import ZipFile, ZIP_DEFLATED
 
 from totalmarker.errors import FeedError, StorageError
 from totalmarker.features.clouds import run as run_clouds
-from totalmarker.features.storm import run
+from totalmarker.features.storm import (run, _SourceCapture, REJECT_CAPTURE,
+                                        CAPTURE_BODY_LIMIT, CAPTURE_TOTAL_LIMIT)
 from totalmarker.http import Response
 from totalmarker.labels import legacy_time
 from totalmarker.state import StormPublisher, load_state, recover_pending
 from totalmarker.storm_sources import (collect_snapshot, NHC_ATCF, NHC_INDEX,
                                        JTWC_RSS, _fresh_advisory, parse_jtwc_rss,
-                                       parse_jtwc_warning, parse_nhc_best,
+                                       parse_jtwc_warning, parse_jtwc_formation_alert, parse_jtwc_kmz, parse_nhc_best,
+                                       _jtwc_url,
                                        parse_nhc_forecast)
 from totalmarker.storm_advisory import parse_advisory
 from totalmarker.storm_model import render_bodies, StormStyle
@@ -153,6 +156,157 @@ class StormSourcesTests(Sandbox):
         self.assertEqual((self.fs.read(settings.storm.marker),
                           self.fs.read(settings.storm.arc)), (marker, arc))
 
+    def test_nhc_forecast_exact_age_boundary_and_latest_eligible_cycle(self):
+        def row(cycle, lead, lat):
+            return f"EP, 21, {cycle}, 00, OFCL, {lead}, {lat}N, 1076W\n".encode()
+        # Distinct positions identify the selected cycle. A future cycle must
+        # not supersede the latest cycle at or before the current advisory.
+        raw = b"".join(row(cycle, lead, lat) for cycle, lat in
+                       (("2026101800", 180), ("2026101900", 190), ("2026102006", 200))
+                       for lead in (0, 48))
+        current = datetime(2026, 10, 20, tzinfo=timezone.utc).timestamp()
+        body = gzip.compress(raw)
+        base, forecast = parse_nhc_forecast(body, "EP212026", current)
+        self.assertEqual((base.lat, base.at), (19.0, current - 86400))
+        self.assertEqual(forecast[0].at, current + 86400)
+        with self.assertRaisesRegex(FeedError, "cycle is stale"):
+            parse_nhc_forecast(body, "EP212026", current + 1)
+
+    def test_malformed_external_containers_and_url_are_feed_errors(self):
+        # Valid gzip header followed by a deflate block with reserved BTYPE=3.
+        corrupt_gzip = b"\x1f\x8b\x08\x00\x00\x00\x00\x00\x00\xff\x07" + b"\x00" * 8
+        with self.assertRaisesRegex(FeedError, "gzip is invalid"):
+            parse_nhc_forecast(corrupt_gzip, "EP212026", NOW)
+        with self.assertRaisesRegex(FeedError, "invalid JTWC product URL"):
+            _jtwc_url(JTWC.replace(".mil/", ".mil:invalid/") + "wp2926web.txt")
+        packed = BytesIO()
+        with ZipFile(packed, "w", compression=ZIP_DEFLATED) as archive:
+            archive.writestr("doc.kml", "<kml>external payload</kml>")
+        damaged = bytearray(packed.getvalue())
+        data_offset = 30 + int.from_bytes(damaged[26:28], "little") + int.from_bytes(damaged[28:30], "little")
+        damaged[data_offset] = 7  # Reserved deflate BTYPE, inside a valid ZIP container.
+        with self.assertRaisesRegex(FeedError, "KMZ is invalid"):
+            parse_jtwc_kmz(bytes(damaged), None, "WP292026", "Champi")
+        # The bounded ZIP reader can reject deflate, unsupported compression or
+        # encryption before XML parsing. Normalize only that external boundary.
+        for error in (zlib.error("invalid block"), NotImplementedError("compression"),
+                      RuntimeError("encrypted member")):
+            with self.subTest(error=type(error).__name__):
+                with patch("totalmarker.storm_sources.ZipFile.read", side_effect=error):
+                    with self.assertRaisesRegex(FeedError, "KMZ is invalid"):
+                        parse_jtwc_kmz(packed.getvalue(), None, "WP292026", "Champi")
+
+    def test_corrupt_forecast_records_failure_and_retains_last_good_pair(self):
+        settings = self.config("StormCheckIntervalSeconds=0\n")
+        first = run(self.fs, settings, fetcher=MappedFetcher(), now=NOW)
+        self.assertEqual(first.outcome, "changed")
+        before = (self.fs.read(settings.storm.marker), self.fs.read(settings.storm.arc))
+        broken = MappedFetcher()
+        broken.payloads[NHC_ATCF + "aid_public/aep212026.dat.gz"] = (
+            b"\x1f\x8b\x08\x00\x00\x00\x00\x00\x00\xff\x07" + b"\x00" * 8)
+        failed = run(self.fs, settings, fetcher=broken, now=NOW + 60)
+        self.assertEqual(failed.outcome, "failed")
+        self.assertEqual(failed.successful_at, NOW)
+        record = self.read_state(settings)["products"]["storm"]
+        self.assertEqual(record["checked_at"], NOW + 60)
+        self.assertIn("gzip is invalid", record["last_error"]["message"])
+        self.assertEqual((self.fs.read(settings.storm.marker), self.fs.read(settings.storm.arc)), before)
+
+    def test_rejected_capture_is_bounded_public_only_and_latest_only(self):
+        settings = self.config("StormCheckIntervalSeconds=0\n")
+        class Bodies:
+            def fetch(self, url, **kwargs):
+                return Response(200, {"authorization": "private-header"}, b"x" * 100000)
+        capture = _SourceCapture(Bodies())
+        for i in range(30):
+            capture.fetch(NHC_INDEX)
+        capture.fetch(JTWC + "abpwweb.txt")
+        capture.fetch(JTWC + "abioweb.txt")
+        for i in range(8):
+            capture.fetch(NHC_INDEX)
+        capture.fetch("https://user:secret@example.invalid/private?token=secret")
+        capture.save(self.fs, settings, NOW)
+        raw = self.fs.read(REJECT_CAPTURE)
+        data = json.loads(raw)
+        self.assertLessEqual(len(raw), 384 * 1024)
+        self.assertEqual(len(data["responses"]), 32)
+        self.assertEqual(data["omitted_responses"], 9)
+        self.assertEqual(sum(r["captured_bytes"] for r in data["responses"]), CAPTURE_TOTAL_LIMIT)
+        self.assertTrue(all(r["captured_bytes"] <= CAPTURE_BODY_LIMIT for r in data["responses"]))
+        self.assertTrue(all(r["truncated"] for r in data["responses"]))
+        self.assertEqual([r["captured_bytes"] for r in data["responses"][30:32]],
+                         [CAPTURE_BODY_LIMIT, CAPTURE_BODY_LIMIT])
+        self.assertEqual(data["responses"][0]["sha256"], hashlib.sha256(b"x" * 100000).hexdigest())
+        self.assertNotIn(b"private-header", raw)
+        self.assertNotIn(b"secret", raw)
+        # Normal success and subsequent cache hits must retain failure evidence.
+        self.assertEqual(run(self.fs, settings, fetcher=MappedFetcher(), now=NOW).outcome, "changed")
+        cached = replace(settings, storm=replace(settings.storm, interval=3600))
+        self.assertEqual(run(self.fs, cached, fetcher=MappedFetcher(), now=NOW + 1).outcome, "unchanged")
+        self.assertEqual(self.fs.read(REJECT_CAPTURE), raw)
+        # A later rejection atomically replaces, rather than accumulates, data.
+        later = _SourceCapture(Bodies())
+        later.fetch(JTWC_RSS)
+        later.save(self.fs, settings, NOW + 2)
+        replacement = json.loads(self.fs.read(REJECT_CAPTURE))
+        self.assertEqual(replacement["at"], NOW + 2)
+        self.assertEqual(len(replacement["responses"]), 1)
+
+    def test_rejected_capture_refuses_output_collisions_and_contained_aliases(self):
+        settings = self.config()
+        capture = _SourceCapture(MappedFetcher())
+        capture.fetch(NHC_INDEX)
+        # Every configured output and journal is protected, including disabled
+        # products and case aliases on case-insensitive installation volumes.
+        examples = [replace(settings, state=REJECT_CAPTURE),
+                    replace(settings, log=REJECT_CAPTURE.upper()),
+                    replace(settings, norad=replace(settings.norad, satellite=REJECT_CAPTURE)),
+                    replace(settings, eclipse=replace(settings.eclipse, journal=REJECT_CAPTURE)),
+                    replace(settings, labels=".state/totalmarker")]
+        for configured in examples:
+            with self.subTest(configured=configured.state):
+                capture.save(self.fs, configured, NOW)
+                self.assertIsNone(self.fs.read(REJECT_CAPTURE))
+        self.fs.write("markers/keep", b"last-good")
+        target = self.root / REJECT_CAPTURE
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.symlink_to(self.root / "markers/keep")
+        capture.save(self.fs, settings, NOW)
+        self.assertEqual(self.fs.read("markers/keep"), b"last-good")
+        self.assertTrue(target.is_symlink())
+
+    def test_capture_storage_failure_preserves_primary_failure(self):
+        settings = self.config("StormCheckIntervalSeconds=0\n")
+        original = self.fs.write
+        def guarded(path, body, **kwargs):
+            if str(path) == REJECT_CAPTURE:
+                raise StorageError("capture cannot be written")
+            return original(path, body, **kwargs)
+        broken = MappedFetcher()
+        broken.payloads[NHC_INDEX] = b"not-json"
+        with patch.object(self.fs, "write", side_effect=guarded):
+            failed = run(self.fs, settings, fetcher=broken, now=NOW)
+        self.assertEqual(failed.outcome, "failed")
+        self.assertEqual(failed.message, "Storm NHC active index is invalid JSON")
+        self.assertEqual(self.read_state(settings)["products"]["storm"]["last_error"]["message"],
+                         failed.message)
+
+    def test_capture_optional_path_oserror_preserves_primary_failure(self):
+        settings = self.config("StormCheckIntervalSeconds=0\n")
+        # A disabled product's unusable configured path is irrelevant to this
+        # failed storm refresh. Collision inspection must remain best effort.
+        self.fs.write("satellites/block", b"regular file")
+        settings = replace(settings, norad=replace(settings.norad,
+                                                   satellite="satellites/block/item"))
+        broken = MappedFetcher()
+        broken.payloads[NHC_INDEX] = b"not-json"
+        failed = run(self.fs, settings, fetcher=broken, now=NOW)
+        self.assertEqual(failed.outcome, "failed")
+        self.assertEqual(failed.message, "Storm NHC active index is invalid JSON")
+        self.assertEqual(self.read_state(settings)["products"]["storm"]["last_error"]["message"],
+                         failed.message)
+        self.assertEqual(self.fs.read("satellites/block"), b"regular file")
+
     def test_jtwc_warning_adjacent_month_year_and_leap_day(self):
         for year, observed_day, rss_month, forecast_day in (
                 (2023, "282100Z", 3, "010900Z"),
@@ -175,6 +329,65 @@ class StormSourcesTests(Sandbox):
                                     tzinfo=timezone.utc).timestamp()
                 self.assertEqual(current.at, expected)
                 self.assertEqual(forecast[0].at, expected + 12 * 3600)
+
+    def test_jtwc_observations_after_season_boundary_reject_previous_season(self):
+        # Synthetic contract checks only: no claim about provider continuity
+        # conventions or permission to accept old-season identities.
+        for basin, code, year, month in (("WP", "02W", 2027, 1),
+                                         ("IO", "02B", 2027, 1),
+                                         ("SH", "02S", 2027, 7)):
+            season = year + (basin == "SH")
+            rss_at = datetime(year, month, 1, 3, tzinfo=timezone.utc).timestamp()
+            warning = (f"SUBJ/TROPICAL CYCLONE {code} (TWO) WARNING NR 002//\n"
+                       "WARNING POSITION:\n010000Z --- NEAR 10.0N 80.0E\n"
+                       "FORECASTS:\n12 HRS, VALID AT:\n011200Z --- NEAR 11.0N 81.0E\n").encode()
+            invest = "93" + code[-1]
+            alert = ("WTIO21 PGTW 010000\n"
+                     f"SUBJ/TROPICAL CYCLONE FORMATION ALERT (INVEST {invest})//\n"
+                     "IS NOW LOCATED NEAR 10.0N 80.0E\n").encode()
+            with self.subTest(basin=basin, boundary=(year, month)):
+                for parser, body, number, message in (
+                        (parse_jtwc_warning, warning, "02", "warning season"),
+                        (parse_jtwc_formation_alert, alert, "93", "formation alert season")):
+                    current = parser(body, basin + number + str(season), rss_at)[0]
+                    self.assertEqual(current.at, rss_at - 3 * 3600)
+                    with self.assertRaisesRegex(FeedError, message + " disagrees with RSS"):
+                        parser(body, basin + number + str(season - 1), rss_at)
+
+    def test_synthetic_final_warning_without_forecast_keeps_entire_last_good_layer(self):
+        settings = self.config("StormCheckIntervalSeconds=0\n")
+        first = run(self.fs, settings, fetcher=MappedFetcher(), now=NOW)
+        self.assertEqual(first.outcome, "changed")
+        saved = (self.fs.read(settings.storm.marker), self.fs.read(settings.storm.arc))
+        broken = MappedFetcher()
+        path = JTWC + "wp2926web.txt"
+        original = broken.payloads[path]
+        self.assertIn(b"FORECASTS:", original)
+        # Deliberately synthetic: preserve a real observed position but omit
+        # all future points, as a possible final product might do.
+        broken.payloads[path] = original.split(b"FORECASTS:", 1)[0] + b"FINAL WARNING\n"
+        failed = run(self.fs, settings, fetcher=broken, now=NOW + 60)
+        self.assertEqual(failed.outcome, "failed")
+        self.assertEqual(failed.message, "Storm JTWC warning lacks issued forecast points")
+        self.assertEqual(failed.successful_at, NOW)
+        self.assertEqual((self.fs.read(settings.storm.marker), self.fs.read(settings.storm.arc)), saved)
+
+    def test_explicit_null_nhc_forecast_is_accepted_without_fetching_a_deck(self):
+        fetcher = MappedFetcher()
+        index = json.loads(fetcher.payloads[NHC_INDEX])
+        index["activeStorms"][0]["forecastTrack"] = None
+        fetcher.payloads[NHC_INDEX] = json.dumps(index).encode()
+        forecast_url = NHC_ATCF + "aid_public/aep212026.dat.gz"
+        del fetcher.payloads[forecast_url]  # An accidental request must fail.
+        snapshot = collect_snapshot(fetcher, now=NOW)
+        storm = next(storm for storm in snapshot.storms if storm.id == "EP212026")
+        self.assertEqual((storm.forecast_status, storm.forecast_base, storm.forecast),
+                         ("not_issued", None, ()))
+        self.assertNotIn(forecast_url, fetcher.calls)
+        marker, arc = render_bodies(snapshot, StormStyle(), required_groups={
+            "nhc", "jtwc_west", "jtwc_indian", "jtwc_south"})
+        self.assertIn(b'Trudy', marker)
+        self.assertTrue(arc)  # Other storms and observed history remain valid.
 
     def test_advisory_sections_current_positions_and_historical_io_format(self):
         abio = parse_advisory((FIXTURES / "jtwc-abio-20261019.txt").read_bytes(), "abio")
@@ -208,7 +421,8 @@ class StormSourcesTests(Sandbox):
                                ("end", until), ("after", until + 1)):
                 with self.subTest(kind=kind, boundary=label):
                     if label in {"before", "after"}:
-                        with self.assertRaisesRegex(FeedError, kind.upper() + " advisory is stale"):
+                        with self.assertRaisesRegex(FeedError, kind.upper() + " advisory is " +
+                                                    ("future-dated" if label == "before" else "stale")):
                             _fresh_advisory(advisory, now, kind)
                     else:
                         _fresh_advisory(advisory, now, kind)
@@ -235,8 +449,8 @@ class StormSourcesTests(Sandbox):
                          (JTWC + "abpwweb.txt", ("Reissued", "26/2230Z")))
         for now in (issued - 3600, issued, until):
             _fresh_advisory(advisory, now, "abpw")
-        for now in (issued - 3601, until + 1):
-            with self.assertRaisesRegex(FeedError, "ABPW advisory is stale"):
+        for now, reason in ((issued - 3601, "future-dated"), (until + 1, "stale")):
+            with self.assertRaisesRegex(FeedError, "ABPW advisory is " + reason):
                 _fresh_advisory(advisory, now, "abpw")
 
         invalid = (
