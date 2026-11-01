@@ -10,7 +10,7 @@ from ..errors import DownloadError, FeedError, StorageError
 from ..http import Fetcher, safe_header
 from ..labels import refresh_all, volcano_timestamp
 from ..state import load_state, MarkerPublisher, recover_pending
-from ..volcano_cap import parse_cap, render_body, render_marker
+from ..volcano_cap import coverage_end_at, parse_cap, render_body, render_marker
 from ..volcano_weekly import (WEEKLY_URL, join_coordinates,
                               load_coordinate_catalogue, parse_weekly_html)
 from .clouds import modified_time
@@ -35,7 +35,7 @@ def _source_key(fs, options):
     for name in ["journal", "interval", "timeout", "max_bytes", "warning"]:
         style.pop(name)
     style["marker"] = str(fs.resolve(options.marker, write=True).relative_to(fs.root))
-    style["parser_version"] = 2
+    style["parser_version"] = 3
     return hashlib.sha256(json.dumps(style, sort_keys=True).encode()).hexdigest()
 
 
@@ -72,7 +72,7 @@ def run(fs, settings, *, fetcher=None, now=None):
         elapsed = now - record.get("fetched_at", -1e20)
         cached = matching and 0 <= elapsed < options.interval
         outcome, message, marker = "unchanged", "Cached volcano markers retained", None
-        if cached and options.provider == "weekly_html":
+        if cached:
             try:
                 _validate_weekly_coverage(record.get("coverage_end_at"), now)
             except FeedError as error:
@@ -96,8 +96,7 @@ def run(fs, settings, *, fetcher=None, now=None):
                 if response.status == 304:
                     if not matching:
                         raise DownloadError("Not-modified response lacks matching volcano markers")
-                    if options.provider == "weekly_html":
-                        _validate_weekly_coverage(record.get("coverage_end_at"), now)
+                    _validate_weekly_coverage(record.get("coverage_end_at"), now)
                     message = "Source reported no change"
                 elif response.status == 200:
                     content_type = response.headers.get("content-type", "").split(";")[0].strip().lower()
@@ -121,12 +120,20 @@ def run(fs, settings, *, fetcher=None, now=None):
                                        " (publication time unavailable)")
                     else:
                         events = parse_cap(response.body)
-                        period_note = ""
+                        periods = {(event.period_start, event.period_end) for event in events}
+                        if len(periods) != 1:
+                            raise FeedError("Volcano CAP entries have conflicting reporting periods")
+                        start, end = periods.pop()
+                        cutoff = coverage_end_at(end)
+                        _validate_weekly_coverage(cutoff, now)
+                        record["coverage_end_at"] = cutoff
+                        record["report_period_start"] = start.isoformat()
+                        record["report_period_end"] = end.isoformat()
+                        period_note = ("; report covers " + start.isoformat() +
+                                       " through " + end.isoformat())
                         record["source_report_at"] = max(
                             (e.source_sent_at for e in events if e.source_sent_at is not None),
                             default=None)
-                        for field in ["coverage_end_at", "report_period_start", "report_period_end"]:
-                            record.pop(field, None)
                     body = render_body(events, options)
                     body_hash = hashlib.sha256(body).hexdigest()
                     if not valid_existing or record.get("body_sha256") != body_hash:

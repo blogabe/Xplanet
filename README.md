@@ -121,11 +121,11 @@ tracking.
 Set a CAP URL or choose `provider = "weekly_html"` in `[volcano]` before
 refreshing; the shipped CAP URL is a placeholder.
 
-Automated requests to the Smithsonian GVP weekly volcano source are returning
-HTTP 403. Setup treats a failed volcano refresh as a warning and continues,
-leaving any existing volcano markers in place; they may be stale. A fresh install
-has no volcano markers until retrieval succeeds or a marker file is supplied
-manually.
+Automated CAP access resumed in late October 2026 after HTTP 403 failures.
+Reliability is still being observed; successful access does not prove the report
+is current. Setup warns if a volcano refresh fails and preserves existing
+markers, which may be stale. A fresh install has no volcano markers until
+retrieval succeeds or a marker file is supplied manually.
 
 ## Sources
 
