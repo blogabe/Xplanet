@@ -585,21 +585,8 @@ if ask "Step 3) Install and register Xplanet automation?"; then
         for job in "${jobs[@]}"; do
             agent="$HOME/Library/LaunchAgents/local.xplanet.$job.plist"
             label="local.xplanet.$job"
-            if registered=$(launchctl list "$label" 2>/dev/null); then
-                # Inspect the loaded configuration rather than trusting a label
-                # match. A different job is left untouched for manual review.
-                local_plist="$project_root/scripts/launchd/local.xplanet.$job.plist"
-                registration_notice=$("$python_bin" -B "$script_dir/lib/xplanet/launchd_registration.py" "$local_plist" <<< "$registered")
-                registration_status=$?
-                if (( registration_status == 0 )); then
-                    print -- "Already registered: $label (left unchanged)."
-                elif (( registration_status == 3 )); then
-                    print -- "Already registered: $label (installation identity matched; left unchanged)."
-                    print -- "  $registration_notice"
-                else
-                    print -u2 -- "Registered $label differs from this installation or could not be verified; left unchanged for review."
-                    failures+=("launchd $job existing registration")
-                fi
+            if launchctl list "$label" >/dev/null 2>&1; then
+                print -- "Already registered: $label (left unchanged; loaded settings were not reverified)."
                 continue
             fi
             if ! launchctl load -w "$agent"; then

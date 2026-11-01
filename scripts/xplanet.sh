@@ -54,7 +54,7 @@ Usage: scripts/xplanet.sh COMMAND [OPTIONS]
   setup      Prompt for preparation, marker refresh and optional automation
   update     Fast-forward Git, then check the blogabe Xplanet tap formula
 
-  start      Launch the configured Xplanet display with -fork
+  start      Start the launchd-owned foreground Xplanet display
   stop       Stop this user's Xplanet processes
   restart    Stop and start Xplanet; start if it was not running
   preview    Render one 1920x1080 Earth frame to dev/preview/earth-manual.png
@@ -86,7 +86,8 @@ Setup delegates to xp-setup.sh. Use setup --dry-run or setup --check to inspect;
 these modes inspect working-directory preparation only. Without an option,
 setup prompts before preparation, live marker refresh and launchd activation.
 Setup installs no packages or virtual environment.
-Start detaches Xplanet. Stop targets this user's Xplanet processes; restart
+Start uses one desktop job without automatic respawn. Stop removes that job and
+stops ALL this user's Xplanet processes, including finite renders; restart
 waits for them to exit before starting one display. A formula reinstall restarts
 the display only if Xplanet was running before the rebuild.
 USAGE

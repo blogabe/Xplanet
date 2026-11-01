@@ -9,7 +9,7 @@ import sys
 import shutil
 import subprocess
 
-from .support import copy_launcher, PROJECT, Sandbox, stub_display_process
+from .support import copy_launcher, PROJECT, Sandbox, stub_desktop_launchctl
 
 
 class LauncherRenderTests(Sandbox):
@@ -19,7 +19,12 @@ class LauncherRenderTests(Sandbox):
         scripts.mkdir()
         self.wrapper = scripts / "xplanet.sh"
         copy_launcher(self.wrapper)
-        stub_display_process(scripts)
+        self.desktop_bin = self.base / 'desktop-bin'
+        self.desktop_bin.mkdir()
+        stub_desktop_launchctl(scripts, self.desktop_bin)
+        pgrep = self.desktop_bin / 'pgrep'
+        pgrep.write_text('#!/bin/sh\nexit 1\n')
+        pgrep.chmod(0o700)
         self.capture = self.root / "dev/preview/capture.json"
         self.mock = scripts / "mock-xplanet"
         self.mock.write_text(
@@ -38,7 +43,7 @@ class LauncherRenderTests(Sandbox):
             "XPLANET_CONFIG=" + shlex.quote(str(self.root / "config")) + "\n"
             "XPLANET_PROJECTION=lambert\nXPLANET_LONGITUDE=-118.3989\n"
             "XPLANET_GEOMETRY=1600x900\n")
-        self.environment = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+        self.environment = {"PATH": f"{self.desktop_bin}:" + os.environ.get("PATH", "/usr/bin:/bin"),
                             "MOCK_CAPTURE": str(self.capture),
                             "PYTHONDONTWRITEBYTECODE": "1"}
 
@@ -193,7 +198,7 @@ class LauncherRenderTests(Sandbox):
                 self.assertEqual(result.returncode, 37, result.stderr)
                 self.assertTrue(self.capture.exists())
 
-    def test_start_preserves_forked_flags_and_space_containing_paths(self):
+    def test_start_uses_foreground_flags_and_space_containing_paths(self):
         spaced = self.base / "project with spaces"
         self.root.rename(spaced)
         wrapper = spaced / "scripts/xplanet.sh"
@@ -217,13 +222,13 @@ class LauncherRenderTests(Sandbox):
             "-projection=lambert", "-latitude", "12.5", "-longitude=-21.91",
             "-labelpos=+10-45",
             "-date_format=%D at %r", "-color=green2",
-            "-geometry=1600x900+12-34", "-fork",
+            "-geometry=1600x900+12-34",
         ])
         self.assertFalse((spaced / "dev/preview").exists())
         failed = subprocess.run([str(wrapper), "restart"], cwd=self.base,
                                 env={**environment, "MOCK_EXIT": "37"},
                                 capture_output=True, text=True, check=False)
-        self.assertEqual(failed.returncode, 37, failed.stderr)
+        self.assertEqual(failed.returncode, 0, failed.stderr)  # launchd accepted the request
 
     def test_start_catches_up_monthly_map_even_when_display_already_running(self):
         env, table, trace, capture = self.lifecycle_env()
@@ -259,7 +264,7 @@ class LauncherRenderTests(Sandbox):
                 args = json.loads(capture.read_text())["args"]
                 self.assertFalse(any(arg.startswith("-geometry") for arg in args))
                 self.assertNotIn("-latitude", args)
-                self.assertEqual(args[-1], "-fork")
+                self.assertNotIn("-fork", args)
 
     def test_start_rejects_missing_or_other_project_config(self):
         config = self.root / "config/xp.def"
@@ -287,10 +292,13 @@ table_path = Path(os.environ["MOCK_PROCESS_TABLE"])
 table = json.loads(table_path.read_text())
 args = sys.argv[1:]
 if name == "pgrep":
+    if os.environ.get("MOCK_PGREP_TRACE"):
+        with open(os.environ["MOCK_PGREP_TRACE"], "a") as out: out.write(json.dumps(args)+"\\n")
     if os.environ.get("MOCK_PGREP_ERROR") == "1":
         sys.exit(2)
-    if args[:3] != ["-u", str(os.geteuid()), "-x"] or args[3:] != ["xplanet"]:
+    if args[:3] != ["-u", str(os.geteuid()), "-x"] :
         sys.exit(4)
+    if args[3:] != ["xplanet"]: sys.exit(1)
     for pid in sorted(table):
         print(pid)
     sys.exit(0 if table else 1)
@@ -362,16 +370,16 @@ sys.exit(4)
         restarted = self.invoke("restart", env)
         self.assertEqual(restarted.returncode, 0, restarted.stderr)
         self.assertFalse(trace.exists())
-        self.assertEqual(json.loads(capture.read_text())["args"][-1], "-fork")
+        self.assertNotIn("-fork", json.loads(capture.read_text())["args"])
 
-    def test_restart_replaces_desktop_but_leaves_unrelated_renderers(self):
+    def test_restart_stops_desktop_preview_and_other_checkout(self):
         env, table, trace, capture = self.lifecycle_env()
         table.write_text(json.dumps({"101": "desktop", "202": "preview", "303": "other"}))
         result = self.invoke("restart", env)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(trace.read_text(), "-TERM 101\n")
-        self.assertEqual(json.loads(table.read_text()), {"202": "preview", "303": "other", "909": "desktop"})
-        self.assertEqual(json.loads(capture.read_text())["args"][-1], "-fork")
+        self.assertEqual(trace.read_text(), "-TERM 101\n-TERM 202\n-TERM 303\n")
+        self.assertEqual(json.loads(table.read_text()), {"909": "desktop"})
+        self.assertNotIn("-fork", json.loads(capture.read_text())["args"])
 
     def test_stop_failure_or_process_inspection_error_prevents_restart(self):
         env, table, trace, capture = self.lifecycle_env()
@@ -395,7 +403,7 @@ sys.exit(4)
         self.assertFalse(capture.exists())
         table.write_text("{}")
         failed_start = self.invoke("restart", {**env, "MOCK_EXIT": "37"})
-        self.assertEqual(failed_start.returncode, 37, failed_start.stderr)
+        self.assertEqual(failed_start.returncode, 0, failed_start.stderr)
         self.assertTrue(capture.exists())
 
     def test_lifecycle_status_is_interactive_only_and_errors_use_stderr(self):
@@ -409,9 +417,78 @@ sys.exit(4)
         self.assertIn("Xplanet display stopped.", stop_output)
         restarted, restart_output = self.invoke_tty("restart", env)
         self.assertEqual(restarted.returncode, 0, restarted.stderr)
-        self.assertIn("Xplanet display running.", restart_output)
+        self.assertIn("Xplanet display started.", restart_output)
         self.assertNotIn("Xplanet display stopped.", restart_output)
         self.assertTrue(capture.exists())
+
+    def test_start_twice_uses_one_foreground_job_without_python_runtime(self):
+        import plistlib
+        env, table, trace, capture = self.lifecycle_env()
+        env['TOTALMARKER_PYTHON'] = '/missing/python'
+        first = self.invoke('start', env)
+        self.assertEqual(first.returncode, 0, first.stderr)
+        before = capture.stat().st_mtime_ns
+        second = self.invoke('start', env)
+        self.assertEqual(second.returncode, 0, second.stderr)
+        self.assertEqual(capture.stat().st_mtime_ns, before)
+        doc = plistlib.loads((self.root / '.state/xplanet/desktop.plist').read_bytes())
+        self.assertNotIn('KeepAlive', doc)
+        self.assertNotIn('RunAtLoad', doc)
+        self.assertEqual(doc['ProgramArguments'], ['/bin/zsh', str(self.root / 'scripts/lib/xplanet/desktop.zsh')])
+        self.assertNotIn('-fork', json.loads(capture.read_text())['args'])
+
+    def test_unmanaged_migration_requires_explicit_restart(self):
+        env, table, trace, capture = self.lifecycle_env()
+        table.write_text(json.dumps({'101':'legacy', '202':'finite'}))
+        result = self.invoke('start', env)
+        self.assertEqual(result.returncode, 2)
+        self.assertIn('use restart', result.stderr)
+        self.assertFalse(trace.exists())
+        self.assertFalse(capture.exists())
+        restarted = self.invoke('restart', env)
+        self.assertEqual(restarted.returncode, 0, restarted.stderr)
+        self.assertEqual(trace.read_text(), '-TERM 101\n-TERM 202\n')
+        self.assertEqual(json.loads(table.read_text()), {'909':'desktop'})
+
+    def test_stop_removes_job_and_no_restart_occurs(self):
+        env, table, trace, capture = self.lifecycle_env()
+        calls = self.base / 'launchctl-calls'
+        env['MOCK_LAUNCHCTL_TRACE'] = str(calls)
+        self.assertEqual(self.invoke('start', env).returncode, 0)
+        result = self.invoke('stop', env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(table.read_text()), {})
+        before = calls.read_text()
+        self.assertIn('bootout gui/', before)
+        self.assertEqual(self.invoke('stop', env).returncode, 0)
+        self.assertEqual(calls.read_text().count('kickstart '), 1)
+        self.assertEqual(json.loads(table.read_text()), {})
+
+    def test_failed_bootout_still_stops_all_processes_and_prevents_restart(self):
+        env, table, trace, capture = self.lifecycle_env()
+        self.assertEqual(self.invoke('start', env).returncode, 0)
+        result = self.invoke('restart', {**env, 'MOCK_BOOTOUT_FAIL':'1'})
+        self.assertEqual(result.returncode, 2)
+        self.assertIn('desktop job removal failed', result.stderr)
+        self.assertEqual(trace.read_text(), '-TERM 909\n')
+        self.assertEqual(json.loads(table.read_text()), {})
+
+    def test_configured_names_are_literal_and_symlink_execution_resolves(self):
+        env, table, trace, capture = self.lifecycle_env()
+        alias = self.root / 'a-long-symlink.with+regex-characters'
+        alias.symlink_to(self.mock)
+        definition = self.root / 'config/xp.def'
+        definition.write_text(definition.read_text().replace(str(self.mock), str(alias)))
+        probes = self.base / 'name-probes'
+        env['MOCK_PGREP_TRACE'] = str(probes)
+        result = self.invoke('start', env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        import plistlib
+        self.assertEqual(self.invoke('stop', env).returncode, 0)
+        patterns = [json.loads(line)[-1] for line in probes.read_text().splitlines()]
+        self.assertIn('a-long-symlink\\.with\\+regex-characters', patterns)
+        self.assertTrue(capture.exists())
+        self.assertNotIn('-fork', json.loads(capture.read_text())['args'])
 
     def test_wrong_home_or_missing_geometry_fails_before_executable(self):
         config = self.root / "config/xp.def"

@@ -6,7 +6,7 @@ import shutil
 import subprocess
 import sys
 
-from .support import copy_launcher, PROJECT, Sandbox, stub_display_process
+from .support import copy_launcher, PROJECT, Sandbox, stub_desktop_launchctl
 
 
 class LauncherUpdateTests(Sandbox):
@@ -17,7 +17,6 @@ class LauncherUpdateTests(Sandbox):
         self.launcher = self.root / "scripts/xplanet.sh"
         self.launcher.parent.mkdir()
         copy_launcher(self.launcher)
-        stub_display_process(self.launcher.parent)
         (self.root / ".gitignore").write_text("cache/\n")
         (self.root / "tracked.txt").write_text("original\n")
         self.environment = {
@@ -36,6 +35,7 @@ class LauncherUpdateTests(Sandbox):
         self.identity(self.publisher)
         self.prepare_formula_fixture()
         self.prepare_renderer_fixture()
+        stub_desktop_launchctl(self.launcher.parent, self.fake_bin)
 
     def prepare_formula_fixture(self):
         self.tap = self.base / "homebrew-xplanet"
@@ -127,8 +127,9 @@ pids = json.loads(path.read_text())
 if name == "pgrep":
     if os.environ.get("TM_PGREP_FAIL") == "1":
         sys.exit(2)
-    if args != ["-u", str(os.geteuid()), "-x", "xplanet"]:
+    if args[:3] != ["-u", str(os.geteuid()), "-x"]:
         sys.exit(4)
+    if args[3:] != ["xplanet"]: sys.exit(1)
     for pid in pids:
         print(pid)
     sys.exit(0 if pids else 1)
@@ -376,23 +377,23 @@ sys.exit(4)
         self.assertEqual(self.events.read_text().splitlines(), ["reinstall"])
         self.assertEqual(sum(call[0] == "reinstall" for call in self.brew_calls()), 1)
 
-    def test_formula_change_restarts_only_a_previously_running_display(self):
+    def test_formula_change_restart_stops_all_current_user_instances(self):
         self.change_formula()
         self.running.write_text(json.dumps(["101", "202"]))
         result = self.update(TM_DESKTOP_PIDS='["101"]')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.events.read_text().splitlines(),
-                         ["reinstall", "TERM 101", "start"])
-        self.assertEqual(json.loads(self.running.read_text()), ["202"])
+                         ["reinstall", "TERM 101", "TERM 202", "start"])
+        self.assertEqual(json.loads(self.running.read_text()), [])
         self.assertIn("Restarting the running Xplanet display", result.stdout)
 
-    def test_formula_rebuild_with_only_preview_does_not_start_desktop(self):
+    def test_formula_rebuild_with_current_user_renderer_restarts(self):
         self.change_formula()
         self.running.write_text(json.dumps(["202"]))
         result = self.update(TM_DESKTOP_PIDS='[]')
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(self.events.read_text().splitlines(), ["reinstall"])
-        self.assertEqual(json.loads(self.running.read_text()), ["202"])
+        self.assertEqual(self.events.read_text().splitlines(), ["reinstall", "TERM 202", "start"])
+        self.assertEqual(json.loads(self.running.read_text()), [])
 
     def test_failed_reinstall_leaves_running_display_untouched(self):
         self.change_formula()

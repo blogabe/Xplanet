@@ -72,10 +72,6 @@ select_python() {
 
 python_bin=$(select_python)
 case "${1:-}" in
-    --display-process)
-        shift
-        exec "$python_bin" -B "$script_dir/lib/xplanet/display_process.py" "$@"
-        ;;
     --python-path)
         [ "$#" -eq 1 ] || exit 2
         printf '%s\n' "$python_bin"

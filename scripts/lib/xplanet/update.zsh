@@ -114,7 +114,7 @@ update_tap_formula() {
         options+=("$option")
     done
     running_before=$(desktop_status) ||
-        fail "could not verify this checkout's desktop display before reinstall"
+        fail "could not inspect this user's Xplanet processes before reinstall"
     print -- "Xplanet tap formula changed; rebuilding from source with installed options."
     HOMEBREW_NO_AUTO_UPDATE=1 "$brew_bin" reinstall --formula --build-from-source \
         blogabe/xplanet/xplanet "${options[@]}" ||
