@@ -14,7 +14,7 @@ The configured check interval can skip a network request when matching, valid lo
 
 Storm data combines NHC Atlantic/East/Central Pacific coverage with JTWC Northwest Pacific, North Indian, and Southern Hemisphere coverage. JTWC significant-weather advisories also supply invest positions; an invest without an issued forecast gets no invented forecast arc. Missing, stale, or unrecognized required coverage fails the complete snapshot instead of publishing an apparently empty world map. `markers/storm` and `arcs/storm` are published as a pair.
 
-NORAD and eclipse are disabled by default. NORAD supports at most 16 selected one-to-five-digit IDs for Xplanet's TLE format. Unsupported six-digit group matches are skipped with a warning when supported selections remain; an all-unsupported selection fails. Display requires a separate Xplanet `satellite_file` setting. Eclipse handles NASA central total, annular, and hybrid paths, not partial-only events; its marker and arc settings must also be enabled in Xplanet. The volcano weekly-HTML option uses a static coordinate catalogue only to locate volcanoes named in the weekly report; that catalogue does not determine activity.
+NORAD and eclipse are disabled by default. NORAD supports at most 16 selected one-to-five-digit IDs for Xplanet's TLE format. Unsupported six-digit group matches are skipped with a warning when supported selections remain; an all-unsupported selection fails. Display requires a separate Xplanet `satellite_file` setting. Eclipse handles NASA central total, annular, and hybrid paths, not partial-only events; its marker and arc settings must also be enabled in Xplanet. The volcano weekly-HTML option uses a static coordinate catalogue only to locate volcanoes named in the weekly report; that catalogue does not determine activity. CAP and weekly HTML must identify one seven-day reporting period. Coverage ends at midnight UTC after its final day; reports more than 14 days past that cutoff, or more than one hour in the future, retain the last good markers without advancing the successful-refresh time. CAP uses headline coverage dates, not the alert sent time. Missing, malformed or conflicting CAP periods fail the refresh. This also applies to cached output and HTTP 304 responses.
 
 ## Failure and recovery
 
@@ -58,6 +58,29 @@ launcher's interpreter selection. No global `PATH` change is required.
 `./scripts/xplanet.sh setup --dry-run` lists safe preparation without writing. `setup --check` returns 0 when directory, link, and personal-file preparation is ready; 1 when safe preparation remains; and 2 for invalid or unsafe input. It does not test live providers or prove launchd jobs will run. Setup verifies existing personal launchd plists and preserves them rather than replacing them; it renders only missing ones. A provider refresh that returns a valid failed TotalMarker result is reported as an optional warning; malformed results, configuration errors, and preparation or automation failures remain setup failures.
 
 `./scripts/xplanet.sh test` runs offline tests with mocked HTTP, saved fixtures, and stubbed system commands. Passing tests do not establish future provider availability, a Homebrew build, or desktop and scheduled-job behavior on another Mac.
+
+## Source health
+
+`./scripts/xplanet.sh health` reads saved state without fetching or writing.
+It lists configured sources, saved check/attempt/success times, source dates or
+coverage, the last recorded error, and retained output. A check time can include
+an offline cache check; an unknown attempt time is not inferred from it. Cloud
+success falls back to its last confirmed publication when no successful-refresh
+time was saved. Missing state or unsupported freshness remains unknown.
+
+`health --live` runs the normal product validators in disposable output roots.
+Normal markers, labels, state, caches and timestamps remain unchanged. It reports
+access separately from content and freshness; valid content alone is not proof
+of current coverage. Disabled optional products are skipped; Santa has no live
+provider. NORAD respects the saved provider cooldown, but probes do not persist
+a new cooldown: avoid repeated live requests. No provider restriction is bypassed.
+
+Use `--json` for structured results. Exit status is 1 for an access failure,
+invalid content or stale data, 2 for configuration/storage/probe errors, and 0 otherwise;
+0 can include unknown health and is not an all-sources-current guarantee.
+Last-error details may be unavailable when logging was disabled or its file
+exceeds the bounded diagnostic read. Saved results can predate config changes;
+use `--live` to check the current configuration.
 
 ## Logs
 

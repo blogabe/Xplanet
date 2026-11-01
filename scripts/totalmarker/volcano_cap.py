@@ -1,6 +1,6 @@
 """Strict CAP extraction and legacy Xplanet marker rendering for GVP weekly data."""
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime, timedelta, timezone
 import math
 import re
 import xml.etree.ElementTree as ET
@@ -16,6 +16,39 @@ CIRCLE = re.compile(
 )
 
 
+MONTHS = {month.lower(): index for index, month in enumerate(
+    ("January", "February", "March", "April", "May", "June", "July", "August",
+     "September", "October", "November", "December"), 1)}
+PERIOD = re.compile(r"(?i)(?<!\d)(\d{1,2})(?:\s+([A-Za-z]+))?(?:\s+(20\d{2}))?\s*[-–]\s*"
+                    r"(\d{1,2})\s+([A-Za-z]+)\s+(20\d{2})(?!\d)")
+
+
+def report_period(text):
+    """Read one seven-day GVP period, including '24-30 September 2023'."""
+    matches = list(PERIOD.finditer(text))
+    if len(matches) != 1:
+        raise FeedError("GVP weekly reporting period is missing or ambiguous")
+    first_day, first_month, first_year, last_day, last_month, last_year = matches[0].groups()
+    try:
+        end_year = int(last_year)
+        end_month = MONTHS[last_month.lower()]
+        start_month = MONTHS[(first_month or last_month).lower()]
+        start_year = int(first_year) if first_year else end_year - (start_month > end_month)
+        start = date(start_year, start_month, int(first_day))
+        end = date(end_year, end_month, int(last_day))
+    except (ValueError, KeyError):
+        raise FeedError("GVP weekly reporting period is invalid") from None
+    if (end - start).days != 6:
+        raise FeedError("GVP weekly reporting period is not seven days")
+    return start, end
+
+
+def coverage_end_at(period_end):
+    # Coverage includes the entire final day in UTC, not the publication time.
+    return datetime.combine(period_end + timedelta(days=1), datetime.min.time(),
+                            timezone.utc).timestamp()
+
+
 @dataclass(frozen=True)
 class Volcano:
     name: str
@@ -24,6 +57,8 @@ class Volcano:
     lon: float
     elevation: str = "UNKNOWN"
     source_sent_at: float | None = None
+    period_start: date | None = None
+    period_end: date | None = None
 
 
 def _parts(tag):
@@ -95,6 +130,7 @@ def parse_cap(raw):
         if not infos:
             raise FeedError("Volcano CAP alert contains no information entries")
         for info in infos:
+            start, end = report_period(_one_text(info, "headline", namespace))
             names = []
             for code in _children(info, "eventCode", namespace):
                 labels = _children(code, "valueName", namespace)
@@ -116,7 +152,8 @@ def parse_cap(raw):
                 raise FeedError("Volcano CAP entry requires exactly one area circle")
             location, lat, lon = positions[0]
             events.append(Volcano(names[0], location, lat, lon,
-                                  source_sent_at=source_sent_at))
+                                  source_sent_at=source_sent_at,
+                                  period_start=start, period_end=end))
     if not events:
         raise FeedError("Volcano CAP response contains no named volcanoes")
     return events

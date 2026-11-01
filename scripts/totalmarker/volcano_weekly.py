@@ -4,7 +4,7 @@ The HTML report selects activity. The GDACS snapshot supplies positions only;
 its active/inactive flags and names never select or rename report entries.
 """
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import date
 from html.parser import HTMLParser
 import json
 import math
@@ -13,15 +13,10 @@ import re
 from urllib.parse import parse_qs, urlsplit
 
 from .errors import FeedError
-from .volcano_cap import Volcano
+from .volcano_cap import Volcano, coverage_end_at, report_period as _period
 
 CATALOGUE = Path(__file__).parent / "data/gdacs_volcano_coordinates_20261019.json"
 WEEKLY_URL = "https://volcano.si.edu/reports_weekly.cfm"
-MONTHS = {month.lower(): index for index, month in enumerate(
-    ("January", "February", "March", "April", "May", "June", "July", "August",
-     "September", "October", "November", "December"), 1)}
-RANGE = re.compile(r"(?i)(\d{1,2})\s+([A-Za-z]+)(?:\s+(20\d{2}))?\s*[-–]\s*"
-                   r"(\d{1,2})\s+([A-Za-z]+)\s+(20\d{2})")
 ID = re.compile(r"vn_([1-9][0-9]{4,8})\Z")
 CITATION = re.compile(r"GVP\.WVAR(20[0-9]{6})-([1-9][0-9]{4,8})\Z")
 VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link",
@@ -104,29 +99,7 @@ class WeeklyPage:
 
     @property
     def coverage_end_at(self):
-        # The week ends at the start of the next UTC day. This is a coverage
-        # cutoff, never a publication timestamp.
-        return datetime.combine(self.period_end + timedelta(days=1),
-                                datetime.min.time(), timezone.utc).timestamp()
-
-
-def _period(text):
-    match = RANGE.search(text)
-    if not match:
-        raise FeedError("GVP weekly reporting period is missing")
-    first_day, first_month, first_year, last_day, last_month, last_year = match.groups()
-    try:
-        end_year = int(last_year)
-        end_month = MONTHS[last_month.lower()]
-        start_month = MONTHS[first_month.lower()]
-        start_year = int(first_year) if first_year else end_year - (start_month > end_month)
-        start = date(start_year, start_month, int(first_day))
-        end = date(end_year, end_month, int(last_day))
-    except (ValueError, KeyError):
-        raise FeedError("GVP weekly reporting period is invalid") from None
-    if (end - start).days != 6:
-        raise FeedError("GVP weekly reporting period is not seven days")
-    return start, end
+        return coverage_end_at(self.period_end)
 
 
 def _cite_id_and_period(heading, expected_id, expected_start):

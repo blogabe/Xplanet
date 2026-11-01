@@ -20,15 +20,20 @@ from .support import PROJECT, Sandbox, ScriptedTransport
 
 NOW = 1_700_000_000
 SAMPLE = (PROJECT / "dev/tests/fixtures/legacy_gvp_cap.xml").read_bytes()
+# Keep the authentic parser fixture intact; provider tests use coverage current
+# at their fixed clock, including its mocked CLI invocation below.
+CURRENT = SAMPLE.replace(b"22 May-28 May 2013", b"2 November-8 November 2023").replace(
+    b"2 April-8 April 2014", b"2 November-8 November 2023")
 
 
-def cap_response(body=SAMPLE, status=200, **headers):
+def cap_response(body=CURRENT, status=200, **headers):
     return Response(status, {"Content-Type": "application/xml", **headers}, body)
 
 
 def synthetic_info(name="Kīlauea &amp; Pele's", circle="19.421,-155.287 0",
-                   location="Hawaiʻi"):
+                   location="Hawaiʻi", period="2 November-8 November 2023"):
     return (f'<alert xmlns="urn:oasis:names:tc:emergency:cap:1.2"><info>'
+            f'<headline>Volcanic activity report, {period}</headline>'
             f'<eventCode><valueName>Volcano Name</valueName><value>{name}</value></eventCode>'
             f'<area><areaDesc>{location}</areaDesc><circle>{circle}</circle></area>'
             f'</info></alert>').encode()
@@ -108,16 +113,14 @@ class VolcanoParserTests(Sandbox):
 
 
 class VolcanoProviderTests(Sandbox):
-    def test_old_cap_report_keeps_source_date_but_new_marker_label_is_green(self):
+    def test_old_cap_coverage_does_not_create_success_label(self):
         settings = self.config("VolcanoCheckIntervalSeconds=0\n")
         result, _ = self.run_with(settings, cap_response(CAP11))
-        self.assertEqual(result.outcome, "changed")
-        self.assertEqual(result.source_report_at,
-                         datetime.fromisoformat("2023-10-01T07:50:51-04:00").timestamp())
-        label = self.fs.read(settings.labels).decode()
-        self.assertIn(legacy_time(NOW), label)
-        self.assertIn("color=Green", label)
-        self.assertLess(result.source_report_at, result.installed_at)
+        self.assertEqual(result.outcome, "failed")
+        self.assertIn("stale", result.message)
+        self.assertIsNone(result.successful_at)
+        self.assertIsNone(self.fs.read(settings.volcano.marker))
+        self.assertIsNone(self.fs.read(settings.labels))
 
     def run_with(self, settings, *responses, now=NOW):
         transport = ScriptedTransport(*responses)
@@ -287,7 +290,9 @@ class VolcanoProviderTests(Sandbox):
         transport = ScriptedTransport(cap_response())
         output = io.StringIO()
         with (patch("totalmarker.features.volcano.Fetcher",
-                    return_value=Fetcher(transport)), redirect_stdout(output)):
+                    return_value=Fetcher(transport)),
+              patch("totalmarker.features.volcano.time.time", return_value=NOW),
+              redirect_stdout(output)):
             status = main(["--root", str(self.root), "--config", "config.toml",
                            "volcano"])
         self.assertEqual(status, 0)
