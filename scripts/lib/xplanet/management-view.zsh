@@ -115,6 +115,7 @@ management_result_line() {
         success) badge='[+] Done' style=$management_good ;;
         cancelled) badge='[-] Cancelled' style='' ;;
         unavailable) badge='[i] Unavailable' style=$management_attention ;;
+        warning) badge='[!] Issues' style=$management_attention ;;
         error) badge='[!] Problem' style=$management_problem ;;
     esac
     print -r -- "$style${1:-Last action}: $badge - $management_last_result$management_reset"
@@ -186,7 +187,7 @@ ${management_heading}Desktop${management_reset}"
 ${management_heading}Maintenance${management_reset}"
     management_item 6 "Update"
     management_item 7 "Saved health"
-    management_item 8 "Python runtime information"
+    management_item 8 "Advanced Python"
     print -r -- "  q) Exit"
     print
 }

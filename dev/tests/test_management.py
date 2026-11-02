@@ -9,7 +9,7 @@ import time
 import termios
 import struct
 
-from .support import Sandbox, copy_launcher
+from .support import PROJECT, Sandbox, copy_launcher
 
 
 class ManagementTests(Sandbox):
@@ -34,6 +34,8 @@ class ManagementTests(Sandbox):
                           '  echo /fixture/python; exit 0; fi\n'
                           'echo "$*" >> "$TRACE"\n')
         self.write_script(self.scripts / 'xp-setup.sh', 'echo setup >> "$TRACE"\n')
+        (self.scripts / 'lib/xplanet/python-runtime.zsh').write_text(
+            'python_choose_runtime() { print -- "Fixture runtime selection"; return 0; }\n')
         self.write_script(self.bin / 'xplanet', 'exit 0\n')
         self.env.update(PROCESS_RESULT='1', JOB_RESULT='0', JOB_TABLE='PID Status Label')
         self.write_script(self.bin / 'pgrep', 'exit "$PROCESS_RESULT"\n')
@@ -146,9 +148,8 @@ class ManagementTests(Sandbox):
         code, output = self.terminal('invalid\n2\n8\n q\n')
         self.assertEqual(code, 0)
         self.assertIn('not implemented yet. No settings were saved or applied.', output)
-        self.assertIn('uv integration is deferred', output)
-        self.assertIn('Homebrew Python is the recommended default', output)
-        self.assertIn('Python runtime information', output)
+        self.assertIn('Fixture runtime selection', output)
+        self.assertIn('Advanced Python', output)
         self.assertNotIn('Advanced Python options', output)
         self.assertEqual(before, self.snapshot())
         self.assertEqual(self.calls(), [])
@@ -245,7 +246,9 @@ class ManagementTests(Sandbox):
                           'if [ "$1 $2" = "install python" ]; then touch "$FIXTURE_BIN/python-ready"; fi\n')
         self.write_script(self.scripts / 'run-totalmarker',
                           '[ -f "$FIXTURE_BIN/python-ready" ] || exit 2\necho /fixture/python\n')
-        code, output = self.terminal('1\ny\nn\n ')
+        (self.scripts / 'lib/xplanet/python-runtime.zsh').write_bytes(
+            (PROJECT / 'scripts/lib/xplanet/python-runtime.zsh').read_bytes())
+        code, output = self.terminal('1\ny\n1\ny\ny\nn\n ')
         self.assertEqual(code, 0, output)
         self.assertEqual(self.calls(), [
             'brew tap blogabe/xplanet', 'brew trust blogabe/xplanet',
@@ -300,6 +303,20 @@ class ManagementTests(Sandbox):
         self.assertIn('Run update?', output)
         self.assertNotIn('Update unavailable:', output)
         self.assertEqual(self.calls(), [])
+
+    def test_saved_health_source_issues_are_not_inspection_failures(self):
+        config = self.root / 'config'
+        config.mkdir()
+        (config / 'totalmarker.toml').write_text('')
+        for status, expected in [(0, 'Done - Saved health completed.'),
+                                 (1, 'Issues - Health check completed; source issues reported.'),
+                                 (2, 'Problem - Health inspection failed (exit 2)')]:
+            self.write_script(self.scripts / 'run-totalmarker', f'echo source-detail; exit {status}\n')
+            code, output = self.terminal('7\n', pause_key=b'x', after_pause='q\n')
+            self.assertEqual(code, 0, output)
+            self.assertIn(expected, output)
+            self.assertIn('source-detail', output)
+            self.assertNotIn('Saved health exited', output)
 
     def test_missing_health_config_gives_hint_without_invoking_runner(self):
         before = self.snapshot()
@@ -416,7 +433,7 @@ class ManagementTests(Sandbox):
         self.enhanced_terminal()
         code, output = self.terminal('8\n', pause_key=b' ', after_pause='q\n')
         self.assertEqual(code, 0)
-        heading = output.index('\x1b[34mPython runtime\x1b[0m')
+        heading = output.index('\x1b[34mAdvanced Python\x1b[0m')
         pause = output.index('Press any key to continue')
         self.assertIn('\x1b[H\x1b[J\r\n', output[:heading])
         self.assertLess(heading, pause)
@@ -477,7 +494,7 @@ class ManagementTests(Sandbox):
         self.assertNotIn('Press Enter to return', output)
         self.assertEqual(output.count('Press any key to continue'), 1)
         self.assertIn('Configurator pending; no settings saved or applied.', output)
-        self.assertIn('Python: Homebrew recommended; uv deferred.', output)
+        self.assertIn('Python interpreter selected.', output)
         self.assertIn('Health needs configuration; choose Guided setup (1).', output)
         self.assertIn('Update has no remote-tracking upstream.', output)
         self.assertIn('Stop was not run.', output)
@@ -582,7 +599,7 @@ class ManagementTests(Sandbox):
         self.enhanced_terminal()
         code, output = self.terminal('8q')
         self.assertEqual(code, 0)
-        self.assertIn('> \x1b[34m8) Python runtime information', output)
+        self.assertIn('> \x1b[34m8) Advanced Python', output)
         self.assertNotIn('Press any key to continue', output)
         self.assertEqual(self.calls(), [])
         code, output = self.terminal('2\nq')

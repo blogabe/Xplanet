@@ -25,8 +25,11 @@ Use `clouds`, `storm`, or `volcano` in place of `quake` for other products.
 `health` reads saved results; `health --live` validates configured sources
 without updating normal outputs. An unrun product has unknown health.
 
-The wrapper finds Python 3.11+ on `PATH`; set `TOTALMARKER_PYTHON` to an absolute
-interpreter path to override it. It uses the checkout as its root, including
+The wrapper honors `TOTALMARKER_PYTHON`, then a saved project interpreter choice,
+then finds Python 3.11+ on `PATH` and existing Homebrew locations. Set
+`TOTALMARKER_PYTHON` to an absolute interpreter path to override discovery.
+The [runtime selection details](python-runtime.md) also explain macOS management;
+Linux users need neither Homebrew nor uv. It uses the checkout as its root, including
 when called from another directory. Keep `scripts/totalmarker/` intact,
 including its `data/` directory.
 

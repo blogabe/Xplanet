@@ -21,17 +21,15 @@ prepare_launchd_files() (
     plist_has() { plist_type "$1" "$2" >/dev/null; }
     plist_set() { /usr/bin/plutil -replace "$2" -string "$3" -- "$1" >/dev/null || fail "Cannot render $1"; }
 
-    (( $# == 4 || $# == 5 )) || fail "expected --home PATH --python PATH [--include-clouds]"
-    [[ "$1" == --home && "$3" == --python ]] || fail "expected --home PATH --python PATH"
+    (( $# == 2 || $# == 3 )) || fail "expected --home PATH [--include-clouds]"
+    [[ "$1" == --home ]] || fail "expected --home PATH"
     home="$2"
-    python_bin="$4"
-    if (( $# == 5 )); then
-        [[ "$5" == --include-clouds ]] || fail "unknown option: $5"
+    if (( $# == 3 )); then
+        [[ "$3" == --include-clouds ]] || fail "unknown option: $3"
     fi
     [[ "$home" == /* && "$home" == "${home:A}" ]] ||
         fail "HOME must be an absolute directory without symlink ancestors"
     real_dir "$home"
-    [[ "$python_bin" == /* && -x "$python_bin" ]] || fail "Python must be an absolute executable path"
     real_dir "$project_root/scripts"
     real_dir "$project_root/scripts/launchd"
     real_dir "$project_root/logs"
@@ -53,8 +51,8 @@ prepare_launchd_files() (
     }
 
     # The same structure is checked before preserving a personal plist and
-    # after rendering a new one. Examples keep relative log paths; local jobs
-    # may use absolute or WorkingDirectory-relative paths inside this root.
+    # after rendering a new one. Examples expose installation-root placeholders;
+    # personal jobs may use absolute or WorkingDirectory-relative paths in this root.
     verify_plist() {
         local path="$1" job="$2" command="$3" working="$4" kind="$5"
         local key value launcher
@@ -71,6 +69,13 @@ prepare_launchd_files() (
             [[ "$kind" == example ]] && fail "Unexpected Program override in example: $path"
             fail "Review local launchd Program override: $path"
         fi
+        if [[ "$kind" == example ]]; then
+            value=__XPLANET_ROOT__
+            [[ "$job" == earth-map ]] && value+=/images
+            [[ "$(plist_get "$path" WorkingDirectory)" == "$value" &&
+               "$(plist_get "$path" ProgramArguments.0)" == __XPLANET_ROOT__/scripts/xplanet.sh ]] ||
+                fail "Unexpected installation-root placeholders: $path"
+        fi
         if [[ "$kind" == local ]]; then
             [[ "$(plist_get "$path" WorkingDirectory)" == "$working" ]] ||
                 fail "Review local launchd WorkingDirectory: $path"
@@ -86,8 +91,9 @@ prepare_launchd_files() (
             [[ "$(plist_type "$path" "$key")" == string ]] ||
                 fail "Review launchd $key in $path"
             value=$(plist_get "$path" "$key")
-            if [[ "$kind" == example && "$value" == /* ]]; then
-                fail "Unexpected $key in $path"
+            if [[ "$kind" == example ]]; then
+                [[ "$value" == __XPLANET_ROOT__/logs/* ]] || fail "Unexpected $key in $path"
+                value="$project_root/${value#__XPLANET_ROOT__/}"
             fi
             verify_log "$value" "$working"
         done
@@ -133,21 +139,11 @@ prepare_launchd_files() (
             fail "Stopped at $local_plist"
         for key in StandardOutPath StandardErrorPath; do
             value=$(plist_get "$example" "$key")
-            resolved="$working/$value"
+            resolved="$project_root/${value#__XPLANET_ROOT__/}"
             resolved="${resolved:A}"
             verify_log "$resolved" "$working"
             plist_set "$temporary" "$key" "$resolved"
         done
-        if ! plist_has "$temporary" EnvironmentVariables; then
-            /usr/bin/plutil -insert EnvironmentVariables -dictionary -- "$temporary" >/dev/null ||
-                fail "Stopped at $local_plist"
-        fi
-        if plist_has "$temporary" EnvironmentVariables.TOTALMARKER_PYTHON; then
-            plist_set "$temporary" EnvironmentVariables.TOTALMARKER_PYTHON "$python_bin"
-        else
-            /usr/bin/plutil -insert EnvironmentVariables.TOTALMARKER_PYTHON -string "$python_bin" -- "$temporary" >/dev/null ||
-                fail "Stopped at $local_plist"
-        fi
         verify_plist "$temporary" "$job" "$command" "$working" local
         (setopt noclobber; cat -- "$temporary" > "$local_plist") || fail "Stopped at $local_plist"
         rm -- "$temporary"
@@ -156,7 +152,7 @@ prepare_launchd_files() (
     }
 
     jobs=(start earth-map quake storm volcano)
-    (( $# == 5 )) && jobs+=(clouds)
+    (( $# == 3 )) && jobs+=(clouds)
     agents="$home/Library/LaunchAgents"
     for directory in "$home/Library" "$agents"; do
         if entry_exists "$directory"; then real_dir "$directory"; fi
@@ -376,6 +372,12 @@ python_bin=$("$script_dir/run-totalmarker" --python-path) || {
     print -u2 -- "TotalMarker needs Python 3.11+; check Homebrew's prefix or set TOTALMARKER_PYTHON to its absolute path."
     exit 2
 }
+# Validate an existing shared choice separately from a temporary environment override.
+shared_python="$python_bin"
+if [[ -e "$project_root/config/totalmarker.python" || -L "$project_root/config/totalmarker.python" ]]; then
+    shared_python=$(unset TOTALMARKER_PYTHON; "$script_dir/run-totalmarker" --python-path) ||
+        fail "Saved TotalMarker interpreter is unavailable; use Advanced Python to choose one"
+fi
 XPLANET_BIN=''
 XPLANET_HOME=''
 XPLANET_CONFIG=''
@@ -399,6 +401,10 @@ fi
     fail "$definition: XPLANET_BIN must name an absolute installed executable; edit that setting or run scripts/xplanet.sh install"
 
 print -- "Xplanet is expected to be installed. TotalMarker will use $python_bin."
+print -- "Preparation records a compatible interpreter for scheduled TotalMarker; existing choices are preserved."
+if [[ "$shared_python" != "$python_bin" ]]; then
+    print -- "TOTALMARKER_PYTHON overrides this setup invocation; unpinned scheduled jobs use $shared_python."
+fi
 print -- "Step 1: create missing personal configs, directories, map links and Earth marker,"
 print -- "        then choose which earthquake, storm and volcano markers to refresh."
 print -- "        Review $project_root/config/totalmarker.toml before any refresh."
@@ -493,6 +499,12 @@ for index in "${missing_links[@]}"; do
     print -- "Prepare link $name <- $target"
 done
 [[ -z "$solar_notice" ]] || print -- "$solar_notice"
+if [[ ! -e "$project_root/config/totalmarker.python" && ! -L "$project_root/config/totalmarker.python" ]]; then
+    source "$script_dir/lib/xplanet/python-runtime.zsh" || fail "missing Python runtime helper"
+    (unset TOTALMARKER_PYTHON; python_save_selection "$python_bin" --if-missing) ||
+        fail "Could not record the TotalMarker interpreter; prior preparation was retained"
+    print -- "Recorded TotalMarker interpreter: $python_bin"
+fi
 # The future configurator returns without applying anything until implemented.
 source "$project_root/scripts/lib/xplanet/configurator.zsh" || fail "missing configurator helper"
 configure_xplanet
@@ -569,7 +581,7 @@ fi
 automation_requested=false
 if ask "Step 3) Install and register Xplanet automation?"; then
     automation_requested=true
-    arguments=(--home "${HOME:-}" --python "$python_bin")
+    arguments=(--home "${HOME:-}")
     jobs=(start earth-map quake storm volcano)
     if [[ "$cloud_selected" == true ]]; then
         arguments+=(--include-clouds)

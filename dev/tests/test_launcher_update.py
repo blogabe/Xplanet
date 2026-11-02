@@ -202,6 +202,11 @@ sys.exit(4)
             text=True, capture_output=True, timeout=10)
 
     def test_fast_forwards_configured_upstream_only(self):
+        selection = self.root / "config/totalmarker.python"
+        selection.write_text("/chosen/provider/python3\n")
+        with (self.root / ".git/info/exclude").open("a") as exclusions:
+            exclusions.write("config/totalmarker.python\n")
+        original_selection = selection.read_bytes()
         self.publish("new.txt", "upstream\n")
         target = self.git(self.publisher, "rev-parse", "HEAD")
         hook = self.root / ".git/hooks/post-merge"
@@ -218,6 +223,7 @@ sys.exit(4)
         self.assertEqual(self.git(self.root, "rev-list", "--left-right", "--count", "HEAD...@{upstream}"), "0\t0")
         self.assertEqual((self.root / "new.txt").read_text(), "upstream\n")
         self.assertFalse(sentinel.exists())
+        self.assertEqual(selection.read_bytes(), original_selection)
 
     def test_fetch_updates_custom_upstream_mapping_only(self):
         original = self.git(self.root, "rev-parse", "refs/remotes/origin/main")

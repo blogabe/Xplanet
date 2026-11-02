@@ -28,13 +28,17 @@ class LaunchdSetupTests(Sandbox):
 
     def prepare(self, *, clouds=False, home=None):
         command = [str(self.root / "scripts/xp-setup.sh"), "--prepare-launchd", "--home",
-                   str(self.home if home is None else home), "--python", sys.executable]
+                   str(self.home if home is None else home)]
         if clouds:
             command.append("--include-clouds")
         return subprocess.run(command, cwd=PROJECT, capture_output=True,
                               text=True, check=False)
 
     def test_rendered_jobs_have_absolute_paths_and_repeat_without_overwrite(self):
+        moved = self.base / "checkout & spaces"
+        self.root.rename(moved)
+        self.root = moved
+        self.source = moved / "scripts/launchd"
         first = self.prepare(clouds=True)
         self.assertEqual(first.returncode, 0, first.stderr)
         self.assertIn("12 new entries", first.stdout)
@@ -48,8 +52,7 @@ class LaunchdSetupTests(Sandbox):
                 self.assertEqual(document["ProgramArguments"], [
                     str(self.root / "scripts/xplanet.sh"),
                     "earth" if job == "earth-map" else job])
-                self.assertEqual(document["EnvironmentVariables"]["TOTALMARKER_PYTHON"],
-                                 sys.executable)
+                self.assertNotIn("EnvironmentVariables", document)
                 for key in ("StandardOutPath", "StandardErrorPath"):
                     self.assertEqual(Path(document[key]).parent, self.root / "logs")
                 self.assertEqual((self.agents / local.name).readlink(), local)
@@ -77,6 +80,10 @@ class LaunchdSetupTests(Sandbox):
             document["WorkingDirectory"] = str(self.root / "images" if job == "earth-map"
                                                 else self.root)
             document["StartCalendarInterval"] = [{"Minute": 13}]
+            document["ProgramArguments"][0] = "../scripts/xplanet.sh" if job == "earth-map" else "./scripts/xplanet.sh"
+            prefix = "../" if job == "earth-map" else "./"
+            document["StandardOutPath"] = prefix + "logs/xplanet.log"
+            document["StandardErrorPath"] = prefix + "logs/xplanet-error.log"
             document.pop("EnvironmentVariables", None)
             original[path] = plistlib.dumps(document)
             path.write_bytes(original[path])

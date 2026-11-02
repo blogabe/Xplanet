@@ -5,8 +5,8 @@ project_root=$(CDPATH= cd -- "$script_dir/.." && pwd -P)
 export PYTHONPATH="$script_dir${PYTHONPATH:+:$PYTHONPATH}"
 export PYTHONDONTWRITEBYTECODE=1
 
-# Keep interpreter selection with the TotalMarker entry point. launchd reads
-# the resolved absolute path from --python-path during interactive setup.
+# Keep interpreter selection with the TotalMarker entry point. Explicit environment
+# overrides remain authoritative; a project selection is shared by CLI and new jobs.
 supported_python() {
     [ -x "$1" ] && "$1" -B -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' \
         >/dev/null 2>&1
@@ -23,6 +23,26 @@ select_python() {
             return 0
         fi
         printf '%s\n' 'TOTALMARKER_PYTHON is not an executable Python 3.11+' >&2
+        return 2
+    fi
+
+    # Explicit project selection is a single literal path, never shell code.
+    # A missing/incompatible selected runtime must not silently change providers.
+    selection="$project_root/config/totalmarker.python"
+    if [ -e "$selection" ] || [ -L "$selection" ]; then
+        selected_python=$(cat "$selection") || return 2
+        carriage_return=$(printf '\r')
+        case "$selected_python" in
+            *'
+'*|*"$carriage_return"*) printf '%s\n' 'Invalid config/totalmarker.python: expected one absolute Python path' >&2; return 2 ;;
+            /*) ;;
+            *) printf '%s\n' 'Invalid config/totalmarker.python: expected one absolute Python path' >&2; return 2 ;;
+        esac
+        if supported_python "$selected_python"; then
+            printf '%s\n' "$selected_python"
+            return 0
+        fi
+        printf '%s\n' 'Selected TotalMarker Python is unavailable or incompatible; choose a runtime in management' >&2
         return 2
     fi
 

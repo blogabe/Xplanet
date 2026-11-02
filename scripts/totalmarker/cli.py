@@ -2,6 +2,8 @@
 import argparse
 from dataclasses import asdict
 import json
+import os
+import sys
 from .config import load
 from .health import check as check_health, exit_status as health_status, format_report
 from .errors import TotalMarkerError
@@ -42,7 +44,10 @@ def main(argv=None):
             return 0
         if args.command == "health":
             report = check_health(fs, settings, live=args.live)
-            print(json.dumps(report) if args.json else format_report(report, verbose=args.verbose))
+            color = (sys.stdout.isatty() and 'NO_COLOR' not in os.environ
+                     and os.environ.get('TERM', '') not in {'', 'dumb'})
+            print(json.dumps(report) if args.json else format_report(
+                report, verbose=args.verbose, color=color))
             return health_status(report)
         if args.command == "volcano":
             result = run_volcano(fs, settings)

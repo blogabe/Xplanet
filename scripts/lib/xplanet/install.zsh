@@ -16,7 +16,17 @@ install_xplanet() {
     brew_bin=$(command -v brew) || fail "Homebrew is required for install"
     [[ "$brew_bin" == /* && -x "$brew_bin" ]] || fail "Homebrew must be an executable on PATH"
     install_renderer
-    install_python
+    if [[ -t 0 && -t 1 ]]; then
+        load_helpers python-runtime
+        if (( ${+TOTALMARKER_PYTHON} )); then
+            "$script_dir/run-totalmarker" --python-path || return
+            print -- 'Using explicit TOTALMARKER_PYTHON; no provider selection changed.'
+        else
+            python_choose_runtime || return
+        fi
+    else
+        install_python
+    fi
     prefix=$("$brew_bin" --prefix blogabe/xplanet/xplanet) ||
         install_failed "Could not locate the installed Xplanet formula."
     [[ "$prefix" == /* ]] || install_failed "Homebrew returned a non-absolute Xplanet prefix."

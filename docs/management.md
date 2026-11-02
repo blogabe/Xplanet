@@ -9,8 +9,9 @@ use numbered line input. With redirected input or output, no arguments prints us
 Guided install/setup checks prerequisites only when selected. It proposes missing
 Homebrew installations before asking for approval; Homebrew itself must already
 be installed. Compatible Python 3.11+ interpreters and `TOTALMARKER_PYTHON` remain
-supported. Python runtime information explains the recommended Homebrew default;
-uv remains deferred, with no selectable implementation.
+supported. [Advanced Python](python-runtime.md) offers an explicit later change between Homebrew
+(recommended) and uv-managed Python, with explicit provisioning and save confirmation.
+Existing scheduled interpreter overrides are preserved; see that page before switching.
 
 Configuration-file presence distinguishes new, partial and existing installations;
 this is not a readiness or health check. Shell-style executable definitions are
@@ -47,6 +48,11 @@ Saved health gives a setup hint when `config/totalmarker.toml` is absent; it doe
 not create configuration or invoke health automatically. Update explains when
 this checkout lacks a remote-tracking upstream before asking for confirmation.
 The direct update command retains all of its validation and race checks.
+Health exit 1 means the assessment completed and found source issues; management
+shows an Issues result. Execution/configuration failures remain errors. Terminal
+source names use green for current, yellow for stale/uncertain, red for recorded
+failure, neutral for unassessed freshness with valid output, and dim for disabled.
+Text labels remain authoritative; JSON and nonterminal output have no colors.
 
 Management delegates start, stop, restart, update and saved health to the existing
 commands. It confirms lifecycle/update actions; stop still stops **all** the
@@ -72,8 +78,7 @@ custom executable with a different process name; inspection failure says unknown
 Capable terminals keep menus and actions in one alternate screen, using restrained
 color and fixed-width ASCII status symbols with text labels. Each action starts
 on a clean screen at the top, including its heading, confirmations and output.
-Short results and cancellations return automatically. Saved health, Python runtime
-information, executed updates, errors and completed setup pause for **any key** so details remain readable. Successful new/partial setup acknowledges
+Short results and cancellations return automatically. Saved health, completed Python selection, executed updates, errors and completed setup pause for **any key** so details remain readable. Successful new/partial setup acknowledges
 its summary before exiting. A persistent last-action result distinguishes
 completion, cancellation, unavailable features and errors. Real decisions still
 require confirmation; there is no timed pause. The continuation prompt ignores already queued submission newlines; Ctrl-D exits
@@ -103,3 +108,25 @@ Its final summary reports whether setup completed and start was skipped, succeed
 or failed. Cancelling or stopping still retains any preparation already completed.
 Installer failures keep their output on screen until acknowledged; direct install
 and setup retain their documented exit statuses.
+
+## Desktop commands
+
+`start` uses `XPLANET_GEOMETRY` from `xp.def` when nonempty; otherwise Xplanet
+sizes the desktop automatically. `render` saves a frame at the configured
+dimensions, while `preview` uses a fixed 1920×1080 size. `stop` signals
+ALL of this user's Xplanet processes, including finite renders and other checkouts,
+and succeeds when none is running. It first removes the managed desktop job.
+`restart` performs that same broad stop, then starts one display. `start` catches up
+a configured monthly map and asks launchd to run one foreground desktop, without
+`KeepAlive` or automatic respawn after stop. Python is used only for TotalMarker.
+
+On the first start after upgrading from the old `-fork` launcher, an existing
+unmanaged Xplanet process produces a request to use `restart`; setup never kills
+it automatically. The existing login trigger stays compatible and can start the
+display on a later login. Stopping a display does not disable login automation.
+Start reports launchd's acceptance, not proof that the renderer produced an image;
+renderer errors go to `logs/xplanet-error.log`. Normal and configured executable
+names (including a resolved symlink target) are included in broad stop. Desktop
+launch resolves executable symlinks. macOS name lookup cannot reliably discover
+unmanaged, physically renamed binaries with names longer than 19 characters; use
+the normal Xplanet binary name for those older manual launches.

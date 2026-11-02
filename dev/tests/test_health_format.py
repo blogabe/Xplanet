@@ -1,5 +1,13 @@
 """Human summaries distinguish saved evidence from live validation."""
 from copy import deepcopy
+import io
+import json
+import os
+from pathlib import Path
+import tempfile
+from unittest.mock import patch
+
+from totalmarker.cli import main
 import unittest
 
 from totalmarker.health import exit_status, format_report
@@ -47,6 +55,51 @@ Disabled: Satellites, Eclipses, Santa''')
         self.assertNotIn('recovered', verbose)
         self.assertIn('success 2026-11-01 04:00Z; publication 2026-11-01 03:00Z', verbose)
         self.assertNotIn('publication', format_report(saved))
+
+    def test_source_colors_follow_saved_and_live_facts_without_changing_text(self):
+        saved = report('saved', product('clouds', freshness='current'), product('quake'),
+                       product('storm', status='stale', freshness='stale'),
+                       product('volcano', status='stale', freshness='stale', last_outcome='failed'),
+                       product('norad', status='disabled'))
+        text = format_report(saved, color=True)
+        self.assertIn('\033[32mClouds\033[0m: saved output current', text)
+        self.assertIn('\nEarthquakes: saved output; freshness not assessed', text)
+        self.assertIn('\033[33mStorms\033[0m:', text)
+        self.assertIn('\033[31mVolcanoes\033[0m:', text)
+        self.assertIn('\033[2mDisabled: Satellites\033[0m', text)
+        self.assertNotIn('\033[', format_report(saved))
+        live = report('live', product('clouds', status='access_failed', access='failed'),
+                      product('volcano', status='healthy', content='valid', freshness='current',
+                              last_outcome='failed'))
+        text = format_report(live, color=True)
+        self.assertIn('\033[31mClouds\033[0m:', text)
+        self.assertIn('\033[32mVolcanoes\033[0m:', text)
+        self.assertEqual(exit_status(saved), 1)
+        self.assertEqual(exit_status(live), 1)
+
+    def test_cli_colors_only_terminal_text_and_preserves_json_and_no_color(self):
+        saved = report('saved', product('clouds', freshness='current'))
+        class Output(io.StringIO):
+            terminal = True
+            def isatty(self):
+                return self.terminal
+        cases = [(True, {'TERM': 'xterm'}, False, True),
+                 (False, {'TERM': 'xterm'}, False, False),
+                 (True, {'TERM': 'xterm', 'NO_COLOR': ''}, False, False),
+                 (True, {'TERM': 'dumb'}, False, False),
+                 (True, {'TERM': 'xterm'}, True, False)]
+        with tempfile.TemporaryDirectory() as root:
+            for tty, env, as_json, colored in cases:
+                output = Output()
+                output.terminal = tty
+                with (patch('totalmarker.cli.load', return_value=object()),
+                      patch('totalmarker.cli.check_health', return_value=saved),
+                      patch('sys.stdout', output), patch.dict(os.environ, env, clear=True)):
+                    status = main(['--root', str(Path(root).resolve()), 'health', *(['--json'] if as_json else [])])
+                self.assertEqual(status, 0, output.getvalue())
+                self.assertEqual('\033[' in output.getvalue(), colored)
+                if as_json:
+                    self.assertEqual(json.loads(output.getvalue()), saved)
 
     def test_live_valid_quake_and_stale_volcano_remain_truthful(self):
         live = report('live', product('quake', access='ok', content='valid'),
