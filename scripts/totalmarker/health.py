@@ -343,7 +343,21 @@ def _summary(row, live):
             'saved output; freshness not assessed'), ''
 
 
-def format_report(report, *, verbose=False):
+def _report_color(row, live):
+    if row['status'] in {'error', 'access_failed', 'invalid_content', 'refresh_failed'}:
+        return '\033[31m'
+    if not live and row['last_outcome'] == 'failed':
+        return '\033[31m'
+    if row['status'] == 'stale' or row['freshness'] == 'stale':
+        return '\033[33m'
+    if not row['output']['present'] or not row['output']['verified']:
+        return '\033[33m'
+    if row['freshness'] == 'current':
+        return '\033[32m'
+    return ''  # Freshness not assessed is not a failure.
+
+
+def format_report(report, *, verbose=False, color=False):
     live = report['mode'] == 'live'
     lines = [('TotalMarker live check (normal output unchanged)' if live else
               'TotalMarker saved status (no network check)')]
@@ -354,6 +368,9 @@ def format_report(report, *, verbose=False):
             disabled.append(title)
             continue
         summary, detail = _summary(row, live)
+        style = _report_color(row, live) if color else ''
+        if style:
+            title = style + title + '\033[0m'
         line = f"{title}: {summary}; {_success_age(row['last_success_at'], report['checked_at'])}"
         if detail:
             line += ' — ' + detail
@@ -361,7 +378,8 @@ def format_report(report, *, verbose=False):
             line += '; prior output retained'
         lines.append(line)
     if disabled:
-        lines.append('Disabled: ' + ', '.join(disabled))
+        disabled_line = 'Disabled: ' + ', '.join(disabled)
+        lines.append('\033[2m' + disabled_line + '\033[0m' if color else disabled_line)
     if report['warning']:
         lines.append(report['warning'])
     if verbose:

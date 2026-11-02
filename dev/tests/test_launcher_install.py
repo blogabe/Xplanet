@@ -1,5 +1,7 @@
 """The install workflow is exercised only with isolated command stubs."""
 import os
+import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -14,8 +16,7 @@ class LauncherInstallTests(Sandbox):
         self.definition.write_bytes(template)
         result = self.run_install("n\ny\ny\nq\n")
         self.assertEqual(result.returncode, 3, result.stderr)
-        self.assertIn(f"XPLANET_BIN={self.prefix}/bin/xplanet\n",
-                      self.definition.read_text())
+        self.assert_definition_binary(self.prefix / "bin/xplanet")
         self.assertEqual((PROJECT / "config/xp.def.example").read_bytes(), template)
         self.assertEqual(self.calls(), self.expected_brew_calls())
 
@@ -61,7 +62,7 @@ class LauncherInstallTests(Sandbox):
         self.config.mkdir()
         self.definition = self.config / "xp.def"
         self.definition.write_text(
-            f"XPLANET_BIN={self.prefix}/bin/xplanet\n"
+            f"XPLANET_BIN={shlex.quote(str(self.prefix / 'bin/xplanet'))}\n"
             "EARTH_MAP_PRE=world/world\n")
         self._script(
             self.bin / "brew",
@@ -93,7 +94,15 @@ class LauncherInstallTests(Sandbox):
 
     def personal_definition(self, binary):
         return (PROJECT / "config/xp.def.example").read_text().replace(
-            "XPLANET_BIN=\n", "XPLANET_BIN=" + binary + "\n")
+            "XPLANET_BIN=\n", "XPLANET_BIN=" + shlex.quote(str(binary)) + "\n")
+
+    def assert_definition_binary(self, expected):
+        actual = subprocess.run(['/bin/zsh', '-c',
+            'project_root=$1; source "$2"; print -r -- "$XPLANET_BIN"',
+            'fixture', str(self.root), str(self.definition)],
+            capture_output=True, text=True, timeout=3)
+        self.assertEqual(actual.returncode, 0, actual.stderr)
+        self.assertEqual(actual.stdout.strip(), str(expected))
 
     def prepare_real_setup(self):
         for name in ("xp.def", "xp.conf", "totalmarker", "earth"):
@@ -167,8 +176,9 @@ class LauncherInstallTests(Sandbox):
         self.trace.unlink()
         result = self.run_install("n\ny\ny\nq\n")
         self.assertEqual(result.returncode, 3, result.stderr)
-        self.assertEqual(self.definition.read_text(),
-                         self.personal_definition(f"{self.prefix}/bin/xplanet"))
+        self.assert_definition_binary(self.prefix / "bin/xplanet")
+        normalize = lambda text: re.sub(r'^XPLANET_BIN=.*$', 'XPLANET_BIN=<chosen>', text, flags=re.M)
+        self.assertEqual(normalize(self.definition.read_text()), normalize(original))
         self.assertEqual(self.calls(), self.expected_brew_calls())
 
     def test_missing_config_requires_shipped_example_before_setup(self):
@@ -208,7 +218,7 @@ class LauncherInstallTests(Sandbox):
         self.trace.unlink()
         accepted = self.run_install("n\ny\nq\n")
         self.assertEqual(accepted.returncode, 3, accepted.stderr)
-        self.assertIn(f"XPLANET_BIN={self.prefix}/bin/xplanet", self.definition.read_text())
+        self.assert_definition_binary(self.prefix / "bin/xplanet")
         self.assertEqual((self.config / "xp.conf").read_bytes(),
                          (self.config / "xp.conf.example").read_bytes())
         self.assertTrue((self.config / "totalmarker.toml").is_file())
@@ -240,7 +250,7 @@ class LauncherInstallTests(Sandbox):
                      '  ln -sf "$TM_PYTHON" "$TM_BREW_PREFIX/bin/python3"\n'
                      'fi\n'
                      'exit 0\n')
-        for name in ("ln", "cat", "mkdir", "chmod", "rm"):
+        for name in ("ln", "cat", "mkdir", "chmod", "rm", "mktemp"):
             tool = self.bin / name
             if not tool.exists():
                 tool.symlink_to(shutil.which(name))

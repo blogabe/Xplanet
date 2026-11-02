@@ -53,7 +53,8 @@ sampled clock identifies an attempt; it is not a per-request network audit trail
 | `images/`, `markers/`, `arcs/`, `satellites/` | Generated display inputs; preserve last-good output on failure |
 | `.state/totalmarker/state.json` and pending journals | Persistent provenance/recovery, not disposable cache |
 | `.state/totalmarker/job.lock` | Installation-local coordination; not a cross-machine sync lock |
-| `.state/xplanet/display.json` and `display.lock` | Desktop process identity and crash-releasing lifecycle lock; separate from product journals |
+| `.state/xplanet/display.lock` | Crash-releasing desktop lifecycle lock; no process-identity database |
+| `config/totalmarker.python` | User-selected absolute interpreter path; shared by the data launcher and scheduled jobs unless explicitly overridden |
 | `.state/totalmarker/storm-rejected.json` | Bounded latest rejected public-source evidence; preserve for diagnosis |
 | `logs/` | Diagnostic history; not required for new saved product error facts |
 | Preview, test temporary directories, release staging | Disposable development output |
@@ -85,7 +86,9 @@ Setup validates on-disk plists with plutil and leaves registered labels alone.
 Loaded settings are explicitly unverified; presence is not configuration equality.
 Python remains behind run-totalmarker for data commands, not desktop lifecycle.
 Product-specific validation and setup remain explicit; no provider plugin framework,
-configuration migration, GUI or Python-management change is added.
+configuration migration or GUI is added. Interpreter selection delegates provisioning
+to Homebrew/uv without owning package or machine migration; see
+[Python runtime](python-runtime.md).
 
 ## Asset and license boundary
 

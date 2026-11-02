@@ -6,11 +6,11 @@
 	<string>local.xplanet.volcano</string>
 
 	<key>WorkingDirectory</key>
-	<string>__HOME__/.xplanet</string>
+	<string>__XPLANET_ROOT__</string>
 
 	<key>ProgramArguments</key>
 	<array>
-		<string>./scripts/xplanet.sh</string>
+		<string>__XPLANET_ROOT__/scripts/xplanet.sh</string>
 		<string>volcano</string>
 	</array>
 
@@ -25,9 +25,9 @@
 	</array>
 
 	<key>StandardOutPath</key>
-	<string>./logs/xplanet.log</string>
+	<string>__XPLANET_ROOT__/logs/xplanet.log</string>
 	<key>StandardErrorPath</key>
-	<string>./logs/xplanet-volcano.log</string>
+	<string>__XPLANET_ROOT__/logs/xplanet-volcano.log</string>
 </dict>
 </plist>
 

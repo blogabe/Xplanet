@@ -10,7 +10,7 @@ MACOS_MODULES = {
     'test_management', 'test_bootstrap', 'test_health_launcher', 'test_launchd_examples',
     'test_launchd_setup', 'test_launcher_install', 'test_launcher_render',
     'test_launcher_update', 'test_launcher_wiring', 'test_monthly_map',
-    'test_python_runtime', 'test_setup', 'test_shell_boundaries',
+    'test_python_runtime', 'test_python_provider', 'test_setup', 'test_shell_boundaries',
 }
 
 

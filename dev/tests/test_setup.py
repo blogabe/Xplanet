@@ -277,12 +277,7 @@ class SetupTests(Sandbox):
 
     def test_cli_modes_and_space_containing_root(self):
         spaced = self.base / "project with spaces"
-        old_root = self.root
-        self.root.rename(spaced)
-        self.root = spaced
-        definition = spaced / "config/xp.def"
-        definition.write_text(definition.read_text().replace(str(old_root),
-                                                             shlex.quote(str(spaced))))
+        self.move_fixture_root(spaced)
         scripts, env, _ = self._shell_fixture()
         dry = self._inspect(scripts, env, "--dry-run")
         self.assertEqual(dry.returncode, 0, dry.stderr)
@@ -362,6 +357,17 @@ class SetupTests(Sandbox):
                                         cwd=PROJECT, env=env, capture_output=True,
                                         text=True, check=False)
         self.assertEqual(launcher_ready.returncode, 0, launcher_ready.stderr)
+
+    def move_fixture_root(self, target):
+        self.root.rename(target)
+        self.root = target
+        values = {'XPLANET_BIN': target / 'mock-xplanet', 'XPLANET_HOME': target,
+                  'XPLANET_CONFIG': target / 'config'}
+        definition = target / 'config/xp.def'
+        lines = definition.read_text().splitlines()
+        definition.write_text('\n'.join(
+            line.split('=', 1)[0] + '=' + shlex.quote(str(values[line.split('=', 1)[0]]))
+            if line.split('=', 1)[0] in values else line for line in lines) + '\n')
 
     def _shell_fixture(self):
         scripts = self.root / "scripts"
@@ -454,7 +460,13 @@ class SetupTests(Sandbox):
         self.assertFalse(any(line.startswith("load ") for line in calls.read_text().splitlines()))
         self.assertEqual(state_file.read_bytes(), before)
 
-    def test_selected_homebrew_python_is_written_to_new_launchd_jobs(self):
+    def test_discovered_homebrew_python_is_saved_for_unpinned_jobs(self):
+        self._selected_python_jobs(shared=False)
+
+    def test_saved_project_selection_is_shared_by_new_launchd_jobs(self):
+        self._selected_python_jobs(shared=True)
+
+    def _selected_python_jobs(self, shared):
         scripts, env, _ = self._shell_fixture()
         shutil.copy2(PROJECT / "scripts/run-totalmarker", scripts / "run-totalmarker")
         examples = scripts / "launchd"
@@ -482,6 +494,8 @@ class SetupTests(Sandbox):
         launchctl = bin_dir / "launchctl"
         stub_launchctl(launchctl)
         env.pop("TOTALMARKER_PYTHON")
+        if shared:
+            (scripts.parent / "config/totalmarker.python").write_text(str(selected) + "\n")
         env.update(HOME=str(home), PATH=f"{bin_dir}:/bin",
                    TM_BREW_PREFIX=str(prefix))
         done = self._inspect(scripts, env, input="y\n\nn\nn\nn\nn\ny\n")
@@ -490,8 +504,13 @@ class SetupTests(Sandbox):
         for job in ("start", "earth-map", "quake", "storm", "volcano"):
             local = examples / f"local.xplanet.{job}.plist"
             document = plistlib.loads(local.read_bytes())
-            self.assertEqual(document["EnvironmentVariables"]["TOTALMARKER_PYTHON"],
-                             str(selected))
+            self.assertNotIn("TOTALMARKER_PYTHON", document.get("EnvironmentVariables", {}))
+        self.assertEqual((scripts.parent / "config/totalmarker.python").read_text(), str(selected) + "\n")
+        minimal = {"PATH": "/usr/bin:/bin"}
+        scheduled = subprocess.run([str(scripts / "run-totalmarker"), "--python-path"],
+                                   env=minimal, capture_output=True, text=True)
+        self.assertEqual(scheduled.returncode, 0, scheduled.stderr)
+        self.assertEqual(scheduled.stdout.strip(), str(selected))
 
     def test_interactive_automation_refuses_personal_plist_without_loading(self):
         scripts, env, products = self._shell_fixture()
@@ -717,12 +736,7 @@ class SetupTests(Sandbox):
                 self.assertNotIn("Setup complete", done.stdout)
 
     def test_retry_uses_shell_quoted_absolute_checkout_path(self):
-        old_root = self.root
-        self.root = self.base / "project with spaces"
-        old_root.rename(self.root)
-        definition = self.root / "config/xp.def"
-        definition.write_text(definition.read_text().replace(
-            str(old_root), shlex.quote(str(self.root))))
+        self.move_fixture_root(self.base / "project with spaces")
         scripts, env, _ = self._shell_fixture()
         env["TM_FAIL_PRODUCT"] = "quake"
         done = self._inspect(scripts, env, input="y\n\ny\nn\nn\nn\nn\n",
@@ -842,3 +856,17 @@ class SetupTests(Sandbox):
         self.assertTrue((self.root / 'arcs').is_dir())
         self.assertTrue((self.root / 'config/totalmarker.toml').is_file())
         self.assertFalse(products.exists())
+
+    def test_explicit_setup_environment_override_preserves_existing_shared_choice(self):
+        scripts, env, _ = self._shell_fixture()
+        shutil.copy2(PROJECT / "scripts/run-totalmarker", scripts / "run-totalmarker")
+        selected = self.root / "saved interpreter with spaces"
+        selected.symlink_to(sys.executable)
+        choice = self.root / "config/totalmarker.python"
+        choice.write_text(str(selected) + "\n")
+        before = choice.read_bytes()
+        done = self._inspect(scripts, env, input="y\nq\n")
+        self.assertEqual(done.returncode, 3, done.stderr)
+        self.assertIn("overrides this setup invocation", done.stdout)
+        self.assertIn("unpinned scheduled jobs use " + str(selected), done.stdout)
+        self.assertEqual(choice.read_bytes(), before)

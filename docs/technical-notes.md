@@ -78,18 +78,18 @@ stdin, exit status, and real Git clone mechanics with a local repository. They d
 not perform a live first install. A tag checkout is intentionally detached and cannot
 use branch fast-forward update; select a branch for installations that use `update`.
 
-`install` installs Xplanet and Homebrew Python, offers a one-frame Xplanet launch
-for macOS security approval, and continues into interactive setup. Setup creates
+`install` installs Xplanet and offers an interactive Python choice (Homebrew is
+recommended; uv is an alternative). Noninteractive install retains Homebrew
+provisioning. It offers a one-frame Xplanet launch for macOS security approval,
+then continues into interactive setup. See [Python runtime](python-runtime.md). Setup creates
 missing personal files from examples and preserves existing files. The example
 cloud URL ends in `.invalid` and must be replaced before enabling cloud refreshes.
 Setup offers product refreshes and launchd automation separately. A failed first
 provider fetch does not veto scheduled retries when the operator enables that
-source. Re-running setup leaves jobs with matching installation identity alone:
-exact label, absolute launcher arguments and executable. It also compares working
-directory and selected Python when launchctl reports them. When those settings
-are omitted, setup succeeds with an explicit notice that they were not verified;
-a reported mismatch remains an error. It does not reconcile other loaded settings
-or replace personal schedules.
+source. Re-running setup validates on-disk personal plists with plutil and leaves
+already registered labels unchanged. Loaded settings are explicitly unverified;
+label presence does not prove configuration equality. Setup does not replace
+personal schedules.
 
 To rerun setup, use `./scripts/xplanet.sh setup`. With an existing `config/xp.def`,
 `XPLANET_BIN` must point to the installed Xplanet executable. Set
@@ -110,18 +110,25 @@ behind broad platform skips.
 clean it up; a crash or SIGKILL can leave it behind. If the command reports an
 existing lock, first ensure no map selection is running, then inspect/remove only
 the reported lock directory before retrying. No automatic lock stealing occurs.
-Desktop start/restart uses the same selected Python 3.11+ interpreter for exact
-native process identity; no extra package is needed. Legacy manual-map configs
-without `EARTH_MAP_PRE` stay manual. A registered desktop with ambiguous identity
-is left untouched for inspection instead of guessed at or duplicated. First-use
-adoption inspects configured executable names; the saved record also retains prior
-names across upgrades. An unrecorded old renderer renamed away from all those
-names requires manual inspection before starting the new configuration.
+Desktop lifecycle uses zsh and macOS launchd; it does not require Python.
+Start selects the current monthly map and runs one managed foreground renderer,
+without automatic respawn after stop. An existing unmanaged renderer prompts for
+restart rather than being adopted. Stop stops all current-user Xplanet processes;
+restart performs that same stop before starting a display. Legacy manual-map
+configs without `EARTH_MAP_PRE` stay manual.
 To disable future scheduled runs, unload the relevant personal LaunchAgent with
 `launchctl unload "$HOME/Library/LaunchAgents/<job>.plist"`; stopping Xplanet alone
 does not disable its scheduled jobs. Preserve the personal plist for re-enabling.
 
 ## Source health
+
+Human terminal summaries color source names: green for current data, yellow for
+stale or unverified output, red for a recorded refresh/access/inspection failure,
+and dim for disabled sources. Freshness not assessed remains neutral. Text labels
+remain authoritative; redirected output, JSON and `NO_COLOR` contain no colors.
+A saved check performs no network request. Exit 1 means the assessment completed
+with source/data issues; exit 2 means a local inspection/configuration/storage
+error. Management distinguishes those outcomes in its result footer.
 
 `./scripts/xplanet.sh health` reads saved state without fetching or writing.
 The default is one line per enabled product with saved status and last success.
@@ -156,7 +163,7 @@ use `--live` to check the current configuration.
 
 ## Logs
 
-The example launchd jobs send normal command output, including TotalMarker's JSON result, to `logs/xplanet.log`. Their stderr goes to separate files such as `logs/xplanet-clouds.log` or `logs/xplanet-storm.log`; an empty stderr file does not mean the refresh succeeded. TotalMarker also appends product outcome events to `logs/totalmarker/events.jsonl` when logging is configured. These paths are relative to the installation root in the supplied examples and can be changed by configuration or plist customization.
+The example launchd jobs send normal command output, including TotalMarker's JSON result, to `logs/xplanet.log`. Their stderr goes to separate files such as `logs/xplanet-clouds.log` or `logs/xplanet-storm.log`; an empty stderr file does not mean the refresh succeeded. TotalMarker also appends product outcome events to `logs/totalmarker/events.jsonl` when logging is configured. The supplied examples use `__XPLANET_ROOT__` path placeholders. Setup renders absolute working, launcher and log paths for the actual checkout, without adding a Python environment override. Existing personal plist customization is preserved.
 
 Logs grow without automatic rotation. To inspect an optional manual trim:
 

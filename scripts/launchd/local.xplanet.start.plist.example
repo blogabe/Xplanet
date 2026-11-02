@@ -6,11 +6,11 @@
 	<string>local.xplanet.start</string>
 
 	<key>WorkingDirectory</key>
-	<string>__HOME__/.xplanet</string>
+	<string>__XPLANET_ROOT__</string>
 
 	<key>ProgramArguments</key>
 	<array>
-		<string>./scripts/xplanet.sh</string>
+		<string>__XPLANET_ROOT__/scripts/xplanet.sh</string>
 		<string>start</string>
 	</array>
 
@@ -18,9 +18,9 @@
 	<true/>
 
 	<key>StandardOutPath</key>
-	<string>./logs/xplanet.log</string>
+	<string>__XPLANET_ROOT__/logs/xplanet.log</string>
 	<key>StandardErrorPath</key>
-	<string>./logs/xplanet-error.log</string>
+	<string>__XPLANET_ROOT__/logs/xplanet-error.log</string>
 </dict>
 </plist>
 

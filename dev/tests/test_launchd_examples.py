@@ -19,16 +19,17 @@ class LaunchdExampleTests(unittest.TestCase):
             with self.subTest(job=job):
                 path = DIRECTORY / f"local.xplanet.{job}.plist.example"
                 data = path.read_bytes()
-                self.assertEqual(data.count(b"__HOME__"), 1)
+                self.assertEqual(data.count(b"__XPLANET_ROOT__"), 4)
+                self.assertNotIn(b"__HOME__", data)
                 self.assertNotIn(b"$HOME", data)
                 self.assertNotIn(b"<USERNAME>", data)
                 parsed = plistlib.loads(data)
                 self.assertTrue(parsed["WorkingDirectory"].startswith(
-                    "__HOME__/.xplanet"))
+                    "__XPLANET_ROOT__"))
                 rendered = plistlib.loads(
-                    data.replace(b"__HOME__", b"/Users/example"))
+                    data.replace(b"__XPLANET_ROOT__", b"/Users/example/Project With Spaces"))
                 self.assertTrue(rendered["WorkingDirectory"].startswith(
-                    "/Users/example/.xplanet"))
+                    "/Users/example/Project With Spaces"))
 
     def test_example_calendars_keep_the_original_cadences(self):
         schedules = {}
@@ -62,6 +63,6 @@ class LaunchdExampleTests(unittest.TestCase):
                 fields = plistlib.loads(example.read_bytes())
                 command = fields["ProgramArguments"]
                 self.assertEqual(len(command), 2)
-                expected = "../scripts/xplanet.sh" if job == "earth-map" else "./scripts/xplanet.sh"
+                expected = "__XPLANET_ROOT__/scripts/xplanet.sh"
                 self.assertEqual(command[0], expected)
                 self.assertEqual(command[1], "earth" if job == "earth-map" else job)

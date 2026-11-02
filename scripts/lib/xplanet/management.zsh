@@ -49,8 +49,8 @@ management_prerequisites() {
     print -- "  Xplanet: ${renderer:-missing}"
     print -- "  Python 3.11+: ${python:-missing}"
     if [[ -z "$renderer" || -z "$python" ]]; then
-        if [[ -z "$brew_bin" ]]; then
-            print -- "Homebrew is required to install missing dependencies. Install it separately, then return."
+        if [[ -z "$brew_bin" && -z "$renderer" ]]; then
+            print -- "Homebrew is required to install the missing renderer. Install it separately, then return."
             management_set_result unavailable "Missing dependencies require Homebrew."
             return 1
         fi
@@ -62,7 +62,7 @@ management_prerequisites() {
         management_section "Missing dependencies"
         print -- "Proposed changes (Homebrew recommended):"
         [[ -n "$renderer" ]] || print -- "  Add/trust blogabe/xplanet and build its Xplanet formula. macOS approval may be needed."
-        [[ -n "$python" ]] || print -- "  Install Homebrew Python."
+        [[ -n "$python" ]] || print -- "  Choose Homebrew (recommended) or uv-managed Python."
         if ! management_confirm "Install these missing dependencies?"; then
             management_set_result cancelled "Dependency installation was not started."
             return 3
@@ -75,8 +75,16 @@ management_prerequisites() {
             installed=$renderer
             [[ -x "$renderer" ]] || { print -u2 -- "Installed Xplanet executable was not found."; return 1; }
         fi
-        [[ -n "$python" ]] || (install_python) || return
+        if [[ -z "$python" ]]; then
+            load_helpers python-runtime
+            python_choose_runtime || return
+        fi
         "$script_dir/run-totalmarker" --python-path >/dev/null || return
+    fi
+    if [[ -n "$python" && ! -e "$project_root/config/totalmarker.python" &&
+          ${+TOTALMARKER_PYTHON} == 0 && "$(management_state)" != existing ]]; then
+        load_helpers python-runtime
+        python_choose_runtime || return
     fi
     management_section "Configuration, data and schedules"
     # This handoff is scoped to setup, not a persistent parallel setting.
@@ -203,20 +211,27 @@ manage_xplanet() {
                    if (( result == 0 )); then
                        management_set_result success "Saved health completed."
                    else
-                       management_set_result error "Saved health exited $result."
+                       if (( result == 1 )); then
+                           management_set_result warning "Health check completed; source issues reported."
+                       else
+                           management_set_result error "Health inspection failed (exit $result); review details above."
+                       fi
                    fi
                else
                    print -- "Health is unavailable until setup creates your configuration. Choose 1 for guided setup."
                    management_set_result unavailable "Health needs configuration; choose Guided setup (1)."
                fi ;;
             8) management_details=true
-               management_section "Python runtime"
-               print -- "Homebrew Python is the recommended default (Python 3.11+)."
-               print
-               print -- "Existing compatible interpreters and TOTALMARKER_PYTHON remain supported."
-               print
-               print -- "uv integration is deferred and is not offered here."
-               management_set_result info "Python: Homebrew recommended; uv deferred." ;;
+               management_section "Advanced Python"
+               load_helpers python-runtime
+               python_choose_runtime change
+               result=$?
+               case "$result" in
+                   0) management_set_result success "Python interpreter selected." ;;
+                   3) management_details=false
+                      management_set_result cancelled "Python selection cancelled; prior choice retained." ;;
+                   *) management_set_result error "Python selection failed; prior choice retained." ;;
+               esac ;;
             *) management_set_result info "Choose a listed option or q to exit." ;;
         esac
         if [[ "$management_details" == true ]]; then

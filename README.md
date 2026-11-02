@@ -66,7 +66,9 @@ shell environment.
 
 Run `./scripts/xplanet.sh --help` for the current command list. Commands work from
 any directory. Bare `./scripts/xplanet.sh` opens [terminal management](docs/management.md);
-`config` is a placeholder that changes no settings.
+`config` is a placeholder that changes no settings. Management also offers
+[TotalMarker interpreter selection](docs/python-runtime.md): Homebrew is recommended,
+with uv-managed Python available as an explicit choice.
 
 | Command | Action |
 | --- | --- |
@@ -84,25 +86,11 @@ any directory. Bare `./scripts/xplanet.sh` opens [terminal management](docs/mana
 | `norad`, `eclipse` | Run an explicitly configured optional product |
 | `test` | Run the offline test suite |
 
-`start` uses `XPLANET_GEOMETRY` from `xp.def` when nonempty; otherwise Xplanet
-sizes the desktop automatically. `render` saves a frame at the configured
-dimensions, while `preview` uses a fixed 1920×1080 size. `stop` signals
-ALL of this user's Xplanet processes, including finite renders and other checkouts,
-and succeeds when none is running. It first removes the managed desktop job.
-`restart` performs that same broad stop, then starts one display. `start` catches up
-a configured monthly map and asks launchd to run one foreground desktop, without
-`KeepAlive` or automatic respawn after stop. Python is used only for TotalMarker.
-
-On the first start after upgrading from the old `-fork` launcher, an existing
-unmanaged Xplanet process produces a request to use `restart`; setup never kills
-it automatically. The existing login trigger stays compatible and can start the
-display on a later login. Stopping a display does not disable login automation.
-Start reports launchd's acceptance, not proof that the renderer produced an image;
-renderer errors go to `logs/xplanet-error.log`. Normal and configured executable
-names (including a resolved symlink target) are included in broad stop. Desktop
-launch resolves executable symlinks. macOS name lookup cannot reliably discover
-unmanaged, physically renamed binaries with names longer than 19 characters; use
-the normal Xplanet binary name for those older manual launches.
+`start` catches up the monthly map and runs one launchd-owned foreground desktop,
+without automatic respawn after stop. `stop` stops **all** your Xplanet processes,
+including finite renders; `restart` performs that stop before starting a display.
+See [desktop behavior and upgrade details](docs/management.md#desktop-commands)
+for geometry, previews, process names and the old-launcher transition.
 
 To update your checkout:
 
