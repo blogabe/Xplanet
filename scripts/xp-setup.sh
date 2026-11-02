@@ -407,7 +407,7 @@ print -- "Step 3: optionally install and register Xplanet launchd jobs; this may
 print -- "No Python package or virtual environment will be installed."
 if ! ask "Step 1) Continue with Xplanet preparation?"; then
     print -- "Setup cancelled without preparing files."
-    exit 0
+    exit 3
 fi
 
 real_dir config
@@ -493,6 +493,9 @@ for index in "${missing_links[@]}"; do
     print -- "Prepare link $name <- $target"
 done
 [[ -z "$solar_notice" ]] || print -- "$solar_notice"
+# The future configurator returns without applying anything until implemented.
+source "$project_root/scripts/lib/xplanet/configurator.zsh" || fail "missing configurator helper"
+configure_xplanet
 print -- "Review or edit $project_root/config/totalmarker.toml now."
 print -- "The file controls feed sources, styling and cloud credentials."
 print -- "Existing personal settings are preserved; no credentials are collected here."
@@ -500,8 +503,8 @@ local_reply=''
 read -r "local_reply?Press Enter after reviewing the TOML, or type q to stop: " ||
     fail "input ended before marker refresh"
 if [[ "$local_reply" == [Qq] ]]; then
-    print -- "Setup stopped before live marker refresh."
-    exit 0
+    print -- "Setup stopped before live marker refresh; preparation was retained."
+    exit 3
 fi
 
 failures=()
