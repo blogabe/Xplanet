@@ -26,6 +26,8 @@ class ManagementTests(Sandbox):
                     'TRACE': str(self.trace), 'PYTHON_RESULT': '0', 'TERM': 'dumb'}
         # CI selects its test interpreter globally; each sandbox owns overrides.
         self.env.pop('TOTALMARKER_PYTHON', None)
+        # A sandbox without .git must not discover the surrounding CI checkout.
+        self.env['GIT_CEILING_DIRECTORIES'] = str(self.root.parent)
         self.write_script(self.scripts / 'run-totalmarker',
                           'if [ "$1" = --python-path ]; then\n'
                           '  [ "$PYTHON_RESULT" = 0 ] || exit 2\n'
@@ -266,6 +268,22 @@ class ManagementTests(Sandbox):
         self.assertNotIn('Run update?', output)
         self.assertEqual(self.calls(), [])
         self.assertEqual(before, self.snapshot())
+
+    def test_parent_checkout_upstream_does_not_leak_into_management_fixture(self):
+        def git(*args):
+            subprocess.run(['git', '-C', str(self.base), *args],
+                           capture_output=True, text=True, check=True)
+        git('init', '-b', 'main')
+        git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid',
+            '-c', 'commit.gpgsign=false', 'commit', '--allow-empty', '-m', 'Parent fixture')
+        git('remote', 'add', 'origin', '/missing-fixture-remote')
+        git('config', 'branch.main.remote', 'origin')
+        git('config', 'branch.main.merge', 'refs/heads/main')
+        code, output = self.terminal('6\nq\n')
+        self.assertEqual(code, 0, output)
+        self.assertIn('Update unavailable:', output)
+        self.assertNotIn('Run update?', output)
+        self.assertEqual(self.calls(), [])
 
     def test_update_with_upstream_can_cancel_before_action(self):
         def git(*args):
