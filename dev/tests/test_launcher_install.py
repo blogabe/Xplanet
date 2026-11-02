@@ -13,7 +13,7 @@ class LauncherInstallTests(Sandbox):
         template = (PROJECT / "config/xp.def.example").read_bytes()
         self.definition.write_bytes(template)
         result = self.run_install("n\ny\ny\nq\n")
-        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.returncode, 3, result.stderr)
         self.assertIn(f"XPLANET_BIN={self.prefix}/bin/xplanet\n",
                       self.definition.read_text())
         self.assertEqual((PROJECT / "config/xp.def.example").read_bytes(), template)
@@ -166,7 +166,7 @@ class LauncherInstallTests(Sandbox):
 
         self.trace.unlink()
         result = self.run_install("n\ny\ny\nq\n")
-        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.returncode, 3, result.stderr)
         self.assertEqual(self.definition.read_text(),
                          self.personal_definition(f"{self.prefix}/bin/xplanet"))
         self.assertEqual(self.calls(), self.expected_brew_calls())
@@ -202,12 +202,12 @@ class LauncherInstallTests(Sandbox):
                      'exit 42\n')
         self.environment["TM_PYTHON"] = sys.executable
         declined = self.run_install("n\nn\n")
-        self.assertEqual(declined.returncode, 0, declined.stderr)
+        self.assertEqual(declined.returncode, 3, declined.stderr)
         for name in ("xp.def", "xp.conf", "totalmarker.toml", "earth"):
             self.assertFalse((self.config / name).exists(), name)
         self.trace.unlink()
         accepted = self.run_install("n\ny\nq\n")
-        self.assertEqual(accepted.returncode, 0, accepted.stderr)
+        self.assertEqual(accepted.returncode, 3, accepted.stderr)
         self.assertIn(f"XPLANET_BIN={self.prefix}/bin/xplanet", self.definition.read_text())
         self.assertEqual((self.config / "xp.conf").read_bytes(),
                          (self.config / "xp.conf.example").read_bytes())
@@ -248,14 +248,14 @@ class LauncherInstallTests(Sandbox):
                                 TM_BREW_PREFIX=str(brew_prefix), TM_PYTHON=sys.executable)
         self.environment.pop("TOTALMARKER_PYTHON", None)
         installed = self.run_install("n\ny\nq\n")
-        self.assertEqual(installed.returncode, 0, installed.stderr)
+        self.assertEqual(installed.returncode, 3, installed.stderr)
         self.assertTrue(selected.is_symlink())
         self.assertIn(f"TotalMarker will use {selected}", installed.stdout)
         self.assertIn("brew --prefix", self.calls())
         standalone = subprocess.run([str(self.launcher), "setup"], cwd=self.base,
                                     env=self.environment, input="y\nq\n",
                                     text=True, capture_output=True, check=False)
-        self.assertEqual(standalone.returncode, 0, standalone.stderr)
+        self.assertEqual(standalone.returncode, 3, standalone.stderr)
         self.assertIn(f"TotalMarker will use {selected}", standalone.stdout)
         bad_override = self.run_install("n\n", TOTALMARKER_PYTHON=str(self.base / "missing-python"))
         self.assertEqual(bad_override.returncode, 2)

@@ -65,7 +65,8 @@ shell environment.
 ## Commands
 
 Run `./scripts/xplanet.sh --help` for the current command list. Commands work from
-any directory.
+any directory. Bare `./scripts/xplanet.sh` opens [terminal management](docs/management.md);
+`config` is a placeholder that changes no settings.
 
 | Command | Action |
 | --- | --- |

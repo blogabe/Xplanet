@@ -47,10 +47,13 @@ interactive_note() {
 
 usage() {
     cat <<'USAGE'
-Usage: scripts/xplanet.sh COMMAND [OPTIONS]
+Usage: scripts/xplanet.sh [COMMAND [OPTIONS]]
+
+With no command in an interactive terminal, open management.
 
   bootstrap  Clone into ~/.xplanet, then run install (Homebrew required)
   install    Install Xplanet and Python, offer approval run, then run setup
+  config     Show the configurator placeholder (no settings are changed)
   setup      Prompt for preparation, marker refresh and optional automation
   update     Fast-forward Git, then check the blogabe Xplanet tap formula
 
@@ -113,7 +116,13 @@ load_helpers() {
             fail "could not load $helper helpers"
     done
 }
+if (( $# == 0 )) && [[ -t 0 && -t 1 ]]; then
+    load_helpers management
+    manage_xplanet
+    exit $?
+fi
 case "$switch" in
+    config) load_helpers configurator ;;
     install) load_helpers install ;;
     update) load_helpers display update ;;
     preview|render|start|restart|stop|earth) load_helpers display ;;
@@ -122,6 +131,9 @@ esac
 case "$switch" in
     help|-h|--help)
         usage
+        ;;
+    config)
+        configure_xplanet
         ;;
     install)
         install_xplanet

@@ -1,6 +1,10 @@
 """Preparation writes only to isolated project fixture roots."""
 from pathlib import Path
 import plistlib
+import os
+import pty
+import select
+import time
 import json
 import shlex
 import shutil
@@ -25,7 +29,8 @@ class SetupTests(Sandbox):
         self.assertIn("Would link markers/earth", dry.stdout)
         self.assertNotIn("Would link images/earth.png", dry.stdout)
         done = self._inspect(scripts, env, input="y\nq\n")
-        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(done.returncode, 3, done.stderr)
+        self.assertIn("Configurator is not implemented yet. No settings were saved or applied.", done.stdout)
         self.assertEqual((self.root / "markers/earth").readlink(), Path("../config/earth"))
         self.assertFalse((self.root / "images/earth.png").exists())
         self.assertEqual(self._inspect(scripts, env, "--check").returncode, 0)
@@ -92,7 +97,7 @@ class SetupTests(Sandbox):
         self.assertFalse((self.root / "arcs").exists())
         self.assertEqual(self._inspect(scripts, env, "--check").returncode, 1)
         done = self._inspect(scripts, env, input="y\nq\n")
-        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(done.returncode, 3, done.stderr)
         self.assertTrue((self.root / "arcs").is_dir())
         self.assertTrue((self.root / "logs/totalmarker").is_dir())
         self.assertTrue((self.root / ".state/totalmarker").is_dir())
@@ -108,7 +113,7 @@ class SetupTests(Sandbox):
         self.assertFalse((self.root / "scripts/launchd").exists())
         self.assertFalse(products.exists())
         self.assertEqual(self._inspect(scripts, env, "--check").returncode, 0)
-        self.assertEqual(self._inspect(scripts, env, input="y\nq\n").returncode, 0)
+        self.assertEqual(self._inspect(scripts, env, input="y\nq\n").returncode, 3)
 
     def test_fresh_config_bootstrap_waits_for_confirmation_and_is_repeatable(self):
         spaced = self.base / "fresh root with spaces"
@@ -133,18 +138,18 @@ class SetupTests(Sandbox):
         self.assertIn("Would copy config/xp.def", dry.stdout)
         self.assertEqual(self._inspect(scripts, env, "--check").returncode, 1)
         declined = self._inspect(scripts, env, input="n\n")
-        self.assertEqual(declined.returncode, 0, declined.stderr)
+        self.assertEqual(declined.returncode, 3, declined.stderr)
         self.assertFalse((config / "xp.conf").exists())
         self.assertFalse((config / "xp.def").exists())
         accepted = self._inspect(scripts, env, input="y\nq\n")
-        self.assertEqual(accepted.returncode, 0, accepted.stderr)
+        self.assertEqual(accepted.returncode, 3, accepted.stderr)
         self.assertEqual((config / "xp.conf").read_bytes(),
                          (config / "xp.conf.example").read_bytes())
         definition = (config / "xp.def").read_text()
         self.assertIn("XPLANET_BIN=", definition)
         self.assertIn(str(xplanet).replace(" ", "\\ "), definition)
         self.assertEqual(self._inspect(scripts, env, "--check").returncode, 0)
-        self.assertEqual(self._inspect(scripts, env, input="y\nq\n").returncode, 0)
+        self.assertEqual(self._inspect(scripts, env, input="y\nq\n").returncode, 3)
         self.assertEqual((config / "xp.def").read_text(), definition)
 
     def test_new_personal_file_created_at_prompt_is_not_overwritten(self):
@@ -187,7 +192,7 @@ class SetupTests(Sandbox):
         scripts, env, _ = self._shell_fixture()
         env["XPLANET_INSTALLED_BIN"] = str(self.root / "mock-xplanet")
         done = self._inspect(scripts, env, input="y\nq\n")
-        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(done.returncode, 3, done.stderr)
         self.assertEqual((config / "xp.conf").read_bytes(), custom)
         self.assertIn("XPLANET_BIN=", (config / "xp.def").read_text())
 
@@ -207,7 +212,7 @@ class SetupTests(Sandbox):
         (self.root / "images/lights.tiff").symlink_to("../assets/maps/lights/earth_lights_4800.tiff")
         scripts, env, _ = self._shell_fixture()
         done = self._inspect(scripts, env, input="y\nq\n")
-        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(done.returncode, 3, done.stderr)
         for name, data in (("config/totalmarker.toml", b"custom toml"),
                            ("config/earth", b"custom earth"),
                            ("images/earth.png", b"custom map")):
@@ -285,7 +290,7 @@ class SetupTests(Sandbox):
         self.assertFalse((spaced / "arcs").exists())
         self.assertEqual(self._inspect(scripts, env, "--check").returncode, 1)
         done = self._inspect(scripts, env, input="y\nq\n")
-        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(done.returncode, 3, done.stderr)
         self.assertEqual(self._inspect(scripts, env, "--check").returncode, 0)
 
     def test_solarsystem_retained_asset_is_used_for_new_link(self):
@@ -299,7 +304,7 @@ class SetupTests(Sandbox):
         dry = self._inspect(scripts, env, "--dry-run")
         self.assertIn("Would link images/solarsystem <- ../assets/maps/solarsystem", dry.stdout)
         done = self._inspect(scripts, env, input="y\nq\n")
-        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(done.returncode, 3, done.stderr)
         solar_link = self.root / "images/solarsystem"
         self.assertEqual(solar_link.readlink(), Path("../assets/maps/solarsystem"))
         solar_link.unlink()
@@ -792,4 +797,48 @@ class SetupTests(Sandbox):
         self.assertNotIn("Setup complete.", done.stdout)
         self.assertNotIn("If macOS asks to let Xplanet control Finder", done.stdout)
         self.assertEqual(sum(line.startswith("load -w ") for line in calls.read_text().splitlines()), 5)
+        self.assertFalse(products.exists())
+
+    def _management_session(self, scripts, env, answers):
+        master, slave = pty.openpty()
+        process = subprocess.Popen([str(scripts / 'xplanet.sh')], env={**env, 'TERM': 'dumb'},
+                                   stdin=slave, stdout=slave, stderr=slave)
+        output = b''
+        try:
+            os.write(master, answers)
+            deadline = time.monotonic() + 5
+            while process.poll() is None and time.monotonic() < deadline:
+                if select.select([master], [], [], .1)[0]:
+                    output += os.read(master, 65536)
+            process.wait(timeout=2)
+            self.assertEqual(process.returncode, 0, output.decode())
+            return output
+        finally:
+            if process.poll() is None:
+                process.kill()
+                process.wait()
+            os.close(master)
+            os.close(slave)
+
+    def test_management_real_setup_early_cancel_returns_without_start_or_writes(self):
+        scripts, env, products = self._shell_fixture()
+        before = {str(p.relative_to(self.root)): p.read_bytes()
+                  for p in self.root.rglob('*') if p.is_file()}
+        output = self._management_session(scripts, env, b'1\nn\nq\n')
+        self.assertIn(b'Setup cancelled without preparing files.', output)
+        self.assertNotIn(b'Start the desktop now?', output)
+        self.assertEqual(output.count(b'Xplanet management'), 2)
+        self.assertFalse(products.exists())
+        self.assertFalse((self.root / 'arcs').exists())
+        self.assertEqual(before, {str(p.relative_to(self.root)): p.read_bytes()
+                                  for p in self.root.rglob('*') if p.is_file()})
+
+    def test_management_real_setup_later_stop_retains_preparation_without_start(self):
+        scripts, env, products = self._shell_fixture()
+        output = self._management_session(scripts, env, b'1\ny\nq\nq\n')
+        self.assertIn(b'preparation was retained.', output)
+        self.assertNotIn(b'Start the desktop now?', output)
+        self.assertEqual(output.count(b'Xplanet management'), 2)
+        self.assertTrue((self.root / 'arcs').is_dir())
+        self.assertTrue((self.root / 'config/totalmarker.toml').is_file())
         self.assertFalse(products.exists())

@@ -15,13 +15,8 @@ install_xplanet() {
     local brew_bin prefix installed
     brew_bin=$(command -v brew) || fail "Homebrew is required for install"
     [[ "$brew_bin" == /* && -x "$brew_bin" ]] || fail "Homebrew must be an executable on PATH"
-    "$brew_bin" tap blogabe/xplanet || install_failed "Could not add the Xplanet tap."
-    "$brew_bin" trust blogabe/xplanet ||
-        install_failed "Could not trust the Xplanet tap; this Homebrew may not support 'brew trust'."
-    "$brew_bin" install --formula --build-from-source blogabe/xplanet/xplanet \
-        --without-giflib --with-cspice ||
-        install_failed "Could not build Xplanet from the tap source."
-    "$brew_bin" install python || install_failed "Could not install Homebrew Python."
+    install_renderer
+    install_python
     prefix=$("$brew_bin" --prefix blogabe/xplanet/xplanet) ||
         install_failed "Could not locate the installed Xplanet formula."
     [[ "$prefix" == /* ]] || install_failed "Homebrew returned a non-absolute Xplanet prefix."
@@ -36,4 +31,17 @@ install_xplanet() {
     fi
     print -- "Xplanet and Python installation steps finished. Continuing to setup."
     XPLANET_INSTALLED_BIN="$installed" "$script_dir/xp-setup.sh"
+}
+
+install_renderer() {
+    "$brew_bin" tap blogabe/xplanet || install_failed "Could not add the Xplanet tap."
+    "$brew_bin" trust blogabe/xplanet ||
+        install_failed "Could not trust the Xplanet tap; this Homebrew may not support 'brew trust'."
+    "$brew_bin" install --formula --build-from-source blogabe/xplanet/xplanet \
+        --without-giflib --with-cspice ||
+        install_failed "Could not build Xplanet from the tap source."
+}
+
+install_python() {
+    "$brew_bin" install python || install_failed "Could not install Homebrew Python."
 }
