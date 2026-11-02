@@ -24,6 +24,8 @@ class ManagementTests(Sandbox):
         self.bin.mkdir()
         self.env = {**os.environ, 'PATH': f'{self.bin}:/usr/bin:/bin',
                     'TRACE': str(self.trace), 'PYTHON_RESULT': '0', 'TERM': 'dumb'}
+        # CI selects its test interpreter globally; each sandbox owns overrides.
+        self.env.pop('TOTALMARKER_PYTHON', None)
         self.write_script(self.scripts / 'run-totalmarker',
                           'if [ "$1" = --python-path ]; then\n'
                           '  [ "$PYTHON_RESULT" = 0 ] || exit 2\n'
