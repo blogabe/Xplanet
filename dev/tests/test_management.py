@@ -57,7 +57,7 @@ class ManagementTests(Sandbox):
         return {str(p.relative_to(self.root)): p.read_bytes()
                 for p in self.root.rglob('*') if p.is_file()}
 
-    def terminal(self, answers=None, interrupt=False, eof=False, termination=None, pause_signal=None, pause_key=None, after_pause=None, menu_steps=(), resize=None, delayed_input=None):
+    def terminal(self, answers=None, interrupt=False, eof=False, termination=None, pause_signal=None, pause_key=None, after_pause=None, menu_steps=(), resize=None, key_marker=None):
         master, slave = pty.openpty()
         fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH',
                     int(self.env.get('TEST_ROWS', 30)), int(self.env.get('TEST_COLS', 100)), 0, 0))
@@ -73,8 +73,9 @@ class ManagementTests(Sandbox):
                     output += os.read(master, 65536)
             self.assertIn(b'Choose: ', output)
             if self.env.get('TERM') == 'xterm-256color':
-                while termios.tcgetattr(slave)[3] & termios.ICANON and time.monotonic() < deadline:
+                while termios.tcgetattr(slave)[3] & (termios.ICANON | termios.ECHO) and time.monotonic() < deadline:
                     select.select([], [], [], .001)
+                self.assertFalse(termios.tcgetattr(slave)[3] & (termios.ICANON | termios.ECHO), output.decode())
             if resize:
                 fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH', *resize, 0, 0))
                 os.kill(proc.pid, signal.SIGWINCH)
@@ -86,11 +87,10 @@ class ManagementTests(Sandbox):
             next_choice_sent = False
             menu_steps = iter(menu_steps)
             next_step = next(menu_steps, None)
-            input_ready_at = time.monotonic() + .15 if delayed_input else None
             while proc.poll() is None and time.monotonic() < deadline:
-                if input_ready_at and time.monotonic() >= input_ready_at:
-                    os.write(master, delayed_input)
-                    input_ready_at = None
+                if key_marker and key_marker in output:
+                    os.write(master, b'q')
+                    key_marker = None
                 if next_step and output.count(b'Choose: ') >= next_step[0]:
                     os.write(master, next_step[1])
                     next_step = next(menu_steps, None)
@@ -603,8 +603,14 @@ class ManagementTests(Sandbox):
 
     def test_partial_and_malformed_escape_input_does_not_activate(self):
         self.enhanced_terminal()
+        # Acknowledge completed parsing; a wall-clock delay races on slow runners.
+        helper = self.scripts / 'lib/xplanet/management-input.zsh'
+        helper.write_text(helper.read_text().replace(
+            '        management_key_read || return 1',
+            '        management_key_read || return 1\n'
+            '        print -rn -- __fixture_key_read__'))
         for keys in ('\x1b', '\x1b[', '\x1b[?x', '\x1b[1234567890123456789012345678901234567890~'):
-            code, output = self.terminal(keys, delayed_input=b'q')
+            code, output = self.terminal(keys, key_marker=b'__fixture_key_read__')
             self.assertEqual(code, 0, output)
             self.assertNotIn('Guided setup\x1b[0m\r\n', output)
             self.assertEqual(self.calls(), [])
