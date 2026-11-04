@@ -90,6 +90,14 @@ def _last_errors(fs, settings):
     return errors, None
 
 
+def cloud_freshness(created, warning, now):
+    """Shared saved-cloud age policy, without access checks or filesystem reads."""
+    if created is None:
+        return 'unknown'
+    return ('stale' if color_for(created, now, warning,
+                                ('current', 'aging', 'stale')) == 'stale' else 'current')
+
+
 def _freshness(product, record, settings, now):
     if product == 'volcano':
         if record.get('coverage_end_at') is None:
@@ -100,16 +108,18 @@ def _freshness(product, record, settings, now):
             return 'stale' if now > record['coverage_end_at'] else 'invalid'
         return 'current'
     if product == 'clouds':
-        created = record.get('source_created_at')
-        if created is None:
-            return 'unknown'
-        return ('stale' if color_for(created, now, settings.warning,
-                                    ('current', 'aging', 'stale')) == 'stale' else 'current')
+        return cloud_freshness(record.get('source_created_at'), settings.warning, now)
     if product == 'storm' and record.get('source_valid_until_at') is not None:
         return 'current' if now <= record['source_valid_until_at'] else 'stale'
     # Other products expose their own source times below. Do not invent a new
     # feed-age policy: successful parsing alone does not prove current coverage.
     return 'unknown'
+
+
+def observational_freshness(product,record,now):
+    """Read-only shared age policy for frozen Earth observational snapshots."""
+    if product not in ('quake','storm','volcano'):raise ValueError('Unsupported observational product')
+    return _freshness(product,record,None,now)
 
 
 class _ProbeFetcher:
@@ -343,19 +353,22 @@ def _summary(row, live):
             'saved output; freshness not assessed'), ''
 
 
-def _report_color(row, live):
+def _report_tone(row, live):
     if row['status'] in {'error', 'access_failed', 'invalid_content', 'refresh_failed'}:
-        return '\033[31m'
+        return 'error'
     if not live and row['last_outcome'] == 'failed':
-        return '\033[31m'
+        return 'error'
     if row['status'] == 'stale' or row['freshness'] == 'stale':
-        return '\033[33m'
+        return 'warning'
     if not row['output']['present'] or not row['output']['verified']:
-        return '\033[33m'
+        return 'warning'
     if row['freshness'] == 'current':
-        return '\033[32m'
-    return ''  # Freshness not assessed is not a failure.
+        return 'good'
+    return 'unknown'  # Freshness not assessed is not a failure.
 
+
+def _report_color(row, live):
+    return {'error':'\033[31m','warning':'\033[33m','good':'\033[32m'}.get(_report_tone(row,live),'')
 
 def format_report(report, *, verbose=False, color=False):
     live = report['mode'] == 'live'
@@ -413,4 +426,27 @@ def format_report(report, *, verbose=False, color=False):
                         and row['last_success_at'] is not None
                         and error['at'] < row['last_success_at'] else '')
                 lines.append(f"  recorded error {_stamp(error.get('at'))}{note}: {error['message']}")
+    return '\n'.join(lines)
+
+
+def format_dashboard(report):
+    """Bounded plain records for management's explicit saved-health action.
+
+    Status semantics stay here. No terminal controls cross this presentation boundary; the caller must not evaluate the records.
+    """
+    if report['mode'] != 'saved':
+        raise ValueError('Dashboard records require saved health.')
+    def plain(value):
+        return ''.join(c if c.isprintable() else ' ' for c in str(value))[:240]
+    lines=['snapshot\t'+_stamp(report['checked_at'])]
+    for row in report['products']:
+        title=_TITLES[row['product']]
+        if row['status']=='disabled':tone,summary,detail='disabled','disabled',''
+        else:
+            tone=_report_tone(row,False)
+            summary,detail=_summary(row,False)
+            summary+='; '+_success_age(row['last_success_at'],report['checked_at'])
+            if row['output']['retained']:summary+='; prior output retained'
+        lines.append(tone+'\t'+title+'\t'+plain(summary)+'\t'+plain(detail))
+    if report['warning']:lines.append('note\t'+plain(report['warning']))
     return '\n'.join(lines)

@@ -30,7 +30,7 @@ class SetupTests(Sandbox):
         self.assertNotIn("Would link images/earth.png", dry.stdout)
         done = self._inspect(scripts, env, input="y\nq\n")
         self.assertEqual(done.returncode, 3, done.stderr)
-        self.assertIn("Configurator is not implemented yet. No settings were saved or applied.", done.stdout)
+        self.assertIn("Explore sample views with scripts/xplanet.sh config; saving there does not apply setup settings.", done.stdout)
         self.assertEqual((self.root / "markers/earth").readlink(), Path("../config/earth"))
         self.assertFalse((self.root / "images/earth.png").exists())
         self.assertEqual(self._inspect(scripts, env, "--check").returncode, 0)

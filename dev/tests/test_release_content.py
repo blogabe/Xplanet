@@ -43,7 +43,7 @@ class ReleaseContentTests(unittest.TestCase):
             if name.startswith("scripts/launchd/"):
                 self.assertTrue(name.endswith(".plist.example"), name)
             if name.startswith("dev/"):
-                self.assertTrue(name.startswith(("dev/tests/", "dev/examples/", "dev/release/")), name)
+                self.assertTrue(name.startswith(("dev/tests/", "dev/configurator-tests/", "dev/examples/", "dev/release/")), name)
                 self.assertNotIn(".tmp", parts, name)
             if name.startswith("assets/"):
                 self.assertFalse(any(part in {".DS_Store", "__MACOSX", "Thumbs.db",
@@ -59,7 +59,7 @@ class ReleaseContentTests(unittest.TestCase):
                        and "/" not in name[len("scripts/"):]}
         self.assertEqual(entrypoints, {"scripts/xplanet.sh", "scripts/xp-setup.sh",
                                        "scripts/xp-bootstrap.sh",
-                                       "scripts/run-totalmarker"})
+                                       "scripts/run-totalmarker", "scripts/run-configurator"})
         self.assertFalse(any(name.startswith("dev/examples/") and name.endswith(".ini")
                              for name in names))
 
@@ -67,7 +67,12 @@ class ReleaseContentTests(unittest.TestCase):
         private = (
             "config/totalmarker.toml", "config/xp.def", "config/xp.conf",
             "scripts/launchd/local.xplanet.start.plist",
-            "dev/open-items.txt", "dev/reference/private/file",
+            "dev/open-items.txt", "dev/configurator-open-items.txt",
+            "dev/configurator-foundation-20261102/verification.md",
+            "scripts/configurator/__pycache__/module.pyc",
+            "scripts/configurator/.env.local", "scripts/configurator/private.key",
+            "dev/configurator-tests/.tmp/capture", "dev/configurator-tests/result.log",
+            "dev/reference/private/file",
             "dev/recovery/archive", "dev/validation/frame.png",
             "dev/todel/snapshot", "dev/preview/earth-render.png",
             "dev/tests/.tmp/capture", "assets/maps/personal.png",
@@ -131,3 +136,11 @@ class ReleaseContentTests(unittest.TestCase):
                 for provider in ("xeric", "custom"):
                     for key in ("username", "password"):
                         self.assertEqual(cloud.get(provider, {}).get(key, ""), "")
+
+
+    def test_stock_scene_pairs_are_regular_tracked_source_export_inputs(self):
+        names={name:mode for mode,name in self.tracked()}
+        for stem in ('earth-solar-dawn','earth-september','earth-from-moon','moon-from-earth','jupiter-cloudtops','saturn-rings'):
+            for suffix in ('.def','.conf'):
+                name='scripts/configurator/samples/scenes/'+stem+suffix
+                self.assertEqual(names.get(name),'100644',name)

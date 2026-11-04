@@ -128,7 +128,7 @@ def check_source_paths(entries):
     allowed_config = {"config/earth.example", "config/xp.conf.example",
                       "config/xp.def.example", "config/totalmarker.example.toml"}
     runtime = ("images/", "markers/", "arcs/", "satellites/", "logs/", ".state/")
-    allowed_dev = ("dev/tests/", "dev/examples/", "dev/release/")
+    allowed_dev = ("dev/tests/", "dev/configurator-tests/", "dev/examples/", "dev/release/")
     for name, metadata in entries.items():
         if (metadata.startswith("120000 ") or name.startswith(runtime) or
                 (name.startswith("assets/") and

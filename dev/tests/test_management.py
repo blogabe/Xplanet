@@ -11,6 +11,8 @@ import struct
 
 from .support import PROJECT, Sandbox, copy_launcher
 
+DASHBOARD='snapshot\t2026-11-04 12:00Z\n'+'\n'.join('unknown\t'+title+'\tsource-detail; freshness not assessed' for title in ('Clouds','Earthquakes','Storms','Volcanoes','Satellites','Eclipses','Santa'))
+
 
 class ManagementTests(Sandbox):
     def setUp(self):
@@ -19,6 +21,7 @@ class ManagementTests(Sandbox):
         self.scripts.mkdir()
         self.entry = self.scripts / 'xplanet.sh'
         copy_launcher(self.entry)
+        self.write_script(self.scripts / 'run-configurator', 'exit 3\n')
         self.trace = self.base / 'calls'
         self.bin = self.base / 'bin'
         self.bin.mkdir()
@@ -32,7 +35,8 @@ class ManagementTests(Sandbox):
                           'if [ "$1" = --python-path ]; then\n'
                           '  [ "$PYTHON_RESULT" = 0 ] || exit 2\n'
                           '  echo /fixture/python; exit 0; fi\n'
-                          'echo "$*" >> "$TRACE"\n')
+                          'echo "$*" >> "$TRACE"\n'
+                          + "if [ \"$2\" = --dashboard ]; then cat <<'DASHBOARD'\n"+DASHBOARD+"\nDASHBOARD\nfi\n")
         self.write_script(self.scripts / 'xp-setup.sh', 'echo setup >> "$TRACE"\n')
         (self.scripts / 'lib/xplanet/python-runtime.zsh').write_text(
             'python_choose_runtime() { print -- "Fixture runtime selection"; return 0; }\n')
@@ -143,23 +147,22 @@ class ManagementTests(Sandbox):
             self.assertEqual(self.calls(), [])
             self.assertEqual(before, self.snapshot())
 
-    def test_config_stub_and_advanced_navigation_do_not_claim_saved_settings(self):
+    def test_cancelled_config_and_advanced_navigation_do_not_claim_saved_settings(self):
         before = self.snapshot()
         code, output = self.terminal('invalid\n2\n8\n q\n')
         self.assertEqual(code, 0)
-        self.assertIn('not implemented yet. No settings were saved or applied.', output)
+        self.assertIn('Configurator cancelled; desktop settings unchanged.', output)
         self.assertIn('Fixture runtime selection', output)
         self.assertIn('Advanced Python', output)
         self.assertNotIn('Advanced Python options', output)
         self.assertEqual(before, self.snapshot())
         self.assertEqual(self.calls(), [])
 
-    def test_direct_config_is_noninteractive_and_noop(self):
+    def test_direct_config_propagates_module_cancellation(self):
         before = self.snapshot()
         result = subprocess.run([str(self.entry), 'config'], env=self.env,
                                 capture_output=True, text=True, timeout=3)
-        self.assertEqual(result.returncode, 0)
-        self.assertIn('No settings were saved or applied', result.stdout)
+        self.assertEqual(result.returncode, 3)
         self.assertEqual(before, self.snapshot())
 
     def test_detection_new_partial_existing_is_read_only(self):
@@ -172,7 +175,7 @@ class ManagementTests(Sandbox):
             before = self.snapshot()
             code, output = self.terminal('q\n')
             self.assertEqual(code, 0)
-            self.assertIn(f'{expected} configuration', output)
+            self.assertIn(f'Legacy setup  {expected};', output)
             self.assertEqual(before, self.snapshot())
         self.assertEqual(self.calls(), [])
 
@@ -311,7 +314,7 @@ class ManagementTests(Sandbox):
         for status, expected in [(0, 'Done - Saved health completed.'),
                                  (1, 'Issues - Health check completed; source issues reported.'),
                                  (2, 'Problem - Health inspection failed (exit 2)')]:
-            self.write_script(self.scripts / 'run-totalmarker', f'echo source-detail; exit {status}\n')
+            self.write_script(self.scripts / 'run-totalmarker', "cat <<'DASHBOARD'\n"+DASHBOARD+f"\nDASHBOARD\nexit {status}\n")
             code, output = self.terminal('7\n', pause_key=b'x', after_pause='q\n')
             self.assertEqual(code, 0, output)
             self.assertIn(expected, output)
@@ -334,7 +337,7 @@ class ManagementTests(Sandbox):
         config.mkdir()
         (config / 'totalmarker.toml').write_text('')
         self.terminal('7\n q\n')
-        self.assertEqual(self.calls(), ['health'])
+        self.assertEqual(self.calls(), ['health --dashboard'])
 
     def test_cancelled_setup_returns_to_menu_without_start_offer(self):
         self.write_script(self.scripts / 'xp-setup.sh', 'exit 3\n')
@@ -356,7 +359,7 @@ class ManagementTests(Sandbox):
         self.assertEqual(code, 0)
         lines = [line.strip() for line in output.splitlines()]
         for label in ['Setup', 'Desktop', 'Maintenance', '4) Stop',
-                      '2) Configurator (placeholder)', 'q) Exit']:
+                      '2) Configurator', 'q) Exit']:
             self.assertIn(label, lines)
         self.assertFalse(any('3) Start' in line and '4) Stop' in line for line in lines))
         self.assertIn('Stop ALL your Xplanet processes, including finite renders?', output)
@@ -365,6 +368,7 @@ class ManagementTests(Sandbox):
 
     def enhanced_terminal(self):
         self.env['TERM'] = 'xterm-256color'
+        self.env['TEST_ROWS'] = '34'
         self.env.pop('NO_COLOR', None)
         self.write_script(self.bin / 'tput',
                           'case "$1" in\n'
@@ -390,7 +394,7 @@ class ManagementTests(Sandbox):
             _, output = self.terminal('q\n')
             self.assertIn('xplanet: ' + expected_process, output)
             self.assertIn('Job: ' + expected_job, output)
-            self.assertIn('Dashboard pending; saved health (7)', output)
+            self.assertIn('Not checked in this session; choose Saved health (7)', output)
         self.assertEqual(self.calls(), [])
 
     def test_opening_never_executes_configuration_or_python(self):
@@ -477,7 +481,7 @@ class ManagementTests(Sandbox):
         _, output = self.terminal('q\n')
         self.assertNotIn('\x1b', output)
         self.assertTrue(output.isascii())
-        self.assertIn('[?] Dashboard pending', output)
+        self.assertIn('[?] Not checked in this session', output)
 
     def test_eof_after_auto_return_restores_normal_screen(self):
         self.enhanced_terminal()
@@ -493,7 +497,7 @@ class ManagementTests(Sandbox):
         self.assertEqual(code, 0)
         self.assertNotIn('Press Enter to return', output)
         self.assertEqual(output.count('Press any key to continue'), 1)
-        self.assertIn('Configurator pending; no settings saved or applied.', output)
+        self.assertIn('Configurator cancelled; desktop settings unchanged.', output)
         self.assertIn('Python interpreter selected.', output)
         self.assertIn('Health needs configuration; choose Guided setup (1).', output)
         self.assertIn('Update has no remote-tracking upstream.', output)
@@ -551,7 +555,7 @@ class ManagementTests(Sandbox):
         code, output = self.terminal('8\n 2\nq\n')
         self.assertEqual(code, 0)
         self.assertEqual(output.count('Press any key to continue'), 1)
-        self.assertIn('Last action: [i] Unavailable - Configurator pending;', output)
+        self.assertIn('Last action: [-] Cancelled - Configurator cancelled; desktop settings unchanged.', output)
         self.assertEqual(output.count('Xplanet management'), 3)
         self.assertNotIn('Choose a listed option', output)
 
@@ -560,7 +564,7 @@ class ManagementTests(Sandbox):
         code, output = self.terminal('8\n\nx2\nq\n')
         self.assertEqual(code, 0)
         self.assertEqual(output.count('Press any key to continue'), 1)
-        self.assertIn('Configurator pending;', output)
+        self.assertIn('Configurator cancelled; desktop settings unchanged.', output)
         self.assertEqual(self.calls(), [])
 
     def test_pause_eof_and_interrupt_restore_terminal(self):
@@ -577,7 +581,7 @@ class ManagementTests(Sandbox):
         self.enhanced_terminal()
         code, output = self.terminal('8\n', pause_key=b'x', after_pause='2\nq\n')
         self.assertEqual(code, 0, output)
-        self.assertIn('Configurator pending;', output)
+        self.assertIn('Configurator cancelled; desktop settings unchanged.', output)
         self.assertEqual(output.count('Press any key to continue'), 1)
 
     def test_ctrl_c_key_during_pause_restores_terminal(self):
@@ -604,18 +608,18 @@ class ManagementTests(Sandbox):
         self.assertEqual(self.calls(), [])
         code, output = self.terminal('2\nq')
         self.assertEqual(code, 0)
-        self.assertIn('Configurator pending;', output)
+        self.assertIn('Configurator cancelled; desktop settings unchanged.', output)
 
     def test_arrow_navigation_repeats_and_stops_at_boundaries(self):
         self.enhanced_terminal()
         for keys, selected in [('\x1b[A' * 3 + 'q', 1),
-                               ('\x1b[B' * 12 + 'q', 8),
+                               ('\x1b[B' * 12 + 'q', 10),
                                ('\x1b[B\x1b[B\x1b[A\nq', 2),
                                ('\x1bOB\nq', 2)]:
             code, output = self.terminal(keys)
             self.assertEqual(code, 0)
-            self.assertIn(f'> \x1b[34m{selected})', output)
-            self.assertEqual('Configurator pending;' in output, selected == 2)
+            self.assertIn(f'> \x1b[34m{"h" if selected==10 else selected})', output)
+            self.assertEqual('Configurator cancelled; desktop settings unchanged.' in output, selected == 2)
         self.assertEqual(self.calls(), [])
 
     def test_partial_and_malformed_escape_input_does_not_activate(self):
@@ -637,7 +641,7 @@ class ManagementTests(Sandbox):
         for key in (b'x', b'\n', b'\x1b[A', b'\x1bOP', b'\x1b[15~'):
             code, output = self.terminal('8\n', pause_key=key, after_pause='2\nq')
             self.assertEqual(code, 0, output)
-            self.assertIn('Configurator pending;', output)
+            self.assertIn('Configurator cancelled; desktop settings unchanged.', output)
             self.assertNotIn('Prerequisites', output)
             self.assertEqual(output.count('Press any key to continue'), 1)
 
@@ -651,14 +655,14 @@ class ManagementTests(Sandbox):
         self.assertEqual(code, 0)
         self.assertEqual(output.count('Xplanet management'), 2)
         self.assertEqual(probes.read_text().splitlines(), ['process', 'jobs'] * 2)
-        self.assertIn('\x1b7\x1b8\x1b[14A\r\x1b[K', output)
-        self.assertIn('Configurator pending;', output)
+        self.assertIn('\x1b7\x1b8\x1b[16A\r\x1b[K', output)
+        self.assertIn('Configurator cancelled; desktop settings unchanged.', output)
         # Relative row offsets stay correct with a longer header/result above.
         self.assertIn('q) Exit\r\n\r\nUp/Down', output)
         first = output.split('Choose: ', 1)[0]
         rows = first.split('\r\n')
-        for number, offset in enumerate((14, 13, 10, 9, 8, 5, 4, 3), 1):
-            item = next(i for i, row in enumerate(rows) if f'{number}) ' in row)
+        for number, offset in enumerate((16, 15, 12, 11, 10, 7, 6, 5, 4, 3), 1):
+            item = next(i for i, row in enumerate(rows) if f'{"h" if number==10 else number}) ' in row)
             self.assertEqual(len(rows) - 1 - item, offset)
 
     def test_narrow_navigation_redraws_using_cached_status(self):
@@ -680,7 +684,7 @@ class ManagementTests(Sandbox):
             code, output = self.terminal(keys, resize=(20, 40), menu_steps=[(2, b'q')])
             self.assertEqual(code, 0, output)
             self.assertGreaterEqual(output.count('Xplanet management'), 2)
-            self.assertIn(f'> \x1b[34m{selected})', output)
+            self.assertIn(f'> \x1b[34m{"h" if selected==10 else selected})', output)
             self.assertEqual(self.calls(), [])
             self.assertEqual(output.count('\x1b[?1049h'), 1)
             self.assertEqual(output.count('\x1b[?1049l'), 1)
@@ -701,3 +705,132 @@ class ManagementTests(Sandbox):
                                 input='', capture_output=True, text=True, timeout=3)
         self.assertEqual(result.returncode, 0)
         self.assertEqual(result.stdout, '')
+
+    def test_completed_configurator_changes_do_not_claim_only_a_view_was_saved(self):
+        self.write_script(self.scripts/'run-configurator','exit 0\n')
+        code,output=self.terminal('2\nq\n')
+        self.assertEqual(code,0);self.assertIn('Configurator closed; saved files and selection retained. Desktop not restarted.',output)
+        self.assertNotIn('View saved; desktop settings unchanged.',output);self.assertEqual(self.calls(),[])
+
+    def test_uncertain_selection_is_reported_for_inspection_not_as_saved_or_cancelled(self):
+        self.write_script(self.scripts/'run-configurator','exit 5\n')
+        code,output=self.terminal('2\n q\n')
+        self.assertEqual(code,0);self.assertIn('Selection outcome uncertain; inspect config/desktop.scene',output)
+        self.assertNotIn('Configurator changes saved;',output);self.assertNotIn('Configurator cancelled;',output)
+        self.assertEqual(self.calls(),[])
+
+
+    def test_health_snapshot_is_explicit_cached_and_never_claims_live_or_running_scene(self):
+        (self.root/'config').mkdir();(self.root/'config/totalmarker.toml').write_text('')
+        code,output=self.terminal('7\n',pause_key=b'x',after_pause='q\n')
+        self.assertEqual(code,0,output);self.assertEqual(self.calls(),['health --dashboard'])
+        self.assertIn('Snapshot  2026-11-04 12:00Z (saved evidence, not a live access check',output)
+        self.assertIn('[?] Clouds',output);self.assertIn('Running scene  [?] Not identified',output)
+        self.assertNotIn('Dashboard pending',output)
+
+    def test_invalid_selection_is_not_silently_presented_as_legacy(self):
+        (self.root/'config').mkdir();(self.root/'config/desktop.scene').write_text('invalid')
+        before=self.snapshot();code,output=self.terminal('q\n')
+        self.assertEqual(code,0,output);self.assertIn('invalid or unavailable selector',output)
+        self.assertNotIn('Next start  legacy',output);self.assertEqual(before,self.snapshot());self.assertEqual(self.calls(),[])
+
+    def test_selection_dashboard_binds_metadata_without_certifying_resources(self):
+        import hashlib,plistlib
+        record={'schema':1,'review':{'root':str(self.root),'scene':'config/scenes/my-scene.conf','geometry':'1920x1080'}}
+        raw=plistlib.dumps(record);identity=hashlib.sha256(raw).hexdigest()
+        revision=self.root/'.state/xplanet/scenes'/identity;revision.mkdir(parents=True)
+        (revision/'deployment.plist').write_bytes(raw);(self.root/'config').mkdir()
+        (self.root/'config/desktop.scene').write_text('v1 '+identity+'\n')
+        before=self.snapshot();code,output=self.terminal('q\n')
+        self.assertEqual(code,0,output);self.assertIn('Next start  my-scene (1920x1080); metadata verified, resources unchecked',output)
+        self.assertIn('Running scene  [?] Not identified',output);self.assertEqual(before,self.snapshot());self.assertEqual(self.calls(),[])
+        (revision/'deployment.plist').write_bytes(raw+b' ')
+        code,output=self.terminal('q\n');self.assertIn('invalid or unavailable selector',output)
+
+
+    def test_malformed_health_records_never_become_successful_snapshot(self):
+        (self.root/'config').mkdir();(self.root/'config/totalmarker.toml').write_text('')
+        for status in (0,1,2):
+            self.write_script(self.scripts/'run-totalmarker',f'echo malformed-result; exit {status}\n')
+            code,output=self.terminal('7\n',pause_key=b'x',after_pause='q\n')
+            self.assertEqual(code,0,output);self.assertIn('Problem - Health inspection failed',output)
+            self.assertIn('no verified snapshot',output);self.assertNotIn('Saved health completed',output)
+
+    def test_saved_health_global_warning_is_visible_and_cached_as_a_caveat(self):
+        (self.root/'config').mkdir();(self.root/'config/totalmarker.toml').write_text('')
+        self.write_script(self.scripts/'run-totalmarker',"cat <<'DASHBOARD'\n"+DASHBOARD+"\nnote\tRecorded error log unavailable\nDASHBOARD\n")
+        code,output=self.terminal('7\n',pause_key=b'x',after_pause='q\n')
+        self.assertEqual(code,0,output);self.assertIn('Recorded error log unavailable',output)
+        self.assertIn('[!] Status warning; review health details',output)
+
+
+    def test_long_completed_result_uses_safe_redraw_instead_of_wrong_cursor_rows(self):
+        self.env['TERM']='xterm-256color';self.write_script(self.scripts/'run-configurator','exit 0\n')
+        code,output=self.terminal('2\r',menu_steps=[(2,b'\x1b[Bq')])
+        self.assertEqual(code,0,output)
+        self.assertGreaterEqual(output.count('Xplanet management'),3)
+        self.assertIn('Desktop not restarted.',output);self.assertEqual(self.calls(),[])
+
+
+    def test_configurator_signal_exit_is_interruption_not_failure_or_rollback(self):
+        for status in (129,130,143):
+            self.write_script(self.scripts/'run-configurator',f'exit {status}\n')
+            code,output=self.terminal('2\nq\n')
+            self.assertEqual(code,0,output)
+            self.assertIn('Configurator interrupted; completed saves/selections remain. Desktop not restarted.',output)
+            self.assertNotIn('Problem - Configurator',output);self.assertEqual(self.calls(),[])
+
+    def test_binary_evidence_is_historical_and_menu_never_executes_probe(self):
+        import json
+        evidence=self.root/'.state/configurator/binary-evidence.json';evidence.parent.mkdir(parents=True)
+        evidence.write_text(json.dumps({'schema':1,'report':{'status':'reported','completed_utc':'2026-11-04T01:02:03+00:00'}}))
+        before=self.snapshot();code,output=self.terminal('q\n')
+        self.assertEqual(code,0);self.assertIn('Binary evidence',output)
+        self.assertIn('reported 2026-11-04T01:02:03Z',output)
+        self.assertIn('not revalidated for next start/running',output)
+        self.assertEqual(self.calls(),[]);self.assertEqual(before,self.snapshot())
+        evidence.write_text('{broken')
+        code,output=self.terminal('q\n');self.assertEqual(code,0)
+        self.assertIn('not checked; run diagnostics explicitly',output);self.assertEqual(self.calls(),[])
+
+    def test_diagnostic_and_help_entries_are_discoverable_without_activation(self):
+        self.enhanced_terminal();before=self.snapshot()
+        for keys in ('9q','hq'):
+            code,output=self.terminal(keys)
+            self.assertEqual(code,0);self.assertIn('9) Diagnostics',output);self.assertIn('h) Help',output)
+            self.assertNotIn('Capture renderer support now?',output);self.assertNotIn('Usage: scripts/xplanet.sh',output)
+        self.assertEqual(self.calls(),[]);self.assertEqual(before,self.snapshot())
+
+    def test_diagnostic_cancellation_is_immediate_and_has_no_probe(self):
+        self.enhanced_terminal();before=self.snapshot()
+        code,output=self.terminal('9\nn\nq')
+        self.assertEqual(code,0);self.assertIn('Renderer diagnostic was not run.',output)
+        self.assertNotIn('Press any key',output);self.assertEqual(self.calls(),[]);self.assertEqual(before,self.snapshot())
+
+    def test_diagnostic_routes_existing_command_and_keeps_unknown_distinct_from_failure(self):
+        self.enhanced_terminal()
+        self.write_script(self.scripts/'lib/xplanet/diagnostics.zsh',
+            'renderer_diagnostics() { echo diagnostics >> "$TRACE"; print -- "fixture support evidence"; return "$DIAGNOSTIC_RESULT"; }\n')
+        for status,message in (('0','Renderer support captured'),('1','renderer support remains unknown'),('2','Renderer inspection failed (exit 2)')):
+            self.env['DIAGNOSTIC_RESULT']=status
+            if self.trace.exists():self.trace.unlink()
+            before=self.snapshot();code,output=self.terminal('9\ny\n',pause_key=b' ',after_pause='q')
+            self.assertEqual(code,0,output);self.assertIn('fixture support evidence',output);self.assertIn(message,output)
+            self.assertEqual(output.count('Press any key'),1);self.assertEqual(self.calls(),['diagnostics'])
+            self.assertEqual(before,self.snapshot());self.assertEqual(output.count('\x1b[?1049h'),1);self.assertTrue(output.endswith('\x1b[?1049l'))
+
+    def test_help_routes_existing_usage_and_exposes_detailed_help_without_probe(self):
+        for enhanced in (False,True):
+            if enhanced:self.enhanced_terminal()
+            before=self.snapshot();code,output=self.terminal('h\n',pause_key=b' ',after_pause='q\n')
+            self.assertEqual(code,0,output);self.assertIn('Usage: scripts/xplanet.sh [COMMAND [OPTIONS]]',output)
+            self.assertIn('diagnostics --help',output);self.assertIn('config --help',output);self.assertIn('config --guide',output)
+            self.assertIn('no probe, setup or service action was run',output)
+            self.assertEqual(self.calls(),[]);self.assertEqual(before,self.snapshot())
+
+    def test_help_pause_ctrl_d_and_ctrl_c_restore_terminal_without_actions(self):
+        self.enhanced_terminal()
+        for key,expected in ((b'\x04',0),(b'\x03',130)):
+            code,output=self.terminal('h\n',pause_key=key)
+            self.assertEqual(code,expected,output);self.assertEqual(output.count('\x1b[?1049h'),1)
+            self.assertTrue(output.endswith('\x1b[?1049l'));self.assertEqual(self.calls(),[])

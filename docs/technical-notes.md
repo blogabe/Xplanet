@@ -96,6 +96,11 @@ To rerun setup, use `./scripts/xplanet.sh setup`. With an existing `config/xp.de
 `TOTALMARKER_PYTHON` to an absolute Python 3.11+ executable only to override the
 launcher's interpreter selection. No global `PATH` change is required.
 
+For renderer build/support troubleshooting, run `./scripts/xplanet.sh diagnostics`
+explicitly, or choose an absolute `--renderer` before setup. This records bounded
+self-reported capabilities, not original compiler flags; setup/start do not probe
+automatically. See [support evidence and limits](configurator-diagnostics.md#renderer-support-outside-the-studio).
+
 ## Setup checks and testing
 
 `./scripts/xplanet.sh setup --dry-run` lists safe preparation without writing. `setup --check` returns 0 when directory, link, and personal-file preparation is ready; 1 when safe preparation remains; and 2 for invalid or unsafe input. It does not test live providers or prove launchd jobs will run. Setup verifies existing personal launchd plists and preserves them rather than replacing them; it renders only missing ones. A provider refresh that returns a valid failed TotalMarker result is reported as an optional warning; malformed results, configuration errors, and preparation or automation failures remain setup failures.

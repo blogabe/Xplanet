@@ -10,7 +10,7 @@ from unittest.mock import patch
 from totalmarker.cli import main
 import unittest
 
-from totalmarker.health import exit_status, format_report
+from totalmarker.health import exit_status, format_report, format_dashboard
 
 NOW = 1793509200
 
@@ -149,3 +149,26 @@ Volcanoes: refresh failed; last success 1h ago — Source returned HTTP 403; pri
         self.assertIn('Clouds: access failed; last success 1h ago — Source returned HTTP 403', format_report(live))
         self.assertNotIn('Server:', format_report(live))
         self.assertEqual(exit_status(live), 1)
+
+
+class DashboardFormatTests(unittest.TestCase):
+    def test_dashboard_uses_shared_semantics_and_never_exposes_provider_paths(self):
+        rows=[product('clouds',freshness='current'),product('quake'),
+              product('storm',freshness='stale'),product('volcano',last_outcome='failed',last_error={'at':NOW,'message':'secret-path; hidden'}),
+              product('norad',status='disabled')]
+        data=format_dashboard(report('saved',*rows))
+        self.assertIn('snapshot\t2026-',data)
+        self.assertIn('good\tClouds\tsaved output current',data)
+        self.assertIn('unknown\tEarthquakes\tsaved output; freshness not assessed',data)
+        self.assertIn('warning\tStorms\tsaved data stale',data)
+        self.assertIn('error\tVolcanoes\trefresh failed',data)
+        self.assertIn('disabled\tSatellites\tdisabled',data)
+        self.assertIn('secret-path',data);self.assertNotIn('example.invalid',data);self.assertNotIn('\033',data)
+        warned=report('saved',*rows);warned['warning']='log unreadable\n\033 problem'
+        note=format_dashboard(warned).splitlines()[-1]
+        self.assertTrue(note.startswith('note\t'));self.assertNotIn('\033',note)
+        with self.assertRaises(ValueError):format_dashboard(report('live',*rows))
+
+    def test_dashboard_flag_cannot_be_combined_with_live_json_or_nonhealth(self):
+        for argv in (['health','--dashboard','--live'],['health','--dashboard','--json'],['clouds','--dashboard']):
+            with self.subTest(argv=argv),patch('sys.stderr',io.StringIO()),self.assertRaises(SystemExit):main(['--root','/unused',*argv])

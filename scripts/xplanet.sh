@@ -53,7 +53,7 @@ With no command in an interactive terminal, open management.
 
   bootstrap  Clone into ~/.xplanet, then run install (Homebrew required)
   install    Install Xplanet and Python, offer approval run, then run setup
-  config     Show the configurator placeholder (no settings are changed)
+  config     Open the scene studio; --help, --guide, --prepare (isolated UI)
   setup      Prompt for preparation, marker refresh and optional automation
   update     Fast-forward Git, then check the blogabe Xplanet tap formula
 
@@ -70,6 +70,8 @@ With no command in an interactive terminal, open management.
   storm      Fetch worldwide tropical-cyclone markers and tracks
   label      Refresh product update labels without fetching (alias: labels)
   log-trim   Trim recognized event logs older than 30 days; --dry-run, --days N
+  diagnostics  Capture selected renderer support; --show reads saved evidence
+               Optional --renderer /absolute/path/to/xplanet before setup
   health     Read saved source health; --live probes without updating outputs
              Use --verbose for details or --json for structured results
 
@@ -86,9 +88,12 @@ tracked changes or untracked/ignored file collisions. It then updates Homebrew
 tap metadata and rebuilds Xplanet only when this tap's formula recipe changed.
 It runs no setup steps.
 Setup delegates to xp-setup.sh. Use setup --dry-run or setup --check to inspect;
-these modes inspect working-directory preparation only. Without an option,
+these modes inspect working-directory preparation only. setup --check-handoff DIR
+verifies a review-only scene bundle without preparing files or changing jobs. Without an option,
 setup prompts before preparation, live marker refresh and launchd activation.
 Setup installs no packages or virtual environment.
+Apply scene selection never restarts the display. No selector keeps legacy settings;
+invalid selected revisions fail instead of falling back.
 Start uses one desktop job without automatic respawn. Stop removes that job and
 stops ALL this user's Xplanet processes, including finite renders; restart
 waits for them to exit before starting one display. A formula reinstall restarts
@@ -96,7 +101,7 @@ the display only if Xplanet was running before the rebuild.
 USAGE
 }
 
-if (( $# > 1 )) && [[ "$1" != setup && "$1" != health && "$1" != log-trim ]]; then
+if (( $# > 1 )) && [[ "$1" != setup && "$1" != health && "$1" != log-trim && "$1" != config && "$1" != diagnostics ]]; then
     fail "expected exactly one command; use --help"
 fi
 if (( $# == 0 )); then
@@ -123,6 +128,7 @@ if (( $# == 0 )) && [[ -t 0 && -t 1 ]]; then
 fi
 case "$switch" in
     config) load_helpers configurator ;;
+    diagnostics) load_helpers diagnostics ;;
     install) load_helpers install ;;
     update) load_helpers display update ;;
     preview|render|start|restart|stop|earth) load_helpers display ;;
@@ -132,8 +138,13 @@ case "$switch" in
     help|-h|--help)
         usage
         ;;
+    diagnostics)
+        shift
+        renderer_diagnostics "$@"
+        ;;
     config)
-        configure_xplanet
+        shift
+        configure_xplanet "$@"
         ;;
     install)
         install_xplanet

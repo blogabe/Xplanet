@@ -5,7 +5,7 @@ import json
 import os
 import sys
 from .config import load
-from .health import check as check_health, exit_status as health_status, format_report
+from .health import check as check_health, exit_status as health_status, format_report, format_dashboard
 from .errors import TotalMarkerError
 from .features.clouds import run
 from .features.volcano import run as run_volcano
@@ -26,6 +26,7 @@ def main(argv=None):
     parser.add_argument("--live", action="store_true", help="Health: validate sources in a temporary root")
     parser.add_argument("--json", action="store_true", help="Health: output structured JSON")
     parser.add_argument("--verbose", action="store_true", help="Health: include source and diagnostic details")
+    parser.add_argument("--dashboard", action="store_true", help="Health: compact saved-status records for management")
     parser.add_argument("--days", type=int, help="Log trim: retain this many days (default 30)")
     parser.add_argument("--dry-run", action="store_true", help="Log trim: report without writing")
     args = parser.parse_args(argv)
@@ -33,8 +34,10 @@ def main(argv=None):
         parser.error("--days and --dry-run are log-trim options")
     if args.days is not None and args.days < 1:
         parser.error("--days must be a positive integer")
-    if args.command != "health" and (args.live or args.json or args.verbose):
-        parser.error("--live, --json and --verbose are health options")
+    if args.dashboard and (args.live or args.json or args.verbose):
+        parser.error("--dashboard requires saved health without --live, --json or --verbose")
+    if args.command != "health" and (args.live or args.json or args.verbose or args.dashboard):
+        parser.error("--live, --json, --verbose and --dashboard are health options")
     try:
         fs = RootFS(args.root)
         settings = load(fs, args.config)
@@ -46,7 +49,7 @@ def main(argv=None):
             report = check_health(fs, settings, live=args.live)
             color = (sys.stdout.isatty() and 'NO_COLOR' not in os.environ
                      and os.environ.get('TERM', '') not in {'', 'dumb'})
-            print(json.dumps(report) if args.json else format_report(
+            print(format_dashboard(report) if args.dashboard else json.dumps(report) if args.json else format_report(
                 report, verbose=args.verbose, color=color))
             return health_status(report)
         if args.command == "volcano":

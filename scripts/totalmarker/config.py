@@ -555,11 +555,16 @@ def _norad_collections(values):
 
 
 def load(fs, path=None):
+    raw = fs.read(path, 1024 * 1024) if path is not None else None
+    if path is not None and raw is None:
+        raise ConfigError("Configuration file does not exist")
+    return load_bytes(fs, raw, path)
+
+
+def load_bytes(fs, raw, path):
+    """Parse an already captured config; path selects syntax, not another read."""
     values, deferred = {}, {}
     if path is not None:
-        raw = fs.read(path, 1024 * 1024)
-        if raw is None:
-            raise ConfigError("Configuration file does not exist")
         if Path(path).suffix.lower() == ".toml":
             values, deferred = _toml_values(raw)
         else:

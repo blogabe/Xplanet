@@ -5,6 +5,12 @@ umask 077
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
 project_root=$(CDPATH= cd -- "$script_dir/.." && pwd -P)
 
+# Read-only handoff verification returns before any legacy definition or setup work.
+if [[ "${1:-}" == --check-handoff ]]; then
+    (( $# == 2 )) || { print -u2 -- 'xp-setup.sh: --check-handoff requires one directory'; exit 2; }
+    exec "$script_dir/run-configurator" --check-handoff "$2"
+fi
+
 # Launchd plan: inspect every job first, render only missing personal plists
 # with plutil, then link missing LaunchAgents. Existing files are never replaced.
 # The internal mode lets isolated tests exercise this without running setup.
@@ -505,9 +511,8 @@ if [[ ! -e "$project_root/config/totalmarker.python" && ! -L "$project_root/conf
         fail "Could not record the TotalMarker interpreter; prior preparation was retained"
     print -- "Recorded TotalMarker interpreter: $python_bin"
 fi
-# The future configurator returns without applying anything until implemented.
-source "$project_root/scripts/lib/xplanet/configurator.zsh" || fail "missing configurator helper"
-configure_xplanet
+# The separate exploration flow never silently applies proposed desktop files.
+print -- "Explore sample views with scripts/xplanet.sh config; saving there does not apply setup settings."
 print -- "Review or edit $project_root/config/totalmarker.toml now."
 print -- "The file controls feed sources, styling and cloud credentials."
 print -- "Existing personal settings are preserved; no credentials are collected here."

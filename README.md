@@ -1,6 +1,11 @@
 # Xplanet and TotalMarker
 
-Xplanet renders the Earth desktop. Python 3.11+ runs TotalMarker, which downloads
+Explore Earth and planetary scenes in the terminal configurator, preview with Xplanet,
+compare framing, recover editing drafts, and save named scenes without changing your desktop. Explicitly review and select
+a scene for the next start/restart, or keep the original desktop configuration.
+See the [studio user guide](docs/configurator-user-guide.md) and [stock scenes](docs/configurator-stock-scenes.md).
+
+Python 3.11+ runs TotalMarker, which downloads
 cloud imagery and generates earthquake, volcano and storm markers, storm arcs, and
 update labels for Xplanet. Optional launchd jobs start the display and schedule
 refreshes. NORAD satellites and central eclipse paths are available but disabled
@@ -66,7 +71,9 @@ shell environment.
 
 Run `./scripts/xplanet.sh --help` for the current command list. Commands work from
 any directory. Bare `./scripts/xplanet.sh` opens [terminal management](docs/management.md);
-`config` is a placeholder that changes no settings. Management also offers
+`config` opens the separate scene studio: reopen a saved view, preview,
+save a new copy or cancel; explicitly select a reviewed scene separately from restart. See [Configurator](docs/configurator.md)
+for its explicit isolated-runtime preparation and current limits. Management also offers
 [TotalMarker interpreter selection](docs/python-runtime.md): Homebrew is recommended,
 with uv-managed Python available as an explicit choice.
 
@@ -75,6 +82,7 @@ with uv-managed Python available as an explicit choice.
 | `bootstrap` | Clone into a new `~/.xplanet`, then run install (Homebrew required) |
 | `install` | Install Xplanet and Python, then run setup |
 | `setup [--dry-run\|--check]` | Prepare or inspect this installation |
+| `config [--prepare]` | Open the scene studio; explicitly prepare its isolated UI if needed |
 | `update` | Fast-forward Git, then reinstall Xplanet if the tap formula changed |
 | `start` / `stop` / `restart` | Start, stop, or restart the desktop display |
 | `preview` / `render` | Save one frame under `dev/preview/` |
@@ -86,8 +94,9 @@ with uv-managed Python available as an explicit choice.
 | `norad`, `eclipse` | Run an explicitly configured optional product |
 | `test` | Run the offline test suite |
 
-`start` catches up the monthly map and runs one launchd-owned foreground desktop,
-without automatic respawn after stop. `stop` stops **all** your Xplanet processes,
+`start` catches up the monthly map on the legacy configuration path and runs one
+launchd-owned foreground desktop, without automatic respawn after stop. A selected
+studio scene keeps its reviewed map/time choices. `stop` stops **all** your Xplanet processes,
 including finite renders; `restart` performs that stop before starting a display.
 See [desktop behavior and upgrade details](docs/management.md#desktop-commands)
 for geometry, previews, process names and the old-launcher transition.

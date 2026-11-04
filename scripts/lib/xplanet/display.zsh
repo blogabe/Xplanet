@@ -1,3 +1,7 @@
+# Scene helpers contain literal data handling only; legacy mode stays the default.
+source "$script_dir/lib/xplanet/scene.zsh" || return 2
+source "$script_dir/lib/xplanet/lifecycle.zsh" || return 2
+
 # Private zsh helpers, sourced by xplanet.sh after root discovery.
 
 select_earth_map() (
@@ -103,6 +107,9 @@ render_frame() {
 }
 
 desktop_command() {
+    XPLANET_SCENE_DIRECTORY=''
+    XPLANET_SCENE_TMPDIR=''
+    selected_scene_command && return 0
     load_render_config
     # Resolve configured symlinks once; execute the real binary rather than
     # introducing an arbitrary alias into the OS process name.
@@ -123,7 +130,7 @@ desktop_command() {
 desktop_label=local.xplanet.desktop
 desktop_domain="gui/$EUID"
 
-start_xplanet() {
+_start_xplanet() {
     local -a desktop_args
     local map_note state temporary
     desktop_command
@@ -183,6 +190,9 @@ xplanet_pids() {
             names+=("${XPLANET_BIN:t}" "${XPLANET_BIN:A:t}")
         fi
     fi
+    local scene_names
+    scene_names=$(scene_renderer_names)
+    [[ -z "$scene_names" ]] || names+=("${(@f)scene_names}")
     local -A seen
     for name in ${(u)names}; do
         # pgrep takes an ERE even with -x; configured names are literal.
@@ -208,7 +218,7 @@ xplanet_pids() {
     done
 }
 
-stop_xplanet() {
+_stop_xplanet() {
     local listing pid remaining attempt kill_bin job_error=0
     kill_bin=$(whence -p kill) || fail "cannot locate the PID-specific kill command"
     [[ "$kill_bin" == /* && -x "$kill_bin" ]] ||
@@ -241,7 +251,11 @@ stop_xplanet() {
     [[ "${1:-}" == quiet ]] || interactive_note "Xplanet display stopped."
 }
 
-restart_xplanet() {
-    stop_xplanet quiet || return $?
-    start_xplanet
+_restart_xplanet() {
+    _stop_xplanet quiet || return $?
+    _start_xplanet
 }
+
+start_xplanet() { desktop_lifecycle _start_xplanet "$@"; }
+stop_xplanet() { desktop_lifecycle _stop_xplanet "$@"; }
+restart_xplanet() { desktop_lifecycle _restart_xplanet "$@"; }
