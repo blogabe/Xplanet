@@ -67,14 +67,48 @@ class ExchangeWorkerTests(unittest.IsolatedAsyncioTestCase):
     async def test_unresolvable_source_destination_preview_and_renderer_are_friendly(self):
         loop=self.root/'loop';loop.symlink_to(loop)
         missing='~xplanet-no-such-user-91bc/path'
-        cases=(('export',missing,self.root/'new',{}),('export',self.source,loop,{}),('export',self.source,self.root/'new',{'preview':missing}),('import',self.root/'absent',self.root/'new',{'renderer':missing}))
+        cases=(('export',loop,self.root/'new',{}),
+               ('export',self.source,loop/'new',{}),
+               ('export',self.source,self.root/'new',{'preview':loop}),
+               ('import',self.source,self.root/'new',{'renderer':loop}),
+               ('export',missing,self.root/'new',{}),
+               ('export',self.source,loop,{}),
+               ('export',self.source,self.root/'new',{'preview':missing}),
+               ('import',self.source,self.root/'new',{'renderer':missing}))
         from unittest.mock import AsyncMock
         with patch.object(self.workspace,'_run_child',new_callable=AsyncMock) as child:
             for mode,source,target,options in cases:
                 with self.subTest(mode=mode,options=options),self.assertRaisesRegex(ValueError,'cannot be resolved safely'):
                     await self.workspace.exchange_scene(mode,source,target,**options)
-            child.assert_not_called()
+            self.assertEqual(child.call_count,0)
         self.assertFalse(self.workspace.busy);self.assertFalse((self.root/'new').exists())
+
+    async def test_permissive_nonstrict_loop_resolution_cannot_start_worker(self):
+        from unittest.mock import AsyncMock
+        loop=self.root/'loop';loop.symlink_to(loop);original=Path.resolve
+        def resolve(path,strict=False):
+            if path==loop and not strict:return path  # Python 3.13+ behavior.
+            return original(path,strict=strict)
+        with patch.object(Path,'resolve',autospec=True,side_effect=resolve),patch.object(self.workspace,'_run_child',new_callable=AsyncMock) as child:
+            with self.assertRaisesRegex(ValueError,'cannot be resolved safely'):
+                await self.workspace.exchange_scene('export',self.source,loop)
+            self.assertEqual(child.call_count,0)
+        self.assertFalse(self.workspace.busy);self.assertIsNone(self.workspace.process)
+
+    async def test_existing_renderer_still_requires_explicit_absolute_path(self):
+        from unittest.mock import AsyncMock
+        relative=os.path.relpath(sys.executable)
+        with patch.object(self.workspace,'_run_child',new_callable=AsyncMock) as child:
+            with self.assertRaisesRegex(ValueError,'absolute path'):
+                await self.workspace.exchange_scene('import',self.source,self.root/'new',renderer=relative)
+            self.assertEqual(child.call_count,0)
+        self.assertFalse(self.workspace.busy)
+
+    async def test_new_destination_inside_existing_custom_parent_keeps_spaces(self):
+        parent=self.root/'custom parent';parent.mkdir();target=parent/'new archive copy'
+        result=await self.workspace.exchange_scene('export',self.source,target)
+        self.assertEqual(result,target);self.assertTrue((target/'scene.xplanet.zip').is_file())
+        self.assertFalse(self.workspace.busy);self.assertIsNone(self.workspace.process)
 
 
 class ExchangeExitReportTests(unittest.TestCase):

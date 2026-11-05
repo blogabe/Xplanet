@@ -285,12 +285,20 @@ class Workspace:
         if mode not in ('export','import'):raise ValueError('Choose scene export or import.')
         try:
             source=Path(source).expanduser();target=Path(destination).expanduser()
-            source.resolve();resolved=target.resolve()
-            if preview is not None:preview=Path(preview).expanduser();preview.resolve()
-            binary=renderer_path(renderer or '') if mode=='import' else None
-        except RuntimeError as exc:raise ValueError('Exchange paths cannot be resolved safely; choose real absolute paths without loops or unknown users.') from exc
+            if not source.is_absolute() or not target.is_absolute():raise ValueError('Choose absolute source and destination paths.')
+            source.resolve(strict=True)
+            # Python 3.13+ no longer reports loops in non-strict resolve. A new
+            # destination may lack its leaf, but its parent must already exist.
+            try:resolved=target.resolve(strict=True)
+            except FileNotFoundError:resolved=target.parent.resolve(strict=True)/target.name
+            if preview is not None:preview=Path(preview).expanduser();preview.resolve(strict=True)
+            binary=None
+            if mode=='import':
+                selected=Path(renderer or '').expanduser()
+                if not selected.is_absolute():raise ValueError('Choose an absolute path to an installed Xplanet executable.')
+                binary=renderer_path(selected.resolve(strict=True))
+        except (RuntimeError,OSError) as exc:raise ValueError('Exchange paths cannot be resolved safely; choose real absolute paths without loops or unknown users.') from exc
         if resolved.is_relative_to(self.root):raise ValueError('Choose a destination outside the temporary preview workspace.')
-        if not source.is_absolute() or not target.is_absolute():raise ValueError('Choose absolute source and destination paths.')
         args=[sys.executable,'-B','-m','configurator.exchange','--'+mode,str(source),'--destination',str(target)]
         if mode=='import':
             if preview is not None:raise ValueError('Import does not accept a preview override.')
