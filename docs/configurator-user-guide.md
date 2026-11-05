@@ -94,7 +94,7 @@ feature are the same problem. A reported unknown is not proof of unsupported cod
 
 **Framing sheet…** separately reviews three radius/FOV variants at one epoch,
 then renders three 1920×1080 images. **Open framing sheet** opens their temporary
-local HTML grid explicitly. This first slice is for static body-centre space views;
+local HTML grid explicitly. Framing comparisons use static body-centre space views;
 it refuses active current-data captures and lunar orbital cameras. It is not
 animation or an image-difference tool. **Imagery month sheet…** instead compares
 three explicit months from the selected bundled Earth map family, holding camera
@@ -206,7 +206,7 @@ commands, see [Apply and guarded recovery](configurator-apply-design.md).
 local annotations with hashes. Export excludes unsaved draft changes; import creates
 a new copy, then offers an explicit Open with dirty-draft protection. The CLI also
 remains available. Bundled
-maps stay references; frozen provider captures are not included in this first slice.
+maps stay references; frozen provider captures are excluded from exchange v1.
 It does not execute imported files or select a desktop scene.
 
 ## Frozen astronomy layers

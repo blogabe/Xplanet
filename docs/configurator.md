@@ -359,7 +359,7 @@ general per-body scene editor, provider configuration, persistent live reference
 dashboard or automatic Apply. Explicit frozen capture supports existing clouds and observational marker/arc products
 in Earth Now scenes; fixed UTC and other targets exclude that current-data-derived layer.
 Non-Earth targets use selected bundled textures, including the supported moons and Pluto/Charon. External ephemerides,
-timewarp, trajectories and animation are outside this slice. Scene time is not evidence of scientific precision. Existing custom
+configurable timewarp, trajectories and animation are unsupported. Scene time is not evidence of scientific precision. Existing custom
 xp.def is never executed to populate the editor. See [module architecture](configurator-architecture.md)
 for preservation rules and the engine relationships informing future work.
 
@@ -456,8 +456,9 @@ Saturn's visible rings are built into Xplanet's non-projected space renderer,
 not loaded from our ring image files. Radius framing includes the outer rings;
 a nonzero observer latitude helps expose them. Projected Saturn omits the visible
 ring system but can retain ring shadows on the map. No rings for other planets
-or ring-texture editor is enabled. Other bodies/shadows may enter space views;
-there is no per-body system compositor in this slice.
+or ring-texture editor is enabled. Other bodies/shadows may enter space views.
+This target-selection mode does not configure individual companion bodies; see
+[system composition](configurator-systems.md) for those controls.
 
 The **1800–2200 studio input rule** remains for Earth and most targets.
 Active Pluto/Charon target or space-origin geometry instead requires fixed UTC
@@ -465,7 +466,7 @@ in **1800–2099**; inactive origins and inactive fixed times are retained.
 It is not a promise that every engine body, origin, satellite calculation or build
 has equal accuracy throughout that interval. Xplanet 1.3.1's `EphemerisLow.cpp`
 discusses its major-planet approximations over that interval; actual previews use
-the selected renderer's backend. This slice does not select external ephemeris
+the selected renderer's backend. The studio does not select external ephemeris
 files or certify event geometry. Satellite approximations and the Pluto input
 guard are explained in [planetary bodies and limits](configurator-planetary.md).
 Eclipse/event presets and kernel-dependent scenes need separate coverage validation. The stock scenes
@@ -574,7 +575,7 @@ scenes. Opening a valid pair still replaces the current draft as explicitly warn
 1920×1080 static space-view variants at a single epoch, without changing the draft
 or ordinary previews. The explicitly opened contact sheet is local HTML, not an
 inline image renderer or an animation. Current-data captures remain outside this
-first comparison slice.
+framing comparison mode.
 
 [Private draft recovery](configurator-recovery.md) adds debounced, bounded checkpoints
 and explicit inspection/recovery, with separate namespaces for concurrent editors.

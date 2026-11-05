@@ -28,7 +28,7 @@ Maps are bundled/installed imagery, not historical photographs at that instant.
 
 Ordinary body-origin cameras use the origin body's **centre**. `earth-from-moon`
 retains that behavior. The separate [lunar orbital camera](configurator-orbital-camera.md)
-now supports `earthrise-lunar-orbit`: an offset spherical lunar observer, static
+supports `earthrise-lunar-orbit`: an offset spherical lunar observer, static
 Moon texture, small crescent Earth and Sun. It was verified in a finite 1920×1080
 render. It is not a Moon-surface, terrain or Apollo reconstruction.
 

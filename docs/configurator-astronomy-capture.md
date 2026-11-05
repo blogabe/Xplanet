@@ -156,7 +156,7 @@ A matching **Fixed UTC eclipse** can use the existing reviewed handoff and immut
 scene-selection flow, with all native/captured files hash-bound and `timewarp 0`.
 Complete predictions remain usable at their matching event time after the real-world
 event has passed. A Now scene omits eclipse references even if its wallclock happens
-to fall inside the event; this conservative first integration avoids changing native
+to fall inside the event; this policy avoids changing native
 file bytes just because time passed. Selection and restart stay separate explicit
 actions, and this feature has not been validated on a live desktop or in UTM.
 

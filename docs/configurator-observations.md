@@ -28,7 +28,7 @@ scene and renderer; the producer working `xp.conf`/`xp.def` is not imported. Thi
 is not general configuration import.
 
 Referenced producer icons must match its configured image dependency and be regular
-contained files. This slice supports PNG containers up to 1 MiB and 512×512 only;
+contained files. Capture supports PNG containers up to 1 MiB and 512×512 only;
 other formats are refused rather than silently omitted. Container/chunk/dimension
 checks are not a full decoder certification. PNG embedded metadata is unchanged;
 review captured imagery and labels before sharing a saved scene.

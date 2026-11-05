@@ -12,43 +12,43 @@ configurator open-items tracker. Current behavior is documented in the
 
 ## What exists, and what the evidence means
 
-The current feature branch has an isolated Python/Textual module; a shipped Earth
+The configurator has an isolated Python/Textual module; a shipped Earth
 sample; projected and space camera modes; geographic/body-origin observers;
 exclusive space framing; current/fixed UTC time; temporary finite PNG previews;
 explicit native-file saves; and strict reopen/revise/save-copy with retained
 inactive choices, without executing shell definitions or changing the original. Configuration health, dynamic controls
-and two-success preview retention/comparison now support that workflow. Exact
+and two-success preview retention/comparison support that workflow. Exact
 resource inspection and image compositing remain future possibilities. Bundled
 seasonal day maps, stock/bundled night imagery, twilight blending, grid presets
 and UTC scene labels round-trip through versioned native formats. It has
-explicit immutable named-scene selection, but no general importer. A flat named scene library under config/scenes now provides matching .def/.conf
+explicit immutable named-scene selection, but no general importer. A flat named scene library under config/scenes provides matching .def/.conf
 pairs and scene-prefixed assets, while retaining legacy directory compatibility.
 Session change review, dirty status and bounded
-undo/redo now support revision, including invalid and inactive draft values.
-Bounded static place labels and surface route arcs now save/reopen as native
+undo/redo support revision, including invalid and inactive draft values.
+Bounded static place labels and surface route arcs save/reopen as native
 optional files; broad layer import and advanced marker options remain future work.
 Bundled relief/specular shading and the explicitly archived 2011 cloud display
-now join the Earth appearance slice, with contextual parameter controls. Live
+are available as Earth appearance settings, with contextual parameter controls.
 TotalMarker live references and provider controls are not implied. Explicit frozen
 cloud capture for Now scenes is implemented separately, with provenance and
 source-independent save/reopen; quake/volcano markers and paired storm marker/arcs
-now have bounded frozen capture with dependency validation as well; fixed UTC excludes current-derived data.
+have bounded frozen capture with dependency validation as well; fixed UTC excludes current-derived data.
 
-Earth composition now includes local solar hour, geographic observer range and
+Earth composition includes local solar hour, geographic observer range and
 space north/rotation with inactive retention and v7 scene compatibility.
 
-Planetary selection now covers Moon and all eight major planets with bundled
+Planetary selection covers Moon and all eight major planets with bundled
 textures, explicit body-origin viewpoints, shadow brightness, target/origin health
 and inactive Earth setting preservation. Saturn space-mode rings and three
 planetary presets are verified narrowly. The additional bundled moons, Pluto/Charon
-and four relationship presets are now supported with explicit geometry caveats.
-Bounded system-texture composition and explicit shared moon enlargement are now
-implemented. Bounded parent-relative orbital guides and shared path styling are now
-implemented as well. Individual moon-scale overrides are now supported with explicit inheritance.
+and four relationship presets are supported with explicit geometry caveats.
+Bounded system-texture composition and explicit shared moon enlargement are
+implemented. Bounded parent-relative orbital guides and shared path styling are
+implemented as well. Individual moon-scale overrides are supported with explicit inheritance.
 Per-body visibility, ring editing and external
 ephemeris-driven work remain future.
 
-Three shipped Earth starting scenes now demonstrate solar-hour framing, seasonal
+Three shipped Earth starting scenes demonstrate solar-hour framing, seasonal
 imagery and Earth-from-Moon geometry, with read-only originals and safe copies.
 
 Future ideas below use these evidence labels:
@@ -81,11 +81,9 @@ preview, keep a copy or cancel. Revisit the next pair after learning from use.
 | Review a bounded Apply plan and recover known config changes | Deliberately connect existing live-data layers |
 | Reproducible finite batches and explicit automation | Timelines, flybys and visual stories |
 
-These are pairings, not mandatory phases. The first narrow workflow/capability
-pair is implemented. Choose the next workflow improvement from real use before
-committing to another expansion. Earth appearance has a narrow implemented
-slice; broader styling, additional bodies and system scenes remain possibilities
-rather than a fixed next assignment.
+These pairings are not mandatory phases or a fixed schedule. Choose further
+workflow improvements and capabilities based on real use and the remaining
+limitations documented below.
 
 ## Workflow possibilities
 
@@ -96,14 +94,14 @@ relevant controls and prerequisites. Make this a guided start with revisitable
 sections, not a rigid wizard. Retain inapplicable choices where their meaning is
 well-defined, and explain incompatible settings rather than silently discarding
 them. Earth/Moon/major-planet target selection is implemented narrowly; additional
-textured moons and Pluto/Charon are now included; bounded system composition now configures supported companions. General
+textured moons and Pluto/Charon are included; bounded system composition configures supported companions. General
 individual scale editing is also implemented; general per-body visibility remains
 unavailable in this renderer.
 
 Grow from exact recognition of our own saved pairs toward a preservation-aware
 reader: show understood settings, inherited values and opaque content separately.
 Preserve comments, ordering, repeated file entries and valid multiple assignments.
-Bounded numeric-copy review now shows exact byte edits and snapshot/copy hashes.
+Bounded numeric-copy review shows exact byte edits and snapshot/copy hashes.
 General preservation-aware native-file diffs remain future work. Concurrent-source
 checks, snapshots and explicit new-copy saves already protect the bounded workflows.
 
@@ -247,30 +245,30 @@ corrections to older documentation. Primary references:
 [1.3.1 source](https://sourceforge.net/projects/xplanet/files/xplanet/1.3.1/).
 
 
-A bounded native numeric-copy tool now patches shade/twilight/bump scale without
+A bounded native numeric-copy tool patches shade/twilight/bump scale without
 reserializing unknown content. It preserves no-op bytes, requires a new same-directory
 file and refuses ambiguity. General editable import, resource relocation and
 general activation of arbitrary native copies remain separate future work; see [the limits](configurator-native-values.md).
 
 
-Review-only named-scene handoff export/check is now implemented. It freezes known
+Review-only named-scene handoff export/check is implemented. It freezes known
 native/captured bytes, binds baselines and compiles explicit display arguments;
-it does not activate a selection or change jobs. A fixture-only reference rollback
-rehearsal explores failure semantics. Explicit immutable named-scene selection and guarded restoration are now
+it does not activate a selection or change jobs. Explicit immutable named-scene
+selection and guarded restoration are
 implemented; restart remains separate and visible UTM validation is deferred. Bounded native numeric copying also covers grid subdivisions, without
 enabling grids or reconstructing arbitrary definitions.
 
-### Current preview and starting-point milestone
+### Preview and stock scenes
 
-The studio now stores bounded preview dimensions (1920×1080 for new and stock
+The studio stores bounded preview dimensions (1920×1080 for new and stock
 scenes), explicitly diagnoses the selected binary and renderer lookup evidence,
 and inspects the immutable scene selected for the next start. The stock set has
-24 scenes, with paired moon-to-planet viewpoints. A fixed lunar orbital camera now demonstrates a limb, crescent Earth and Sun
+24 scenes, with paired moon-to-planet viewpoints. A fixed lunar orbital camera demonstrates a limb, crescent Earth and Sun
 in a separately labeled Earthrise-style stock scene; body-centre Earth-from-Moon
 remains distinct. This is not a surface/event reconstruction or arbitrary trajectory
 import. Centre offsets and a generated frozen coordinate row round-trip safely. See the [stock scene guide](configurator-stock-scenes.md).
 
-The bounded native numeric-copy tool now includes cloud gamma/threshold and
+The bounded native numeric-copy tool includes cloud gamma/threshold and
 illustrative magnification. It preserves no-op bytes and opaque content; broad
 path/resource/definition editing remains outside its contract.
 

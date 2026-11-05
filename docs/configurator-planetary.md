@@ -51,11 +51,11 @@ Mars-from-Phobos uses FOV 80°, Saturn-from-Titan 25° and Pluto-from-Charon 20�
 These relationship scenes do not magnify moons or promise another visible body.
 See the [current stock collection](configurator-stock-scenes.md) for the additional
 paired viewpoints and separately labeled orbital Earthrise scene.
-Unconfigured bodies may enter a space view according to renderer geometry. [Bundled system composition](configurator-systems.md) now configures supported
+Unconfigured bodies may enter a space view according to renderer geometry. [Bundled system composition](configurator-systems.md) configures supported
 companions with optional explicit enlargement. General per-body visibility, arbitrary
 trajectory editing, custom rings and event presets remain
 separate work. No install, desktop, provider or Apply action occurs here.
 
 
-[Illustrative orbital guides](configurator-orbits.md) now provide a bounded local
+[Illustrative orbital guides](configurator-orbits.md) provide a bounded local
 path layer; their sampled time footprint has stricter date-edge checks.

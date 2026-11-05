@@ -1,7 +1,7 @@
-"""Read-only frozen NORAD/eclipses groundwork; no provider calls or activation.
+"""Read-only frozen NORAD and eclipse captures; no provider calls or activation.
 
 Kept separate from weather: NORAD is current orbital data, whereas a NASA path
-is a dated prediction with a bounded event interval. Scene/UI integration follows.
+is a dated prediction with a bounded event interval.
 """
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone, timedelta

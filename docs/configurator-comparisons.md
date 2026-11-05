@@ -5,7 +5,7 @@ current radius or field of view. It is separate from **Compare…**, which compa
 the two ordinary successful previews. The draft and ordinary preview history
 remain unchanged.
 
-The first slice supports **space views with body-centre cameras and static layers**.
+Framing comparison supports **space views with body-centre cameras and static layers**.
 All three values must fit the existing model bounds; values are not silently
 clamped. The interface explains unavailable cases. Map projections, lunar orbital
 cameras and active current-data captures are deliberately unsupported here.

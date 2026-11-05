@@ -21,7 +21,7 @@ Loading and closing inspection performs no source writes. In this inspection flo
 content stays read-only: there is no Edit, Render or Copy operation that might
 silently omit unknown settings or associated assets. The current editor draft and
 its unsaved history remain unchanged. General preservation-aware editing/import
-is not implemented by this review slice.
+is not supported by this inspection flow.
 
 For a **complete recognized configurator-generated scene**, **Copy original bytes**
 can create an explicitly chosen new directory. It preserves every loaded native
