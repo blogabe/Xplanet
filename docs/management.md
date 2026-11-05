@@ -169,8 +169,10 @@ refreshing providers or changing services. A completed but unrecognized/failed p
 reports unknown support; execution/storage problems remain failures. Cancelling the
 confirmation runs nothing and returns directly to the menu.
 
-**h) Help** displays the existing top-level command help and points to
-`diagnostics --help`, `config --help` and `config --guide` for details. Both long
+**h) Help** displays the same intent-grouped usage as `xplanet.sh --help`: scene
+exploration, installation/maintenance, desktop control, data refresh, diagnostics,
+housekeeping/development, and unavailable commands. Detailed switches and the
+studio guide remain in the linked subcommand help. Both long
 reports use the existing any-key continuation; Ctrl-D exits and Ctrl-C interrupts
 with terminal restoration. Arrows reach both entries; 1–9 and h highlight, Enter
 activates. q remains the immediate exit shortcut. Limited terminals accept a numbered

@@ -269,9 +269,6 @@ manage_xplanet() {
                 "$script_dir/xplanet.sh" --help
                 result=$?
                 if (( result == 0 )); then
-                    print
-                    print -- 'Detailed commands: scripts/xplanet.sh diagnostics --help'
-                    print -- 'Scene studio: scripts/xplanet.sh config --help; config --guide prints the user guide.'
                     management_set_result info "Help displayed; no probe, setup or service action was run."
                 else
                     management_set_result error "Help exited $result."

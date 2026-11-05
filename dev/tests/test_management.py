@@ -825,6 +825,8 @@ class ManagementTests(Sandbox):
             before=self.snapshot();code,output=self.terminal('h\n',pause_key=b' ',after_pause='q\n')
             self.assertEqual(code,0,output);self.assertIn('Usage: scripts/xplanet.sh [COMMAND [OPTIONS]]',output)
             self.assertIn('diagnostics --help',output);self.assertIn('config --help',output);self.assertIn('config --guide',output)
+            for heading in ('Explore and configure', 'Control the desktop', 'Refresh data (Python TotalMarker)', 'Inspect and troubleshoot'):
+                self.assertIn(heading,output)
             self.assertIn('no probe, setup or service action was run',output)
             self.assertEqual(self.calls(),[]);self.assertEqual(before,self.snapshot())
 

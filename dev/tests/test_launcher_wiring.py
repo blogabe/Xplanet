@@ -1,6 +1,7 @@
 """Offline checks for launcher delegation before other providers exist."""
 import os
 import pty
+import re
 import select
 import subprocess
 
@@ -120,6 +121,29 @@ class LauncherWiringTests(Sandbox):
             [str(self.launcher), "--help"], cwd=self.base,
             text=True, capture_output=True, timeout=5)
         self.assertEqual(result.returncode, 0)
+        groups = {
+            "Explore and configure": ("config", "preview", "render"),
+            "Install and maintain": ("bootstrap", "install", "setup", "update"),
+            "Control the desktop": ("start", "stop", "restart", "earth"),
+            "Refresh data (Python TotalMarker)": ("clouds", "quake", "storm", "volcano", "norad", "eclipse", "label"),
+            "Inspect and troubleshoot": ("health", "diagnostics"),
+            "Housekeeping and development": ("log-trim", "test"),
+            "Unavailable": ("santa",),
+        }
+        headings = list(groups)
+        rows = re.findall(r"^  ([a-z][a-z-]*) {2,}", result.stdout, re.M)
+        self.assertEqual(rows, [command for commands in groups.values() for command in commands])
+        self.assertEqual(sorted(headings, key=result.stdout.index), headings)
+        for index, (heading, commands) in enumerate(groups.items()):
+            end = result.stdout.index(headings[index + 1]) if index + 1 < len(headings) else result.stdout.index("Detailed help:")
+            section = result.stdout[result.stdout.index(heading):end]
+            for command in commands:
+                row = "  " + command + " "
+                self.assertEqual(rows.count(command), 1)
+                self.assertIn(row, section)
+        self.assertLessEqual(max(map(len, result.stdout.splitlines())), 78)
+        self.assertIn("Stop ALL this user's Xplanet processes", result.stdout)
+        self.assertIn("alias: labels", result.stdout)
         for product in (*PRODUCTS, "start", "stop", "restart", "setup", "install", "update",
                         "--dry-run", "--check"):
             self.assertIn(product, result.stdout)

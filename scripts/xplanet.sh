@@ -49,55 +49,74 @@ usage() {
     cat <<'USAGE'
 Usage: scripts/xplanet.sh [COMMAND [OPTIONS]]
 
-With no command in an interactive terminal, open management.
+With no command, an interactive terminal opens management.
+Redirected input or output prints usage instead.
 
-  bootstrap  Clone into ~/.xplanet, then run install (Homebrew required)
-  install    Install Xplanet and Python, offer approval run, then run setup
-  config     Open the scene studio; --help, --guide, --prepare (isolated UI)
-  setup      Prompt for preparation, marker refresh and optional automation
-  update     Fast-forward Git, then check the blogabe Xplanet tap formula
+Explore and configure
+  config       Open the scene studio; save and selection are separate
+  preview      Render one 1920x1080 frame
+               Output: dev/preview/earth-manual.png
+  render       Render one frame at the configured size
+               Output: dev/preview/earth-render.png
 
-  start      Start the launchd-owned foreground Xplanet display
-  stop       Stop this user's Xplanet processes
-  restart    Stop and start Xplanet; start if it was not running
-  preview    Render one 1920x1080 Earth frame to dev/preview/earth-manual.png
-  render     Render one configured-size Earth frame to dev/preview/earth-render.png
+Install and maintain
+  bootstrap    Clone into ~/.xplanet, then run install (Homebrew required)
+  install      Install Xplanet and Python, offer approval run, then setup
+  setup        Prepare files, refresh markers and register optional automation
+  update       Fast-forward Git, then check the blogabe Xplanet tap formula
 
-  earth      Select the current month's configured Earth map link
-  clouds     Fetch the live cloud image through Python TotalMarker
-  quake      Fetch USGS GeoJSON through Python TotalMarker
-  volcano    Refresh volcano markers from configured CAP or GVP weekly HTML
-  storm      Fetch worldwide tropical-cyclone markers and tracks
-  label      Refresh product update labels without fetching (alias: labels)
-  log-trim   Trim recognized event logs older than 30 days; --dry-run, --days N
+Control the desktop
+  start        Start the launchd-owned foreground display
+  stop         Stop ALL this user's Xplanet processes
+               Includes finite renders
+  restart      Stop, wait for exit, then start one display
+  earth        Select the current month's configured Earth map link
+
+Refresh data (Python TotalMarker)
+  clouds       Fetch the live cloud image
+  quake        Fetch USGS earthquake GeoJSON
+  storm        Fetch worldwide tropical-cyclone markers and tracks
+  volcano      Refresh markers from configured CAP or GVP weekly HTML
+  norad        Update optional, explicitly selected NORAD satellite files
+  eclipse      Update optional NASA central eclipse markers and arcs
+  label        Refresh update labels without fetching (alias: labels)
+
+Inspect and troubleshoot
+  health       Read saved health; --live probes without updating outputs
+               --verbose shows details; --json returns structured results
   diagnostics  Capture selected renderer support; --show reads saved evidence
-               Optional --renderer /absolute/path/to/xplanet before setup
-  health     Read saved source health; --live probes without updating outputs
-             Use --verbose for details or --json for structured results
+               --renderer /absolute/path/to/xplanet works before setup
 
-  norad      Update optional, explicitly selected NORAD satellite files
-  eclipse    Update optional NASA central eclipse markers and arcs
+Housekeeping and development
+  log-trim     Trim recognized logs older than 30 days; --dry-run, --days N
+  test         Run the offline Python regression suite
 
-  santa      STUB: Santa foundation; Xplanet invocation-time on/off is pending
+Unavailable
+  santa        STUB: invocation-time Santa on/off is pending
 
-  test       Run the offline Python regression suite
+Detailed help: config --help, config --guide, setup --help, health --help,
+               diagnostics --help, log-trim --help
+Use config --prepare to prepare the isolated scene-studio UI environment.
 
-Install runs before the interactive setup and may request macOS security approvals.
-Update fetches only the current branch's configured upstream and refuses local
-tracked changes or untracked/ignored file collisions. It then updates Homebrew
-tap metadata and rebuilds Xplanet only when this tap's formula recipe changed.
-It runs no setup steps.
-Setup delegates to xp-setup.sh. Use setup --dry-run or setup --check to inspect;
-these modes inspect working-directory preparation only. setup --check-handoff DIR
-verifies a review-only scene bundle without preparing files or changing jobs. Without an option,
-setup prompts before preparation, live marker refresh and launchd activation.
-Setup installs no packages or virtual environment.
-Apply scene selection never restarts the display. No selector keeps legacy settings;
-invalid selected revisions fail instead of falling back.
-Start uses one desktop job without automatic respawn. Stop removes that job and
-stops ALL this user's Xplanet processes, including finite renders; restart
-waits for them to exit before starting one display. A formula reinstall restarts
-the display only if Xplanet was running before the rebuild.
+Workflow notes (macOS)
+  Install may request macOS security approvals. Setup installs no packages
+  or virtual environment; it delegates to xp-setup.sh and prompts before
+  file preparation, live marker refresh and launchd activation.
+  setup --dry-run and setup --check inspect directory preparation only.
+  setup --check-handoff DIR checks a scene bundle without preparing files
+  or changing jobs.
+
+  Update uses only the current branch's upstream. It refuses tracked changes
+  and untracked/ignored collisions, then updates Homebrew tap metadata. It
+  rebuilds only when this tap's formula recipe changes; no setup runs. A
+  formula reinstall restarts the display only if Xplanet was already
+  running.
+
+  Without a selector, start uses legacy settings. An invalid selected
+  revision fails instead of falling back. Apply never restarts; start uses
+  one job with no automatic respawn. Stop removes it and stops ALL this
+  user's Xplanet processes. Restart waits for exit before starting one
+  display.
 USAGE
 }
 
