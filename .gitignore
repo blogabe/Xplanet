@@ -44,19 +44,6 @@
 !/scripts/run-configurator
 !/scripts/configurator/
 !/scripts/configurator/**
-!/docs/configurator.md
-!/docs/configurator-architecture.md
-!/docs/configurator-roadmap.md
-!/docs/configurator-cloud-capture.md
-!/docs/configurator-observations.md
-!/docs/configurator-import.md
-!/docs/configurator-native-values.md
-!/docs/configurator-planetary.md
-!/docs/configurator-systems.md
-!/docs/configurator-orbits.md
-!/docs/configurator-apply-design.md
-!/dev/configurator-tests/
-!/dev/configurator-tests/**
 
 **/__pycache__/
 *.py[cod]
@@ -68,14 +55,10 @@
 /dev/tests/.tmp/
 /dev/tests/.tmp/**
 
-/dev/configurator-tests/.tmp/
-/dev/configurator-tests/.tmp/**
-!/docs/configurator-diagnostics.md
-!/docs/configurator-stock-scenes.md
-!/docs/configurator-orbital-camera.md
-!/docs/configurator-recovery.md
-!/docs/configurator-comparisons.md
+!/docs/configurator/
+!/docs/configurator/*.md
+!/docs/configurator.md
 !/docs/configurator-user-guide.md
-!/docs/configurator-export.md
-!/docs/configurator-exchange.md
-!/docs/configurator-astronomy-capture.md
+
+/dev/tests/**/.tmp/
+/dev/tests/**/.tmp/**

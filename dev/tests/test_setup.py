@@ -15,6 +15,35 @@ from .support import PROJECT, Sandbox, wait_for_prompt, copy_launcher, stub_laun
 
 
 class SetupTests(Sandbox):
+    def test_help_returns_before_configuration_prerequisites_or_actions(self):
+        scripts, env, products = self._shell_fixture()
+        guard = self.base / "help-must-not-execute"
+        (self.root / "mock-xplanet").unlink()
+        (self.root / "config/xp.def").write_text("print unexpected > " + shlex.quote(str(guard)) + "\n")
+        runner = scripts / "run-totalmarker"
+        runner.write_text("#!/bin/sh\nprintf unexpected > " + shlex.quote(str(guard)) + "\nexit 97\n")
+        runner.chmod(0o700)
+        before = {str(p.relative_to(self.root)): p.read_bytes()
+                  for p in self.root.rglob('*') if p.is_file()}
+        for command in ([str(scripts / "xp-setup.sh"), "--help"],
+                        [str(scripts / "xp-setup.sh"), "-h"],
+                        [str(scripts / "xplanet.sh"), "setup", "--help"]):
+            result = subprocess.run(command, env=env, input='', text=True,
+                                    capture_output=True, timeout=5)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            for text in ("Usage:", "--dry-run", "--check", "--check-handoff",
+                         "1 preparation needed", "3 cancelled/stopped"):
+                self.assertIn(text, result.stdout)
+            self.assertFalse(guard.exists())
+            self.assertFalse(products.exists())
+            self.assertEqual(before, {str(p.relative_to(self.root)): p.read_bytes()
+                                     for p in self.root.rglob('*') if p.is_file()})
+        invalid = subprocess.run([str(scripts / "xp-setup.sh"), "--help", "--check"],
+                                 env=env, input='', text=True, capture_output=True)
+        self.assertEqual(invalid.returncode, 2)
+        self.assertIn("takes no other arguments", invalid.stderr)
+        self.assertFalse(guard.exists())
+
     def test_public_stock_templates_prepare_without_private_maps(self):
         scripts, env, _ = self._shell_fixture()
         shutil.rmtree(self.root / "assets")
@@ -114,6 +143,61 @@ class SetupTests(Sandbox):
         self.assertFalse(products.exists())
         self.assertEqual(self._inspect(scripts, env, "--check").returncode, 0)
         self.assertEqual(self._inspect(scripts, env, input="y\nq\n").returncode, 3)
+
+    def test_bathymetry_asset_does_not_change_monthly_or_bump_links(self):
+        scripts, env, _ = self._shell_fixture()
+        bathymetry = self.root / "assets/maps/bathymetry/gebco_bathy.21601x10801.jpg"
+        bathymetry.parent.mkdir()
+        bathymetry.write_bytes(b"bathymetry")
+        definition = self.root / "config/xp.def"
+        definition.write_text(definition.read_text().replace(
+            "EARTH_MAP_PRE=world/world", "EARTH_MAP_PRE=world.topo.bathy/world.topo.bathy"))
+        maps = self.root / "assets/maps/world.topo.bathy"
+        maps.mkdir()
+        for month in range(1, 13):
+            (maps / f"world.topo.bathy.2004{month:02d}.3x5400x2700.png").write_bytes(b"monthly")
+        done = self._inspect(scripts, env, input="y\nq\n")
+        self.assertEqual(done.returncode, 3, done.stderr)
+        earth = (self.root / "images/earth.png").readlink()
+        self.assertEqual(earth.parent, Path("../assets/maps/world.topo.bathy"))
+        self.assertRegex(earth.name, r"^world\.topo\.bathy\.2004[01][0-9]\.3x5400x2700\.png$")
+        self.assertEqual((self.root / "images/bump.png").readlink(),
+                         Path("../assets/maps/bump/gebco_08_rev_elev_21600x10800.png"))
+        self.assertEqual({p.name for p in (self.root / "images").iterdir()},
+                         {"earth.png", "lights.tiff", "bump.png", "specular.png"})
+        self.assertEqual(self._inspect(scripts, env, "--check").returncode, 0)
+        self.assertEqual(bathymetry.read_bytes(), b"bathymetry")
+
+    def test_setup_preserves_custom_image_files_and_internal_links(self):
+        scripts, env, _ = self._shell_fixture()
+        images = self.root / "images"
+        images.mkdir()
+        bump = images / "bump.png"
+        bump.write_bytes(b"personal bump")
+        custom = self.root / "assets/maps/bathymetry/gebco_bathy.21601x10801.jpg"
+        custom.parent.mkdir()
+        custom.write_bytes(b"custom map")
+        earth = images / "earth.png"
+        earth.symlink_to("../assets/maps/bathymetry/gebco_bathy.21601x10801.jpg")
+        done = self._inspect(scripts, env, input="y\nq\n")
+        self.assertEqual(done.returncode, 3, done.stderr)
+        self.assertEqual(bump.read_bytes(), b"personal bump")
+        self.assertFalse(bump.is_symlink())
+        self.assertEqual(earth.readlink(), Path("../assets/maps/bathymetry/gebco_bathy.21601x10801.jpg"))
+        self.assertEqual(self._inspect(scripts, env, "--check").returncode, 0)
+
+    def test_missing_custom_old_bathymetry_link_is_refused_without_rewriting(self):
+        scripts, env, products = self._shell_fixture()
+        images = self.root / "images"
+        images.mkdir()
+        earth = images / "earth.png"
+        target = Path("../assets/maps/other/gebco_bathy.21601x10801.jpg")
+        earth.symlink_to(target)
+        result = self._inspect(scripts, env, input="y\nq\n")
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertEqual(earth.readlink(), target)
+        self.assertFalse((self.root / "arcs").exists())
+        self.assertFalse(products.exists())
 
     def test_fresh_config_bootstrap_waits_for_confirmation_and_is_repeatable(self):
         spaced = self.base / "fresh root with spaces"

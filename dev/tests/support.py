@@ -13,7 +13,6 @@ from totalmarker.http import Fetcher, Response
 from totalmarker.paths import RootFS
 
 PROJECT = Path(__file__).resolve().parents[2]
-TEMP = PROJECT / "dev" / "tests" / ".tmp"
 
 
 def copy_launcher(destination):
@@ -80,10 +79,9 @@ def image_response(comment=None, **headers):
 
 class Sandbox(unittest.TestCase):
     def setUp(self):
-        TEMP.mkdir(exist_ok=True)
-        self.directory = tempfile.TemporaryDirectory(dir=TEMP)
+        self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
-        self.base = Path(self.directory.name)
+        self.base = Path(self.directory.name).resolve()
         self.root = self.base / "sandbox"
         self.root.mkdir()
         self.fs = RootFS(self.root)

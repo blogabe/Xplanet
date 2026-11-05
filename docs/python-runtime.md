@@ -2,7 +2,7 @@
 
 TotalMarker needs Python 3.11+ and only the standard library. Python is used for
 TotalMarker data work, never desktop lifecycle or management orchestration.
-The separate [configurator](configurator.md) explicitly prepares its own isolated
+The separate [configurator](configurator/reference.md) explicitly prepares its own isolated
 Textual environment; it does not add dependencies to TotalMarker or this interpreter.
 
 Initial interactive installation/setup offers a Python choice. Later, management's

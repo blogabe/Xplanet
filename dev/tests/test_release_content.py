@@ -1,5 +1,6 @@
 """Guard the private development checkout's current public-file boundary."""
 import re
+import os
 import subprocess
 import tomllib
 import unittest
@@ -30,8 +31,10 @@ class ReleaseContentTests(unittest.TestCase):
 
     def test_index_excludes_personal_runtime_and_recovery_content(self):
         names = []
+        from dev.release import build_candidate as release
         for mode, name in self.tracked():
             names.append(name)
+            self.assertFalse(release.private_source_path(name), name)
             self.assertNotEqual(mode, "120000", f"tracked symlink: {name}")
             parts = name.split("/")
             self.assertFalse({".git", ".state", "__pycache__"} & set(parts), name)
@@ -43,7 +46,7 @@ class ReleaseContentTests(unittest.TestCase):
             if name.startswith("scripts/launchd/"):
                 self.assertTrue(name.endswith(".plist.example"), name)
             if name.startswith("dev/"):
-                self.assertTrue(name.startswith(("dev/tests/", "dev/configurator-tests/", "dev/examples/", "dev/release/")), name)
+                self.assertTrue(name.startswith(("dev/tests/", "dev/examples/", "dev/release/")), name)
                 self.assertNotIn(".tmp", parts, name)
             if name.startswith("assets/"):
                 self.assertFalse(any(part in {".DS_Store", "__MACOSX", "Thumbs.db",
@@ -63,6 +66,59 @@ class ReleaseContentTests(unittest.TestCase):
         self.assertFalse(any(name.startswith("dev/examples/") and name.endswith(".ini")
                              for name in names))
 
+    def test_exporter_rejects_private_names_inside_allowed_source_directories(self):
+        from dev.release import build_candidate as release
+        unsafe = (
+            "dev/tests/.tmp/capture.json", "dev/tests/configurator/.tmp/session.json",
+            "dev/tests/configurator/ui/.tmp/session.json", "dev/tests/.state/state.json",
+            "dev/tests/.cache/token.json", "dev/tests/__pycache__/module.pyc",
+            "dev/tests/.git/config", "dev/tests/.GiT/config", "dev/tests/.DS_Store",
+            "dev/tests/._fixture.json", "dev/tests/.env", "dev/tests/.env.local",
+            "dev/tests/.env-data/token.json", "dev/tests/result.log", "dev/tests/private.key",
+            "dev/tests/private.pem", "dev/tests/private.ini", "dev/tests/module.pyc",
+            "dev/tests/module.pyo", "dev/tests/module.pyd",
+        )
+        for name in unsafe:
+            with self.subTest(name=name), self.assertRaisesRegex(RuntimeError, "unsafe source entry"):
+                release.check_source_paths({name: "100644 blob " + "0" * 40})
+        safe = (
+            "config/totalmarker.example.toml", "dev/examples/custom.example.toml",
+            "dev/tests/fixtures/example.toml", "dev/tests/fixtures/example.json",
+            "dev/tests/fixtures/cache/response.json", "dev/tests/test_log_trim.py",
+            "scripts/launchd/local.xplanet.start.plist.example", ".gitignore",
+            ".gitattributes", ".github/workflows/offline-tests.yml",
+        )
+        for name in safe:
+            with self.subTest(name=name):
+                release.check_source_paths({name: "100644 blob " + "0" * 40})
+
+    def test_force_tracked_private_fixture_is_rejected_before_candidate_staging(self):
+        from dev.release import build_candidate as release
+        for name in ("dev/tests/.env.local", "dev/tests/configurator/ui/.tmp/capture.json"):
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory).resolve()
+                private = root / name
+                private.parent.mkdir(parents=True)
+                private.write_text("private fixture sentinel")
+                environment = {**os.environ, "GIT_CONFIG_GLOBAL": os.devnull,
+                               "GIT_CONFIG_NOSYSTEM": "1"}
+                def git(*args):
+                    return subprocess.run(("git", "-C", str(root), *args), env=environment,
+                                          check=True, capture_output=True)
+                git("init", "-q", "--template=", "-b", "main")
+                git("add", "-f", "--", name)
+                git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
+                    "-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null",
+                    "commit", "-q", "-m", "private fixture")
+                staging = root / "dev/release-staging"
+                with patch.object(release, "ROOT", root), \
+                     patch.object(release, "STAGING", staging), \
+                     patch.object(release, "OUTPUT", staging / "candidate-next"):
+                    with self.assertRaisesRegex(RuntimeError, "unsafe source entry"):
+                        release.build()
+                self.assertFalse(staging.exists())
+                self.assertEqual(private.read_text(), "private fixture sentinel")
+
     def test_personal_paths_are_ignored_even_if_files_exist(self):
         private = (
             "config/totalmarker.toml", "config/xp.def", "config/xp.conf",
@@ -71,7 +127,7 @@ class ReleaseContentTests(unittest.TestCase):
             "dev/configurator-foundation-20261102/verification.md",
             "scripts/configurator/__pycache__/module.pyc",
             "scripts/configurator/.env.local", "scripts/configurator/private.key",
-            "dev/configurator-tests/.tmp/capture", "dev/configurator-tests/result.log",
+            "dev/tests/configurator/ui/.tmp/capture", "dev/tests/configurator/ui/result.log",
             "dev/reference/private/file",
             "dev/recovery/archive", "dev/validation/frame.png",
             "dev/todel/snapshot", "dev/preview/earth-render.png",

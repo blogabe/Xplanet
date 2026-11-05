@@ -94,7 +94,7 @@ Setup validates on-disk plists with plutil and leaves registered labels alone.
 Loaded settings are explicitly unverified; presence is not configuration equality.
 Python remains behind run-totalmarker for data commands, not desktop lifecycle.
 Product-specific validation and setup remain explicit; no provider plugin framework,
-configuration migration is added. The separate [configurator](configurator-architecture.md)
+configuration migration is added. The separate [configurator](configurator/architecture.md)
 uses Python/Textual as an explicit UI boundary; lifecycle remains zsh. Interpreter selection delegates provisioning
 to Homebrew/uv without owning package or machine migration; see
 [Python runtime](python-runtime.md).
@@ -112,7 +112,7 @@ Renderer support evidence is an explicit stdlib diagnostic implemented in the
 configurator module and dispatched by zsh. It shares the strict capability parser
 and owned-process cleanup with scene diagnostics; the private cache is historical
 evidence only. Management reads a bounded summary without Python or executable
-probes; lifecycle never imports this code. See [diagnostic boundaries](configurator-diagnostics.md#renderer-support-outside-the-studio).
+probes; lifecycle never imports this code. See [diagnostic boundaries](configurator/diagnostics.md#renderer-support-outside-the-studio).
 
 `lib/xplanet/lifecycle.zsh` supplies a per-user native advisory lock for the public
 Start/Stop/Restart operations. The foreground renderer does not hold it; Restart

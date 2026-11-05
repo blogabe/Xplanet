@@ -19,14 +19,14 @@ case "${1:-}" in
             'Prepare explicitly downloads pinned Textual dependencies into an isolated project venv.' \
             'Open a stock/saved scene; preview, save a new copy, or keep a private recovery draft.' \
             'In the editor: Help / F1. Full manual: scripts/xplanet.sh config --guide' \
-            'Guide: docs/configurator-user-guide.md; detailed reference: docs/configurator.md' \
+            'Guide: docs/configurator/user-guide.md; detailed reference: docs/configurator/reference.md' \
             'Ctrl-C cancels active work first; Ctrl-D/Ctrl-Q requests a protected exit.'
         exit 0 ;;
     --guide)
         [ "$#" -eq 1 ] || { printf '%s\n' '--guide takes no other options' >&2; exit 2; }
-        guide="$project_root/docs/configurator-user-guide.md"
-        if [ -L "$project_root/docs" ] || [ -L "$guide" ] || [ ! -f "$guide" ]; then
-            printf '%s\n' 'Scene studio guide unavailable; restore docs/configurator-user-guide.md from the complete checkout.' >&2
+        guide="$project_root/docs/configurator/user-guide.md"
+        if [ -L "$project_root/docs" ] || [ -L "$project_root/docs/configurator" ] || [ -L "$guide" ] || [ ! -f "$guide" ]; then
+            printf '%s\n' 'Scene studio guide unavailable; restore docs/configurator/user-guide.md from the complete checkout.' >&2
             exit 2
         fi
         /bin/cat "$guide"

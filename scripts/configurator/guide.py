@@ -2,11 +2,13 @@
 import os,stat
 from pathlib import Path
 
-GUIDE=Path(__file__).resolve().parents[2]/'docs/configurator-user-guide.md'
+GUIDE=Path(__file__).resolve().parents[2]/'docs/configurator/user-guide.md'
 LIMIT=128*1024
 
 def read_guide():
-    if GUIDE.parent!=GUIDE.parent.resolve():raise ValueError('Guide directory is linked; restore the complete checkout.')
+    try:parent=GUIDE.parent.resolve()
+    except (OSError,RuntimeError) as exc:raise ValueError('Guide directory is unavailable; restore the complete checkout.') from exc
+    if GUIDE.parent!=parent:raise ValueError('Guide directory is linked; restore the complete checkout.')
     fd=os.open(GUIDE,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
     with os.fdopen(fd,'rb') as stream:
         before=os.fstat(stream.fileno())

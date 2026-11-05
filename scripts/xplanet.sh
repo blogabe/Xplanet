@@ -54,9 +54,9 @@ Redirected input or output prints usage instead.
 
 Explore and configure
   config       Open the scene studio; save and selection are separate
-  preview      Render one 1920x1080 frame
+  preview      Render one legacy Earth frame at 1920x1080
                Output: dev/preview/earth-manual.png
-  render       Render one frame at the configured size
+  render       Render one legacy Earth frame at the configured size
                Output: dev/preview/earth-render.png
 
 Install and maintain

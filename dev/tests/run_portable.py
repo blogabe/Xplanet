@@ -1,26 +1,28 @@
-"""Run data/publication tests without claiming macOS workflow coverage.
-
-The normal xplanet.sh test command remains the full supported macOS suite.
-This explicit boundary is for hosts without zsh, launchd, plutil or Homebrew.
-"""
-from pathlib import Path
-import unittest
+"""Portable data/publication subset; no macOS or Textual coverage claim."""
+from .run_core import suite as core_suite,run
 
 MACOS_MODULES = {
-    'test_lifecycle_race', 'test_management', 'test_bootstrap', 'test_health_launcher', 'test_launchd_examples',
-    'test_launchd_setup', 'test_launcher_install', 'test_launcher_render',
-    'test_launcher_update', 'test_launcher_wiring', 'test_monthly_map',
-    'test_handoff_shell', 'test_scene_desktop', 'test_python_runtime', 'test_python_provider', 'test_setup', 'test_shell_boundaries',
+    'tests.configurator.test_handoff_shell',
+    'tests.configurator.test_scene_desktop',
+    'tests.test_bootstrap',
+    'tests.test_health_launcher',
+    'tests.test_launchd_examples',
+    'tests.test_launchd_setup',
+    'tests.test_launcher_install',
+    'tests.test_launcher_render',
+    'tests.test_launcher_update',
+    'tests.test_launcher_wiring',
+    'tests.test_lifecycle_race',
+    'tests.test_management',
+    'tests.test_monthly_map',
+    'tests.test_python_provider',
+    'tests.test_python_runtime',
+    'tests.test_setup',
+    'tests.test_shell_boundaries',
 }
 
-
 def suite():
-    loader = unittest.TestLoader()
-    names = [path.stem for path in sorted(Path(__file__).parent.glob('test_*.py'))
-             if path.stem not in MACOS_MODULES]
-    return loader.loadTestsFromNames(['tests.' + name for name in names])
-
+    return core_suite(exclude=MACOS_MODULES)
 
 if __name__ == '__main__':
-    result = unittest.TextTestRunner(verbosity=2).run(suite())
-    raise SystemExit(not result.wasSuccessful())
+    raise SystemExit(not run(suite))

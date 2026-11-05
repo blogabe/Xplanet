@@ -16,7 +16,7 @@ class StudioHelp(ModalScreen):
         with VerticalScroll(id='studio-help-scroll'):
             yield Static('Scene studio help · F1 / Escape returns · scroll to read')
             try:text=read_guide()
-            except (OSError,ValueError,UnicodeError) as exc:text='# Help unavailable\n\n'+safe(exc)+'\n\nRestore docs/configurator-user-guide.md from the complete checkout. No state changed.'
+            except (OSError,ValueError,UnicodeError) as exc:text='# Help unavailable\n\n'+safe(exc)+'\n\nRestore docs/configurator/user-guide.md from the complete checkout. No state changed.'
             yield Markdown(text,id='studio-help-text',open_links=False)
             yield Static('Related links name files in docs; help does not launch a browser. CLI: scripts/xplanet.sh config --guide',id='studio-help-link',markup=False)
             yield Button('Back to previous screen',id='studio-help-back')

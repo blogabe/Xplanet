@@ -25,7 +25,7 @@ def report_result(result):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Explore Earth, planets and supported moons; save native files without automatic activation.',epilog='In-app Help: F1. Full manual: --guide or scripts/xplanet.sh config --guide. See docs/configurator-user-guide.md.')
+    parser = argparse.ArgumentParser(description='Explore Earth, planets and supported moons; save native files without automatic activation.',epilog='In-app Help: F1. Full manual: --guide or scripts/xplanet.sh config --guide. See docs/configurator/user-guide.md.')
     parser.add_argument('--guide',action='store_true',help='Print the bundled user guide without opening the UI')
     parser.add_argument('--root', type=Path, default=Path(__file__).resolve().parents[2])
     parser.add_argument('--renderer', default=shutil.which('xplanet') or '')

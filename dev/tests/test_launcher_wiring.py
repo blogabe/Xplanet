@@ -80,7 +80,7 @@ class LauncherWiringTests(Sandbox):
         trace = self.base / "setup-trace.txt"
         environment = {**os.environ, "TM_SETUP_TRACE": str(trace),
                        "TM_SETUP_EXIT": "37"}
-        for command, options in (("setup", ()), ("setup", ("--dry-run",))):
+        for command, options in (("setup", ()), ("setup", ("--dry-run",)), ("setup", ("--help",))):
             with self.subTest(command=command, options=options):
                 trace.unlink(missing_ok=True)
                 result = subprocess.run(
@@ -144,6 +144,7 @@ class LauncherWiringTests(Sandbox):
         self.assertLessEqual(max(map(len, result.stdout.splitlines())), 78)
         self.assertIn("Stop ALL this user's Xplanet processes", result.stdout)
         self.assertIn("alias: labels", result.stdout)
+        self.assertIn("legacy Earth frame", result.stdout)
         for product in (*PRODUCTS, "start", "stop", "restart", "setup", "install", "update",
                         "--dry-run", "--check"):
             self.assertIn(product, result.stdout)

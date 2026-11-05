@@ -1,19 +1,25 @@
-# Xplanet and TotalMarker
+# Xplanet for macOS
 
-Explore Earth and planetary scenes in the terminal configurator, preview with Xplanet,
-compare framing, recover editing drafts, and save named scenes without changing your desktop. Explicitly review and select
-a scene for the next start/restart, or keep the original desktop configuration.
-See the [studio user guide](docs/configurator-user-guide.md) and [stock scenes](docs/configurator-stock-scenes.md).
+[Xplanet](https://xplanet.sourceforge.net/) renders Earth, other planets and moons.
+This project brings its maps, scene configuration, current-data overlays and
+macOS desktop automation together. Xplanet is required for previews and the desktop.
 
-Python 3.11+ runs TotalMarker, which downloads
-cloud imagery and generates earthquake, volcano and storm markers, storm arcs, and
-update labels for Xplanet. Optional launchd jobs start the display and schedule
-refreshes. NORAD satellites and central eclipse paths are available but disabled
-by default; Santa is a disabled stub.
+The [configurator](docs/configurator/user-guide.md) lets you explore and preview
+scenes, save native configurations and explicitly select a scene for the next
+start/restart. See the [stock scenes](docs/configurator/stock-scenes.md).
+
+TotalMarker downloads cloud imagery and generates earthquake, volcano and storm
+markers, storm tracks and update labels. Optional NORAD satellite and central
+eclipse products are disabled by default; Santa remains a disabled stub.
+
+`xplanet.sh` manages installation, setup, updates and desktop control; optional
+launchd jobs start the display and schedule refreshes. Both the configurator and
+TotalMarker require Python 3.11+. The configurator's UI dependencies are isolated;
+TotalMarker uses only the Python standard library.
 
 [Xplanet](https://xplanet.sourceforge.net/) is by Hari Nair. Michael Dear wrote
 and maintained the original Perl TotalMarker, which inspired this Python version;
-see the [original marker-file notes](https://blog.rajab.us/xplanet/markerfiles/).
+see [credits and third-party terms](docs/asset-credits.md).
 
 ## Install on macOS
 
@@ -54,10 +60,8 @@ bump and specular textures. For example, select the included `world.topo` set wi
 month's map. When enabled, the `earth-map` launchd job runs that selection on the
 first day of each month.
 
-The [original map notes](https://blog.rajab.us/xplanet/maps/) describe NASA
-imagery, a preference for 1994–95 night lights because the Nile and Trans-Siberian
-corridor showed more clearly, and a specular map assembled from Celestia
-Motherlode tiles.
+See [asset credits and source records](docs/asset-credits.md) for map provenance
+and third-party terms.
 
 TotalMarker settings live in `config/totalmarker.toml`. `[cloud]` selects a Xeric
 or custom HTTPS image source and its credentials; `[quake]` selects a USGS feed
@@ -72,7 +76,7 @@ shell environment.
 Run `./scripts/xplanet.sh --help` for the current command list. Commands work from
 any directory. Bare `./scripts/xplanet.sh` opens [terminal management](docs/management.md);
 `config` opens the separate scene studio: reopen a saved view, preview,
-save a new copy or cancel; explicitly select a reviewed scene separately from restart. See [Configurator](docs/configurator.md)
+save a new copy or cancel; explicitly select a reviewed scene separately from restart. See [Configurator](docs/configurator/README.md)
 for its explicit isolated-runtime preparation and current limits. Management also offers
 [TotalMarker interpreter selection](docs/python-runtime.md): Homebrew is recommended,
 with uv-managed Python available as an explicit choice.
@@ -85,7 +89,7 @@ with uv-managed Python available as an explicit choice.
 | `config [--prepare]` | Open the scene studio; explicitly prepare its isolated UI if needed |
 | `update` | Fast-forward Git, then reinstall Xplanet if the tap formula changed |
 | `start` / `stop` / `restart` | Start, stop, or restart the desktop display |
-| `preview` / `render` | Save one frame under `dev/preview/` |
+| `preview` / `render` | Render the legacy Earth configuration under `dev/preview/` |
 | `earth` | Select the current seasonal Earth map |
 | `clouds`, `quake`, `storm`, `volcano` | Refresh that product and its labels |
 | `label` | Refresh update labels without fetching a product |

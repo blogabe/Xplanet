@@ -99,7 +99,7 @@ launcher's interpreter selection. No global `PATH` change is required.
 For renderer build/support troubleshooting, run `./scripts/xplanet.sh diagnostics`
 explicitly, or choose an absolute `--renderer` before setup. This records bounded
 self-reported capabilities, not original compiler flags; setup/start do not probe
-automatically. See [support evidence and limits](configurator-diagnostics.md#renderer-support-outside-the-studio).
+automatically. See [support evidence and limits](configurator/diagnostics.md#renderer-support-outside-the-studio).
 
 ## Setup checks and testing
 

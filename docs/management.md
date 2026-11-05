@@ -25,18 +25,18 @@ and the optional start offer, new/partial flows acknowledge the summary and exit
 return to management. macOS may require approval for an installed renderer;
 review such prompts yourself.
 
-`config` opens the [scene configurator](configurator.md). It previews temporarily
+`config` opens the [scene configurator](configurator/reference.md). It previews temporarily
 and saves new native scenes. Explicit reviewed Apply can select an immutable
 revision separately from saving and restart; it never changes the running display
 or schedules. Completed saves/selections persist when the editor closes. Its
 Textual dependencies require explicit isolated preparation. Deliberate configurator
 interruptions are reported as interruptions, preserving completed saves/selections;
 they are not presented as rollback or command failure. See the [studio exit and
-recovery contract](configurator-recovery.md). Missing prerequisites
+recovery contract](configurator/recovery.md). Missing prerequisites
 leave management usable.
 
 Management retains installation, plist generation/registration and lifecycle.
-Configurator selection uses the [guarded scene handoff](configurator-apply-design.md);
+Configurator selection uses the [guarded scene handoff](configurator/apply-design.md);
 it is not another installer.
 
 Setup's apply-mode exit status is explicit: **0 completed**, **3 cancelled or
@@ -127,11 +127,16 @@ and setup retain their documented exit statuses.
 
 ## Desktop commands
 
+`setup --help` lists setup modes without inspecting configuration or prerequisites.
+
+
 With no scene selector, `start` uses `XPLANET_GEOMETRY` from `xp.def` when nonempty;
 otherwise Xplanet sizes the desktop automatically. A selected revision uses its
 reviewed explicit geometry and scene arguments; invalid selection fails clearly.
 The legacy `render` command saves a frame at the configured
-dimensions, while `preview` uses a fixed 1920×1080 size. `stop` signals
+dimensions, while `preview` uses a fixed 1920×1080 size. Both render the legacy
+Earth configuration, not a selected studio revision or unsaved draft. Use Preview
+in the configurator for a studio scene. `stop` signals
 ALL of this user's Xplanet processes, including finite renders and other checkouts,
 and succeeds when none is running. It first removes the managed desktop job.
 `restart` performs that same broad stop, then starts one display. Legacy `start`
@@ -156,7 +161,7 @@ the normal Xplanet binary name for those older manual launches.
 For suspected build/support problems, use `scripts/xplanet.sh diagnostics` explicitly;
 `diagnostics --show` reads the last evidence without running Xplanet. Before setup,
 `diagnostics --renderer /absolute/path/to/xplanet` inspects a deliberate local choice.
-See [renderer support evidence and limits](configurator-diagnostics.md#renderer-support-outside-the-studio).
+See [renderer support evidence and limits](configurator/diagnostics.md#renderer-support-outside-the-studio).
 Management's binary line is historical evidence, not a current/running build check.
 Setup and normal start do not automatically run this diagnostic. Saved TotalMarker
 health describes data sources, not compiled renderer capabilities.

@@ -5,6 +5,32 @@ umask 077
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
 project_root=$(CDPATH= cd -- "$script_dir/.." && pwd -P)
 
+# Help must return before definitions, prerequisites or preparation are inspected.
+if [[ "${1:-}" == --help || "${1:-}" == -h ]]; then
+    (( $# == 1 )) || { print -u2 -- 'xp-setup.sh: --help takes no other arguments'; exit 2; }
+    cat <<'USAGE'
+Usage: scripts/xplanet.sh setup [--help | --dry-run | --check]
+       scripts/xplanet.sh setup --check-handoff DIRECTORY
+
+With no option, prompt before preparing files, live data refresh and optional
+launchd registration. Xplanet and Python 3.11+ must already be available.
+Setup installs no packages or virtual environment. Existing personal settings
+are retained unless you approve a proposed change.
+Existing launchd registrations are left alone; registration may start Xplanet.
+
+  --help, -h          Show help before configuration/prerequisite inspection
+  --dry-run          Describe directory/file/link preparation without writing
+  --check            Check that preparation; 0 ready, 1 preparation needed
+  --check-handoff DIR Verify a scene review bundle without preparation or jobs
+
+Preparation checks do not establish provider access or live launchd readiness.
+Apply-mode exit codes: 0 completed, 1 failed core steps, 2 invalid/unsafe input
+or ended input, 3 cancelled/stopped. Cancellation after preparation retains it.
+Scene selection and desktop restart are separate explicit operations.
+USAGE
+    exit 0
+fi
+
 # Read-only handoff verification returns before any legacy definition or setup work.
 if [[ "${1:-}" == --check-handoff ]]; then
     (( $# == 2 )) || { print -u2 -- 'xp-setup.sh: --check-handoff requires one directory'; exit 2; }

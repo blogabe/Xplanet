@@ -5,7 +5,7 @@ renderer_diagnostics() (
         (( $# == 1 )) || fail "diagnostics --help takes no other arguments"
         print -- 'Usage: scripts/xplanet.sh diagnostics [--renderer /absolute/path/to/xplanet] [--show]'
         print -- 'Capture bounded version/support evidence explicitly; --show reads prior evidence only.'
-        print -- 'No renderer or Python is invoked by this help. See docs/configurator-diagnostics.md.'
+        print -- 'No renderer or Python is invoked by this help. See docs/configurator/diagnostics.md.'
         return 0
     fi
     while (( $# )); do
