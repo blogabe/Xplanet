@@ -99,7 +99,7 @@ class RuntimePathIntegrationTests(RuntimeFixture):
         self.assertFalse(image.is_symlink())
         self.assertEqual(image.read_bytes(), jpeg(width=4096))
         label = self.root / "markers/updatelabel"
-        self.assertIn('-53 -12 "Cloud Map Last Updated', label.read_text())
+        self.assertIn('-53 -13 "Cloud Map Last Updated', label.read_text())
         before_label = label.read_bytes()
         labels = self.command([
             "-m", "totalmarker", "--root", str(self.root),

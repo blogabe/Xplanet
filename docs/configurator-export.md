@@ -1,6 +1,6 @@
 # Durable render exports
 
-**Export latest…** copies the retained successful preview; **Export framing sheet…**
+**Export latest…** copies the retained successful preview; **Export comparison sheet…**
 copies the latest complete three-frame set. Neither rerenders. They work with the
 recorded snapshot even after the draft changes: read the scene/time shown in the
 confirmation rather than assuming the image matches today's editor fields.
@@ -22,7 +22,7 @@ links, escaped captions and no scripts/external resources. Keep the directory's
 files together; open index.html explicitly in a browser if desired.
 
 Image bytes are copied exactly and bind to retained file identity; changed or missing
-source images fail safely. Sheet frame hashes and reviewed framing values must also
+source images fail safely. Sheet frame hashes and reviewed comparison parameter values must also
 match. An ordinary preview is limited to 64 MiB for export; sheet frames remain
 16 MiB each. Header geometry is checked, but this is not a complete PNG decoder or
 scientific/resource certification. Scene geometry time is not an imagery epoch.

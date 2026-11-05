@@ -41,7 +41,7 @@ class SharedLabelRefreshTests(Sandbox):
                          "unchanged")
         expected = old.replace("Infomation", "Information").replace("color=Red", "color=Green")
         expected = expected.replace("UNKNOWN", legacy_time(NOW))
-        expected += ('-98 -12 "Cloud Map Last Updated UNKNOWN" '
+        expected += ('-98 -13 "Cloud Map Last Updated UNKNOWN" '
                      'color=Red image=none position=pixel\n')
         self.assertEqual(self.fs.read(settings.labels).decode(), expected)
         run_clouds(self.fs, settings, label_only=True, now=NOW)

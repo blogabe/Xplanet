@@ -579,3 +579,12 @@ first comparison slice.
 [Private draft recovery](configurator-recovery.md) adds debounced, bounded checkpoints
 and explicit inspection/recovery, with separate namespaces for concurrent editors.
 It is editing continuity, not another runtime configuration or Apply mechanism.
+
+## Frozen astronomy
+
+[Existing NORAD and eclipse captures](configurator-astronomy-capture.md) are separate
+from weather observations. NORAD is Earth/Now preview-only; eclipse display uses
+Fixed UTC within validated event sample coverage. Captures, choices and provenance
+survive save/reopen and recovery, including when inactive. No source refresh occurs.
+Active NORAD cannot be handed off to the desktop; static eclipse handoff remains
+reviewed and explicit.

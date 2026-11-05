@@ -11,6 +11,7 @@ import fcntl,hashlib,json,math,os,re,stat,time,uuid
 from pathlib import Path
 from .cloud_capture import FrozenCloud,IMAGE_FILE,META_FILE
 from .observation_capture import FrozenObservations,META_FILE as OBS_META
+from .astronomy_capture import FrozenAstronomy,FILES as ASTRONOMY_FILES,payload_names as astronomy_payload_names
 from .fileio import OwnedFiles,fingerprint,same_directory
 from .model import View,NUMERIC_FIELDS,choice_rules,recognized_body
 
@@ -20,6 +21,8 @@ BUDGET=256*1024*1024
 ENTRY_LIMIT=4096
 SESSION=re.compile('[0-9a-f]{32}')
 SHA=re.compile('[0-9a-f]{64}')
+ASTRONOMY_FIELDS={'norad_layer','norad_id','eclipse_layer','eclipse_id','eclipse_window'}
+LEGACY_FIELDS=(set(vars(View()))-ASTRONOMY_FIELDS)|{'renderer'}
 
 def digest(raw):return hashlib.sha256(raw).hexdigest()
 def encoded(value):return (json.dumps(value,sort_keys=True,ensure_ascii=True,allow_nan=False,separators=(',',':'))+'\n').encode()
@@ -30,12 +33,14 @@ def raw_fields(view=None,renderer=''):
     return {**values,'renderer':renderer}
 
 def validate_fields(values):
+    if isinstance(values,dict) and set(values)==LEGACY_FIELDS:
+        values={**{key:getattr(View(),key) for key in ASTRONOMY_FIELDS},**values}
     if not isinstance(values,dict) or set(values)!=set(vars(View()))|{'renderer'}:raise ValueError('Unsupported recovery fields/version; originals retained.')
     for key,value in values.items():
         if not isinstance(value,str) or len(value.encode('utf-8'))>256*1024 or any(not c.isprintable() and not (key in ('places_text','routes_text') and c in '\n\t') for c in value):raise ValueError('Unsafe or oversized recovery field: '+key)
     for key,allowed,_ in choice_rules():
         if values[key] not in allowed:raise ValueError('Unsupported recovery choice: '+key)
-    for key in ('capture_id','observations_id'):
+    for key in ('capture_id','observations_id','norad_id','eclipse_id'):
         if values[key] and not SHA.fullmatch(values[key]):raise ValueError('Invalid frozen capture reference.')
     return values
 
@@ -48,13 +53,14 @@ class Recovered:
     clouds:tuple=field(default=(),repr=False)
     observations:tuple=field(default=(),repr=False)
     fallback:bool=False
+    astronomy:tuple=field(default=(),repr=False)
 
 
 def pack(current,baseline,config,workspace,source=''):
     """Snapshot memory only; raw invalid inputs need not make a valid scene."""
     current=dict(validate_fields(current));baseline=dict(validate_fields(baseline))
     if not isinstance(config,bytes) or len(config)>256*1024 or not recognized_body(config):raise ValueError('Recovery requires a recognized studio body snapshot.')
-    blobs={digest(config):config};clouds={};observations={}
+    blobs={digest(config):config};clouds={};observations={};astronomy={}
     def refs(files):
         result={}
         for name,raw in files.items():blobs[digest(raw)]=raw;result[name]=digest(raw)
@@ -67,7 +73,11 @@ def pack(current,baseline,config,workspace,source=''):
         item=workspace.observations.get(identity)
         if item is None:raise ValueError('Referenced frozen observations are unavailable; previous checkpoint retained.')
         observations[identity]=refs(item.files())
-    record={'schema':1,'at':time.time(),'current':current,'baseline':baseline,'source':str(source or ''),'config':digest(config),'clouds':clouds,'observations':observations,'objects':{sha:len(raw) for sha,raw in blobs.items()}}
+    for identity in {v[field] for v in (current,baseline) for field in ('norad_id','eclipse_id')}-{''}:
+        item=workspace.astronomy.get(identity)
+        if item is None:raise ValueError('Referenced astronomy capture is unavailable; previous checkpoint retained.')
+        astronomy[identity]=refs(item.files())
+    record={'schema':2,'at':time.time(),'current':current,'baseline':baseline,'source':str(source or ''),'config':digest(config),'clouds':clouds,'observations':observations,'astronomy':astronomy,'objects':{sha:len(raw) for sha,raw in blobs.items()}}
     raw=encoded(record)
     if len(raw)>META_LIMIT or len(blobs)>64 or any(len(raw)>BLOB_LIMIT for raw in blobs.values()) or sum(map(len,blobs.values()))>128*1024*1024+256*1024:raise ValueError('Recovery snapshot exceeds its metadata/capture bounds.')
     return record,blobs
@@ -110,18 +120,24 @@ def head(fd):
 
 def metadata(fd,sha):
     value,raw,_=json_read(fd,sha+'.json',META_LIMIT)
-    if digest(raw)!=sha or not isinstance(value,dict) or set(value)!={'schema','at','current','baseline','source','config','clouds','observations','objects'} or type(value['schema']) is not int or value['schema']!=1:raise ValueError('Recovery checkpoint hash/schema mismatch.')
-    validate_fields(value['current']);validate_fields(value['baseline'])
+    legacy_keys={'schema','at','current','baseline','source','config','clouds','observations','objects'}
+    if digest(raw)!=sha or not isinstance(value,dict) or type(value.get('schema')) is not int:raise ValueError('Recovery checkpoint hash/schema mismatch.')
+    if value['schema']==1 and set(value)==legacy_keys:
+        if any(not isinstance(value[key],dict) or set(value[key])!=LEGACY_FIELDS for key in ('current','baseline')):raise ValueError('Unsupported legacy recovery fields; originals retained.')
+        value={**value,'astronomy':{}}
+    elif value['schema']!=2 or set(value)!=legacy_keys|{'astronomy'}:raise ValueError('Recovery checkpoint hash/schema mismatch.')
+    elif any(not isinstance(value[key],dict) or set(value[key])!=set(vars(View()))|{'renderer'} for key in ('current','baseline')):raise ValueError('Unsupported recovery fields/version; originals retained.')
+    value={**value,'current':dict(validate_fields(value['current'])),'baseline':dict(validate_fields(value['baseline']))}
     if type(value['at']) not in (int,float) or not math.isfinite(value['at']) or not 0<=value['at']<=32503680000:raise ValueError('Invalid recovery time.')
     if not isinstance(value['source'],str) or len(value['source'])>4096 or any(not c.isprintable() for c in value['source']):raise ValueError('Invalid source hint.')
     objects=value['objects']
     if not isinstance(objects,dict) or not 1<=len(objects)<=64 or any(not SHA.fullmatch(key) or type(size) is not int or not 0<=size<=BLOB_LIMIT for key,size in objects.items()) or sum(objects.values())>128*1024*1024+256*1024:raise ValueError('Invalid recovery object bounds.')
     referenced={value['config']}
-    for kind,field_name in (('clouds','capture_id'),('observations','observations_id')):
-        captures=value[kind];expected={v[field_name] for v in (value['current'],value['baseline'])}-{''}
+    for kind,fields in (('clouds',('capture_id',)),('observations',('observations_id',)),('astronomy',('norad_id','eclipse_id'))):
+        captures=value[kind];expected={v[field_name] for v in (value['current'],value['baseline']) for field_name in fields}-{''}
         if not isinstance(captures,dict) or set(captures)!=expected:raise ValueError('Recovery captures do not match draft references.')
         for files in captures.values():
-            if not isinstance(files,dict) or not 1<=len(files)<=10 or any(not isinstance(name,str) or len(name)>80 or not isinstance(sha,str) or not SHA.fullmatch(sha) for name,sha in files.items()):raise ValueError('Invalid frozen file reference.')
+            if not isinstance(files,dict) or not 1<=len(files)<=(19 if kind=='astronomy' else 10) or any(not isinstance(name,str) or len(name)>80 or not isinstance(sha,str) or not SHA.fullmatch(sha) for name,sha in files.items()):raise ValueError('Invalid frozen file reference.')
             referenced.update(files.values())
     if referenced!=set(objects):raise ValueError('Recovery object association mismatch.')
     return value
@@ -135,7 +151,7 @@ def recover(fd,session,sha,fallback=False):
         objects[identity]=raw
     config=objects[value['config']]
     if len(config)>256*1024 or not recognized_body(config):raise ValueError('Unsupported recovery body snapshot.')
-    clouds=[];observations=[]
+    clouds=[];observations=[];astronomy=[]
     for identity,files in value['clouds'].items():
         if set(files)!={IMAGE_FILE,META_FILE}:raise ValueError('Unsupported cloud file association.')
         item=FrozenCloud(objects[files[IMAGE_FILE]],objects[files[META_FILE]])
@@ -145,7 +161,13 @@ def recover(fd,session,sha,fallback=False):
         item=FrozenObservations.from_files({name:objects[sha] for name,sha in files.items()})
         if item.identity!=identity:raise ValueError('Frozen observation identity mismatch.')
         observations.append(item)
-    return Recovered(session,sha,value,config,tuple(clouds),tuple(observations),fallback)
+    for identity,files in value['astronomy'].items():
+        products=[product for product in ASTRONOMY_FILES if f'frozen-{product}.json' in files]
+        if len(products)!=1 or set(files)!={f'frozen-{products[0]}.json',*astronomy_payload_names(objects[files[f'frozen-{products[0]}.json']])}:raise ValueError('Unsupported astronomy file association.')
+        item=FrozenAstronomy.from_files({name:objects[sha] for name,sha in files.items()},products[0])
+        if item.identity!=identity:raise ValueError('Frozen astronomy identity mismatch.')
+        astronomy.append(item)
+    return Recovered(session,sha,value,config,tuple(clouds),tuple(observations),fallback,tuple(astronomy))
 
 
 class RecoveryStore:

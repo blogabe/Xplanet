@@ -77,12 +77,13 @@ references remain local references as before, so review those when sharing. Keep
 image/provider credits; bundling data does not change its source terms.
 
 Undo/redo tracks capture identity and retains prior immutable captures in the
-current draft. Captured image storage is bounded to 128 MiB; reaching it refuses
+current draft. Combined cloud, observation and astronomy capture history is bounded to 128 MiB; reaching it refuses
 a new capture without evicting undo data. Save/reopen or open another scene to
 establish a fresh history. This is a capture-storage budget, not a total renderer
 or application memory cap. Existing preview/viewer behavior is unchanged.
 
-Storm/quake/volcano products, NORAD/TLE dependencies, eclipse time coverage and
-persistent live references remain separate future work. A Now clock still
+Frozen [storm/quake/volcano products](configurator-observations.md) and
+[NORAD/dated eclipse products](configurator-astronomy-capture.md) have separate
+validated capture workflows. Persistent live references remain future work. A Now clock still
 changes on rerender; frozen input does not freeze scene geometry or certify
 pixel-identical results across builds. No UTM validation is claimed here.

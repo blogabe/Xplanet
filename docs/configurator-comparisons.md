@@ -1,4 +1,4 @@
-# Framing comparison sheets
+# Comparison sheets
 
 **Framing sheet…** renders three finite snapshots with 75%, 100% and 125% of the
 current radius or field of view. It is separate from **Compare…**, which compares
@@ -44,7 +44,23 @@ Cancel framing set stops owned work; the exit/recovery keys follow the
 
 Only one completed sheet is retained, separately from the two ordinary previews.
 The studio originals are temporary and disappear when the editor closes; a viewer
-may retain already loaded pixels. **Export framing sheet…** explicitly preserves
+may retain already loaded pixels. **Export comparison sheet…** explicitly preserves
 a complete set in a new user-chosen directory: see [durable export](configurator-export.md).
 Arbitrary batch axes, live-data comparisons, contact-sheet rasterization, trajectories
 and video assembly remain future choices.
+
+## Bundled imagery months
+
+**Imagery month sheet…** offers three distinct months from the draft's already
+selected bundled Earth monthly-map family. Stock imagery has no month axis. Review
+the three months and fixed epoch, then render. Camera, framing, lighting time and
+all other scene choices stay constant; only the bundled imagery-month selection
+changes. These are 2004 imagery-month alternatives, not three simulated seasons,
+contemporary observations or certified historical imagery.
+
+Unlike framing sheets, this axis also supports Earth map projections and orbital
+cameras. It retains the same three-frame geometry, budgets, cancellation, prior
+success and explicit open/export protections above. Current observational captures
+and active NORAD are refused rather than re-dated. A validated Fixed-UTC eclipse
+prediction can accompany all three images unchanged. The ordinary draft, preview
+history and native scenes are unchanged.

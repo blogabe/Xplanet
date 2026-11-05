@@ -96,16 +96,27 @@ feature are the same problem. A reported unknown is not proof of unsupported cod
 then renders three 1920×1080 images. **Open framing sheet** opens their temporary
 local HTML grid explicitly. This first slice is for static body-centre space views;
 it refuses active current-data captures and lunar orbital cameras. It is not
-animation or an image-difference tool. See [comparison limits](configurator-comparisons.md).
+animation or an image-difference tool. **Imagery month sheet…** instead compares
+three explicit months from the selected bundled Earth map family, holding camera
+and scene time constant. Stock maps have no monthly variants; current observational
+layers are refused rather than re-dated. See [comparison limits](configurator-comparisons.md).
 
 All preview/contact-sheet files are temporary and disappear on editor exit.
 An external viewer may retain already loaded pixels. Nothing replaces wallpaper,
 starts desktop jobs or runs providers.
 
-**Export framing sheet…** keeps the complete set as PNGs plus static local HTML.
+**Export comparison sheet…** keeps the complete set as PNGs plus static local HTML.
 Source previews are temporary; exported copies survive editor cleanup. Exported
 images are snapshots, not portable scene files or new observations. See
 [durable exports and limits](configurator-export.md).
+
+For eclipse paths, **Import local NASA-format path…** reads an explicit local table
+and a claimed official event reference without fetching it. Format, hash and event
+consistency are evidence about supplied content, not proof of NASA authorship.
+Review coverage, then choose matching Fixed UTC, including a midnight
+rollover only with an explicit independently supplied first-row UTC date; Now retains but omits the prediction. Frozen NORAD can retain bounded PNG
+icons for Now previews, while active NORAD desktop handoff remains unavailable.
+See [astronomy capture policy](configurator-astronomy-capture.md).
 
 ## 5. Save a new scene and continue later
 
@@ -187,3 +198,21 @@ commands, see [Apply and guarded recovery](configurator-apply-design.md).
 | Existing clouds/events and freshness | [Frozen clouds](configurator-cloud-capture.md), [observations](configurator-observations.md) |
 | Preserve a custom configuration | [Native inspection](configurator-import.md), [literal copies](configurator-native-values.md) |
 | Installation, scheduling and desktop commands | [Management](management.md) |
+
+## Share a generated scene
+
+**Export saved scene…** and **Import scene archive…** use the
+[scene exchange workflow](configurator-exchange.md) for saved settings and recognized
+local annotations with hashes. Export excludes unsaved draft changes; import creates
+a new copy, then offers an explicit Open with dirty-draft protection. The CLI also
+remains available. Bundled
+maps stay references; frozen provider captures are not included in this first slice.
+It does not execute imported files or select a desktop scene.
+
+## Frozen astronomy layers
+
+Earth scenes can explicitly capture existing TotalMarker NORAD selectors/TLEs and
+dated eclipse paths. NORAD is Now-only for editor preview; eclipse display requires
+matching Fixed UTC. Inactive captures remain saved, but active NORAD desktop handoff
+is refused because runtime expiry is not enforced. No producer refresh or automatic
+activation occurs. See [capture steps, time policy and limits](configurator-astronomy-capture.md).

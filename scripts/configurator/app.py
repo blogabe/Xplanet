@@ -19,6 +19,7 @@ from .model import PROJECTIONS, SAMPLE, View, ViewDocument, number, MONTHS, TARG
 from .geography import COLORS
 from .cloud_capture import describe_capture
 from .observation_capture import PRODUCTS as OBS_PRODUCTS,describe as describe_observations,describe_metadata as describe_observation_metadata
+from .astronomy_capture import FILES as ASTRONOMY_FILES,describe as describe_astronomy,describe_metadata as describe_astronomy_metadata
 from .library import save_named
 from .history import DraftHistory
 from .native_inspection import inspect_native,copy_unchanged
@@ -29,10 +30,13 @@ from .handoff_ui import HandoffScreen
 from .selection_info_ui import SelectedSceneScreen
 from .resources import safe
 from .library_ui import SceneLibrary
+from .exchange_ui import SceneExchange
+from .eclipse_import_ui import EclipseImport
+from .resources import safe
 from .draft_session import DraftSession
 from .recovery_ui import RecoveryScreen
 from .comparison import plan as comparison_plan,reason as comparison_reason,render_set
-from .comparison_ui import ComparisonReview
+from .comparison_ui import ComparisonReview,MonthComparisonReview
 from .help_ui import StudioHelp
 from .export_ui import RenderExport
 from .render_export import export_snapshot
@@ -148,7 +152,7 @@ class ConfirmCapture(ModalScreen[bool]):
             yield Static(self.root+'\n'+self.config,markup=False)
             yield Static('No provider request, refresh, lock, recovery or source-file write. A verified frozen copy is retained for this draft.')
             with Horizontal():
-                yield Button('Capture saved clouds' if self.description=='clouds' else 'Capture saved observations',id='confirm-capture',variant='primary')
+                yield Button({'clouds':'Capture saved clouds','norad':'Capture saved NORAD','eclipse':'Capture saved eclipse prediction'}.get(self.description,'Capture saved observations'),id='confirm-capture',variant='primary')
                 yield Button('Back',id='back-capture')
 
     def on_button_pressed(self,event):
@@ -185,6 +189,8 @@ class ReportScreen(ModalScreen):
                 yield Static(f'{label}: {snapshot.view.summary()}\nRenderer: {snapshot.renderer}\nCompleted UTC: {snapshot.completed_utc}\n{snapshot.path}', markup=False)
                 if snapshot.cloud_provenance:
                     yield Static(describe_capture(json.loads(snapshot.cloud_provenance)),markup=False)
+                for product,provenance in snapshot.astronomy_provenance:
+                    yield Static(describe_astronomy_metadata(json.loads(provenance)),markup=False)
                 if snapshot.observation_provenance:
                     yield Static('Active frozen observations in this preview: '+', '.join(snapshot.view.uses_observations())+'\n'+describe_observation_metadata(json.loads(snapshot.observation_provenance)),markup=False)
                 yield Button('Open ' + label, id=f'report-image-{index}', disabled=not Path('/usr/bin/open').is_file())
@@ -228,6 +234,7 @@ class ConfiguratorApp(App):
         if self.workspace.capabilities is None:self.workspace.capabilities=cached_binary_evidence(root)
         self.preview_job = None
         self.saved = None
+        self.exchange_notice = ''
         self.selection_label = None
         self.controls_ready = False
         self.leaving = False
@@ -242,8 +249,9 @@ class ConfiguratorApp(App):
         self.document = document or ViewDocument(View(), renderer, SAMPLE.read_bytes())
         self.capture_id=self.document.view.capture_id
         self.observations_id=self.document.view.observations_id
+        for field in ('norad_id','eclipse_id','eclipse_window'):setattr(self,field,getattr(self.document.view,field))
         self.moon_scales=self.document.view.moon_scales
-        self.workspace.reset_captures(self.document.capture,self.document.observations)
+        self.workspace.reset_captures(self.document.capture,self.document.observations,self.document.astronomy)
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -260,6 +268,9 @@ class ConfiguratorApp(App):
                 yield Button('Edit native values…',id='edit-native')
                 yield Button('Handoff review…',id='handoff')
                 yield Button('Selected scene…',id='selected-scene')
+            with Horizontal():
+                yield Button('Export saved scene…',id='exchange-export')
+                yield Button('Import scene archive…',id='exchange-import')
             yield Static('', id='dirty-state', markup=False)
             with Horizontal():
                 yield Button('Undo', id='undo', disabled=True)
@@ -416,6 +427,11 @@ class ConfiguratorApp(App):
                 with Vertical(id='control-'+product+'-layer',classes='control'):
                     yield Label({'quake':'Earthquakes','volcano':'Volcanoes','storm':'Storm markers and tracks'}[product]+' — frozen existing output, Earth Now only')
                     yield Select([('Off — retain capture','off'),('Use frozen capture','captured')],value=getattr(self.document.view,product+'_layer'),allow_blank=False,id=product+'-layer')
+            for product in ASTRONOMY_FILES:
+                with Vertical(id='control-'+product+'-layer',classes='control'):
+                    yield Label('NORAD satellites — frozen Now-only preview; no desktop handoff' if product=='norad' else 'Dated eclipse path — Fixed UTC within saved event coverage')
+                    yield Select([('Off — retain capture','off'),('Use frozen capture','captured')],value=getattr(self.document.view,product+'_layer'),allow_blank=False,id=product+'-layer')
+            yield Static('',id='astronomy-summary',markup=False)
             yield Static('',id='observations-summary',markup=False)
             with Vertical(id='capture-source',classes='control'):
                 yield Label('Explicit capture source (not stored in the scene)')
@@ -423,6 +439,9 @@ class ConfiguratorApp(App):
                 yield Input('config/totalmarker.toml',id='capture-config')
                 yield Button('Capture existing clouds…',id='capture-cloud')
                 yield Button('Capture selected observations…',id='capture-observations')
+                yield Button('Capture existing NORAD…',id='capture-norad')
+                yield Button('Capture existing eclipse…',id='capture-eclipse')
+                yield Button('Import local NASA-format path…',id='import-eclipse')
             yield Static('',id='capture-summary',markup=False)
             with Vertical(id='control-cloud-gamma',classes='control'):
                 yield Label('Cloud gamma: 0.1–5 (studio range)')
@@ -470,10 +489,11 @@ class ConfiguratorApp(App):
                 yield Button('Compare…', id='compare', disabled=True)
             with Horizontal():
                 yield Button('Framing sheet…',id='framing-sheet')
+                yield Button('Imagery month sheet…',id='month-sheet')
                 yield Button('Open framing sheet',id='open-sheet',disabled=True)
             with Horizontal():
                 yield Button('Export latest…',id='export-image',disabled=True)
-                yield Button('Export framing sheet…',id='export-sheet',disabled=True)
+                yield Button('Export comparison sheet…',id='export-sheet',disabled=True)
             yield Static('',id='comparison-context',markup=False)
             yield Button('Cancel preview', id='cancel-preview')
             yield Static('', id='preview-state', markup=False)
@@ -516,7 +536,7 @@ class ConfiguratorApp(App):
             return
         if self.recovery:self.recovery.boundary()
         self.recovery_origin=None
-        self.workspace.reset_captures(document.capture,document.observations)
+        self.workspace.reset_captures(document.capture,document.observations,document.astronomy)
         self.document = document
         values = {field: number(value) if field in NUMERIC_FIELDS else value
                   for field, value in vars(document.view).items()}
@@ -578,10 +598,11 @@ class ConfiguratorApp(App):
         try:
             if self.recovery:self.recovery.boundary()
             from .workspace import CAPTURE_BUDGET
-            if sum(len(item.image) for item in recovered.clouds)+sum(item.byte_size for item in recovered.observations)>CAPTURE_BUDGET:raise ValueError('Recovered captures exceed the session budget.')
+            if sum(len(item.image) for item in recovered.clouds)+sum(item.byte_size for item in recovered.observations)+sum(item.byte_size for item in recovered.astronomy)>CAPTURE_BUDGET:raise ValueError('Recovered captures exceed the session budget.')
             self.workspace.reset_captures()
             for item in recovered.clouds:self.workspace.register_capture(item)
             for item in recovered.observations:self.workspace.register_observations(item)
+            for item in recovered.astronomy:self.workspace.register_astronomy(item)
             baseline=dict(recovered.record['baseline']);current=dict(recovered.record['current'])
             if not use_recorded:baseline['renderer']=current['renderer']=self.query_one('#renderer',Input).value
             self.document=ViewDocument(View.from_fields({key:value for key,value in baseline.items() if key!='renderer'}),'',recovered.config)
@@ -593,7 +614,7 @@ class ConfiguratorApp(App):
         except (OSError,ValueError) as exc:self.status('Recovery could not be restored: '+str(exc)+'. Original recovery material retained.')
 
     def on_select_changed(self, event: Select.Changed):
-        if self.controls_ready and event.select.id in ('camera-mode', 'orbit-paths', 'orbit-color', 'composition', 'target', 'projection', 'observer', 'framing', 'longitude-mode', 'north', 'time-mode', 'map-family', 'month', 'night', 'grid', 'label', 'places', 'routes', 'place-color', 'route-color', 'relief', 'relief-shadow', 'specular', 'clouds', 'quake-layer', 'volcano-layer', 'storm-layer'):
+        if self.controls_ready and event.select.id in ('camera-mode', 'orbit-paths', 'orbit-color', 'composition', 'target', 'projection', 'observer', 'framing', 'longitude-mode', 'north', 'time-mode', 'map-family', 'month', 'night', 'grid', 'label', 'places', 'routes', 'place-color', 'route-color', 'relief', 'relief-shadow', 'specular', 'clouds', 'quake-layer', 'volcano-layer', 'storm-layer', 'norad-layer', 'eclipse-layer'):
             self.capture_edit()
 
     def on_input_changed(self, event: Input.Changed):
@@ -612,10 +633,11 @@ class ConfiguratorApp(App):
         fields = {field.replace('-', '_'): self.query_one('#' + field, Input).value
                   for field in ('orbit-latitude','orbit-longitude','orbit-range','frame-x','frame-y','geometry', 'latitude', 'longitude', 'solar-hour', 'distance', 'rotation', 'radius', 'fov', 'utc', 'twilight', 'place-size', 'route-width', 'relief-scale', 'relief-shade', 'cloud-gamma', 'cloud-threshold', 'planet-shade', 'satellite-scale', 'orbit-width')}
         fields.update({field.replace('-', '_'): str(self.query_one('#' + field, Select).value)
-                       for field in ('camera-mode', 'orbit-paths', 'orbit-color', 'composition', 'target', 'projection', 'observer', 'framing', 'longitude-mode', 'north', 'time-mode', 'map-family', 'month', 'night', 'grid', 'label', 'places', 'routes', 'place-color', 'route-color', 'relief', 'relief-shadow', 'specular', 'clouds', 'quake-layer', 'volcano-layer', 'storm-layer')})
+                       for field in ('camera-mode', 'orbit-paths', 'orbit-color', 'composition', 'target', 'projection', 'observer', 'framing', 'longitude-mode', 'north', 'time-mode', 'map-family', 'month', 'night', 'grid', 'label', 'places', 'routes', 'place-color', 'route-color', 'relief', 'relief-shadow', 'specular', 'clouds', 'quake-layer', 'volcano-layer', 'storm-layer', 'norad-layer', 'eclipse-layer')})
         fields.update({field.replace('-', '_'):self.query_one('#'+field,TextArea).text for field in ('places-text','routes-text')})
         fields['capture_id']=self.capture_id
         fields['observations_id']=self.observations_id
+        for field in ('norad_id','eclipse_id','eclipse_window'):fields[field]=getattr(self,field)
         fields['moon_scales']=self.moon_scales
         fields['renderer'] = self.query_one('#renderer', Input).value
         return fields
@@ -630,7 +652,7 @@ class ConfiguratorApp(App):
 
     def restore_fields(self, values):
         for field, value in values.items():
-            if field in ('capture_id','observations_id','moon_scales'):
+            if field in ('capture_id','observations_id','moon_scales','norad_id','eclipse_id','eclipse_window'):
                 setattr(self,field,value)
                 continue
             widget = self.query_one('#' + field.replace('_', '-'))
@@ -662,6 +684,7 @@ class ConfiguratorApp(App):
             lines.append(f'{field.replace("_", " ").title()} ({role}): {before!r} → {after!r}')
         if not self.history.dirty:
             lines.append('No unsaved scene changes. A new copy can still be saved.')
+        if self.norad_id or self.eclipse_id:lines.append('Save retains associated astronomy bytes and provenance, including inactive captures. Active NORAD desktop handoff is unavailable; eclipse handoff requires matching Fixed UTC.')
         if self.observations_id:
             lines.append('Save includes frozen observation markers/arcs and referenced PNG icons (embedded image metadata unchanged), plus bounded provenance; review before sharing.')
         if self.capture_id:
@@ -671,17 +694,21 @@ class ConfiguratorApp(App):
 
     def current_issues(self):
         view=self.draft()
-        return configuration_issues(view,self.query_one('#renderer',Input).value,self.document.config,self.workspace.capture_for(view),self.workspace.observations_for(view),self.workspace.capabilities)
+        return configuration_issues(view,self.query_one('#renderer',Input).value,self.document.config,self.workspace.capture_for(view),self.workspace.observations_for(view),self.workspace.capabilities,astronomy=self.workspace.astronomy_for(view))
 
     def update_controls(self):
         view = self.draft()
         why=comparison_reason(view)
         self.query_one('#framing-sheet',Button).disabled=bool(why) or self.workspace.busy
+        month_reason=comparison_reason(view,kind='months')
+        self.query_one('#month-sheet',Button).disabled=bool(month_reason) or self.workspace.busy
+        self.query_one('#month-sheet',Button).tooltip=month_reason or 'Three bundled day-map months, unchanged camera and scene time.'
         self.query_one('#comparison-context',Static).update(why or 'Three static 1920×1080 framing snapshots at one reviewed epoch; contact sheet opens explicitly.')
         self.query_one('#framing-sheet',Button).tooltip=why or 'Three framing values, one reviewed epoch, temporary local contact sheet.'
         sheet=self.workspace.comparison_latest
         self.query_one('#open-sheet',Button).disabled=sheet is None
-        self.query_one('#open-sheet',Button).label='Open framing sheet' if sheet is None or sheet.matches(view,self.query_one('#renderer',Input).value) else 'Open prior framing sheet'
+        sheet_name='imagery-month sheet' if sheet and sheet.plan.parameter=='month' else 'framing sheet'
+        self.query_one('#open-sheet',Button).label='Open '+sheet_name if sheet is None or sheet.matches(view,self.query_one('#renderer',Input).value) else 'Open prior '+sheet_name
         issues = self.current_issues()
         invalid = {issue.field for issue in issues if issue.severity == 'blocking'}
         active = view.active_fields()
@@ -694,7 +721,7 @@ class ConfiguratorApp(App):
                                    ('route-color',Select),('route-width',Input),('relief',Select),('relief-scale',Input),
                                    ('relief-shadow',Select),('relief-shade',Input),('specular',Select),('clouds',Select),
                                    ('cloud-gamma',Input),('cloud-threshold',Input),('planet-shade',Input),
-                                   *((product+'-layer',Select) for product in OBS_PRODUCTS)]:
+                                   *((product+'-layer',Select) for product in (*OBS_PRODUCTS,*ASTRONOMY_FILES))]:
             key = field.replace('-', '_')
             visible = key in active or key in invalid
             self.query_one('#control-' + field).display = visible
@@ -731,7 +758,15 @@ class ConfiguratorApp(App):
                 f'Unsaved scene changes: {count} field(s).' if count else 'No unsaved scene changes.')
             self.query_one('#undo', Button).disabled = not self.history.can_undo
             self.query_one('#redo', Button).disabled = not self.history.can_redo
-        self.query_one('#capture-source').display=bool(view.uses_capture() or view.uses_observations())
+        self.query_one('#capture-source').display=bool(view.uses_capture() or view.uses_observations() or earth and any(getattr(view,p+'_layer')=='captured' for p in ASTRONOMY_FILES))
+        astronomy=self.workspace.astronomy_for(view);astronomy_text=[]
+        for product in ASTRONOMY_FILES:
+            self.query_one('#capture-'+product).display=earth and getattr(view,product+'_layer')=='captured'
+            if product=='eclipse':self.query_one('#import-eclipse').display=earth and view.eclipse_layer=='captured'
+            if product in astronomy:astronomy_text.append(describe_astronomy(astronomy[product]))
+            if getattr(view,product+'_layer')=='captured' and product not in view.uses_astronomy():astronomy_text.append(product+' inactive; choose Now for NORAD or Fixed UTC within eclipse coverage. Choices and bytes are retained.')
+        self.query_one('#astronomy-summary',Static).update('\n'.join(astronomy_text) or 'No frozen astronomy capture retained. Explicit read-only capture; no refresh.')
+        self.query_one('#astronomy-summary').display=earth and (bool(astronomy) or any(getattr(view,p+'_layer')=='captured' for p in ASTRONOMY_FILES))
         self.query_one('#capture-cloud').display=view.uses_capture()
         self.query_one('#capture-observations').display=bool(view.uses_observations())
         frozen=self.workspace.observations_for(view)
@@ -761,7 +796,7 @@ class ConfiguratorApp(App):
         self.query_one('#export-image',Button).disabled=latest is None or running
         self.query_one('#export-sheet',Button).disabled=self.workspace.comparison_latest is None or running
         self.query_one('#cancel-preview').display = running
-        self.query_one('#cancel-preview',Button).label='Cancel export' if self.workspace.operation=='export' else 'Cancel capture' if self.workspace.operation=='capture' else 'Cancel framing set' if self.workspace.operation=='comparison' else 'Cancel preview'
+        self.query_one('#cancel-preview',Button).label='Cancel scene exchange' if self.workspace.operation=='exchange' else 'Cancel export' if self.workspace.operation=='export' else 'Cancel capture' if self.workspace.operation=='capture' else 'Cancel comparison set' if self.workspace.operation=='comparison' else 'Cancel preview'
 
     def view(self):
         view = self.draft()
@@ -796,7 +831,11 @@ class ConfiguratorApp(App):
 
     def on_button_pressed(self, event: Button.Pressed):
         action = event.button.id
-        if action == 'load':
+        if action in ('exchange-export','exchange-import'):
+            if self.workspace.busy:self.status('Wait for the current operation or cancel it first.');return
+            self.capture_edit();mode=action.removeprefix('exchange-');renderer=self.query_one('#renderer',Input).value
+            self.push_screen(SceneExchange(mode,str(self.document.source or '') if mode=='export' else '',renderer,self.history.dirty),lambda request:self.start_scene_exchange(mode,request,renderer))
+        elif action == 'load':
             self.capture_edit()
             self.push_screen(OpenView(str(self.document.source or self.root / 'dev' / 'earth-view'), self.history.dirty), self.load)
         elif action == 'moon-scales':
@@ -825,6 +864,14 @@ class ConfiguratorApp(App):
             self.action_redo()
         elif action == 'review':
             self.push_screen(ReportScreen('Review unsaved scene changes', self.change_review()))
+        elif action=='import-eclipse':
+            self.push_screen(EclipseImport(),self.start_local_eclipse)
+        elif action in ('capture-norad','capture-eclipse'):
+            product=action.removeprefix('capture-')
+            if self.draft().target=='earth' and getattr(self.draft(),product+'_layer')=='captured':
+                source=self.query_one('#capture-root',Input).value;config=self.query_one('#capture-config',Input).value
+                self.push_screen(ConfirmCapture(source,config,product),lambda ok:self.start_astronomy(ok,source,config,product))
+            else:self.status('Select the corresponding Earth astronomy layer before capturing.')
         elif action == 'capture-observations':
             products=self.draft().uses_observations()
             if products:
@@ -842,6 +889,11 @@ class ConfiguratorApp(App):
             if self.recovery:self.push_screen(RecoveryScreen(self.recovery.store),self.restore_recovery)
         elif action == 'health':
             self.show_health()
+        elif action=='month-sheet':
+            try:
+                review=comparison_plan(self.view(),kind='months');renderer=self.query_one('#renderer',Input).value
+                self.push_screen(MonthComparisonReview(review),lambda chosen:self.start_comparison(chosen is not None,chosen or review,renderer))
+            except (ValueError,OSError) as exc:self.status('Cannot plan imagery-month set: '+str(exc))
         elif action=='framing-sheet':
             try:
                 review=comparison_plan(self.view());renderer=self.query_one('#renderer',Input).value
@@ -853,7 +905,7 @@ class ConfiguratorApp(App):
             kind='preview' if action=='export-image' else 'sheet'
             snapshot=self.workspace.latest if kind=='preview' else self.workspace.comparison_latest
             if snapshot is not None and not self.workspace.busy:
-                description=(snapshot.view.summary()+'\nRender completed: '+snapshot.completed_utc) if kind=='preview' else ('Three recorded framing snapshots; epoch '+snapshot.plan.epoch)
+                description=(snapshot.view.summary()+'\nRender completed: '+snapshot.completed_utc) if kind=='preview' else ('Three recorded '+('imagery-month' if snapshot.plan.parameter=='month' else 'framing')+' snapshots; epoch '+snapshot.plan.epoch)
                 destination=self.root/'dev'/('export-'+kind+'-'+datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S'))
                 self.push_screen(RenderExport(kind,description,str(destination)),lambda path:self.start_export(kind,snapshot,path))
         elif action == 'compare':
@@ -942,34 +994,49 @@ class ConfiguratorApp(App):
         elif not self.draft().uses_observations():self.status('Observations are inactive outside Earth Now scenes.')
         else:self.preview_job=self.capture_cloud(source,config,products)
 
+    def start_local_eclipse(self,request):
+        if request is None:self.status('Local import cancelled. Source and prior capture unchanged.')
+        else:self.preview_job=self.capture_cloud('', '',astronomy_product='eclipse',local_eclipse=request)
+
+    def start_astronomy(self,confirmed,source,config,product):
+        if not confirmed:self.status('Capture cancelled. No source data was read.')
+        else:self.preview_job=self.capture_cloud(source,config,astronomy_product=product)
+
     @work(exclusive=True,group='preview')
-    async def capture_cloud(self,source,config,products=None):
-        for field in ('preview','resources','save','save-continue','recovery','framing-sheet','open-sheet','load','library','stock','compare','capture-cloud','capture-observations','inspect-native','edit-native','handoff','selected-scene','moon-scales'):
+    async def capture_cloud(self,source,config,products=None,*,astronomy_product=None,local_eclipse=None):
+        for field in ('preview','resources','save','save-continue','recovery','framing-sheet','month-sheet','open-sheet','load','library','stock','compare','capture-cloud','capture-observations','capture-norad','capture-eclipse','import-eclipse','inspect-native','edit-native','handoff','selected-scene','moon-scales','exchange-export','exchange-import'):
             self.query_one('#'+field,Button).disabled=True
         self.query_one('#cancel-preview',Button).label='Cancel capture'
         self.query_one('#cancel-preview').display=True
-        self.status('Capturing existing saved observation bytes… no provider request or refresh.' if products else 'Capturing existing saved cloud bytes… no provider request or refresh.')
+        self.status('Importing explicit local NASA-format content… No network or source write; authorship is unverified.' if local_eclipse else 'Capturing existing '+astronomy_product+' bytes… no provider request or refresh.' if astronomy_product else 'Capturing existing saved observation bytes… no provider request or refresh.' if products else 'Capturing existing saved cloud bytes… no provider request or refresh.')
         try:
-            if products:
+            if local_eclipse:
+                frozen=await self.workspace.import_eclipse_file(*local_eclipse[:2],first_row_date=local_eclipse[2])
+                self.eclipse_id=frozen.identity;self.eclipse_window=frozen.window_token
+            elif astronomy_product:
+                frozen=await self.workspace.capture_astronomy(str(Path(source).expanduser()),config,astronomy_product)
+                setattr(self,astronomy_product+'_id',frozen.identity)
+                if astronomy_product=='eclipse':self.eclipse_window=frozen.window_token
+            elif products:
                 frozen=await self.workspace.capture_observations(str(Path(source).expanduser()),config,products)
                 self.observations_id=frozen.identity
             else:
                 frozen=await self.workspace.capture_cloud(str(Path(source).expanduser()),config)
                 self.capture_id=frozen.identity
             self.capture_edit()
-            self.status(('Frozen '+', '.join(products)+' observations ready.' if products else 'Frozen cloud capture ready.')+' Review provenance before saving; original data is unchanged.')
+            self.status(('Local NASA-format prediction imported; authorship unverified and producer facts unknown.' if local_eclipse else 'Frozen '+astronomy_product+' ready.' if astronomy_product else 'Frozen '+', '.join(products)+' observations ready.' if products else 'Frozen cloud capture ready.')+' Review provenance before saving; original data is unchanged.')
         except asyncio.CancelledError:
             if not self.leaving:self.status('Capture cancelled. Previous capture and preview retained.')
         except (ValueError,OSError) as exc:
             if not self.leaving:self.status('Capture unavailable: '+str(exc)+' Previous capture and preview retained.')
         finally:
             if not self.leaving:
-                for field in ('preview','resources','save','save-continue','recovery','framing-sheet','open-sheet','load','library','stock','capture-cloud','capture-observations','inspect-native','edit-native','handoff','selected-scene','moon-scales'):self.query_one('#'+field,Button).disabled=False
+                for field in ('preview','resources','save','save-continue','recovery','framing-sheet','month-sheet','open-sheet','load','library','stock','capture-cloud','capture-observations','capture-norad','capture-eclipse','import-eclipse','inspect-native','edit-native','handoff','selected-scene','moon-scales','exchange-export','exchange-import'):self.query_one('#'+field,Button).disabled=False
                 self.update_controls()
 
     @work(exclusive=True, group='preview')
     async def render(self, view, renderer,diagnostic=False):
-        for field in ('preview', 'resources', 'save', 'save-continue', 'recovery', 'framing-sheet', 'open-sheet', 'load', 'library', 'stock', 'compare', 'capture-cloud', 'capture-observations', 'inspect-native','edit-native','handoff','selected-scene','moon-scales'):
+        for field in ('preview', 'resources', 'save', 'save-continue', 'recovery', 'framing-sheet','month-sheet', 'open-sheet', 'load', 'library', 'stock', 'compare', 'capture-cloud', 'capture-observations','capture-norad','capture-eclipse','import-eclipse', 'inspect-native','edit-native','handoff','selected-scene','moon-scales','exchange-export','exchange-import'):
             self.query_one('#' + field, Button).disabled = True
         self.query_one('#cancel-preview').display = True
         self.status('Rendering one finite image… Ctrl-C or Cancel preview cancels work; Ctrl-D/Ctrl-Q requests exit.')
@@ -986,10 +1053,49 @@ class ConfiguratorApp(App):
                 try:store_binary_evidence(self.root,self.workspace.capabilities)
                 except (OSError,ValueError) as exc:self.status('Diagnostic evidence remains in this session; could not save support cache: '+str(exc))
             if not self.leaving:
-                for field in ('preview', 'resources', 'save', 'save-continue', 'recovery', 'framing-sheet', 'open-sheet', 'load', 'library', 'stock', 'capture-cloud', 'capture-observations', 'inspect-native','edit-native','handoff','selected-scene','moon-scales'):
+                for field in ('preview', 'resources', 'save', 'save-continue', 'recovery', 'framing-sheet','month-sheet', 'open-sheet', 'load', 'library', 'stock', 'capture-cloud', 'capture-observations','capture-norad','capture-eclipse','import-eclipse', 'inspect-native','edit-native','handoff','selected-scene','moon-scales','exchange-export','exchange-import'):
                     self.query_one('#' + field, Button).disabled = False
                 self.update_preview_state()
                 if diagnostic and self.workspace.last_outcome!='cancelled' and not self.exit_prompting:self.resource_report()
+
+    def start_scene_exchange(self,mode,request,renderer):
+        if request is None:self.status('Scene exchange cancelled before writing. Draft and saved files unchanged.')
+        elif self.workspace.busy:self.status('Wait for the current operation before exchanging a scene.')
+        else:
+            destination=safe(str(request[1])).replace('\n','\\n')
+            self.exchange_notice='Last scene exchange outcome is not yet confirmed. Inspect '+destination+' before retrying; a partial or complete new copy may exist. Draft and desktop selection are separate.'
+            self.preview_job=self.exchange_scene(mode,request,renderer)
+
+    @work(exclusive=True,group='preview')
+    async def exchange_scene(self,mode,request,renderer):
+        source,destination,preview=request;target=None
+        fields=('preview','resources','save','save-continue','recovery','framing-sheet','month-sheet','open-sheet','load','library','stock','compare','capture-cloud','capture-observations','capture-norad','capture-eclipse','import-eclipse','inspect-native','edit-native','handoff','selected-scene','moon-scales','exchange-export','exchange-import','export-image','export-sheet')
+        for field in fields:self.query_one('#'+field,Button).disabled=True
+        self.query_one('#cancel-preview',Button).display=True;self.query_one('#cancel-preview',Button).label='Cancel scene exchange'
+        self.status('Exchanging explicit saved files… The editor draft is not being saved, replaced or activated.')
+        try:
+            target=await self.workspace.exchange_scene(mode,source,destination,renderer=renderer,preview=preview)
+            self.exchange_notice=('Archive copy created at '+safe(str(target/'scene.xplanet.zip')) if mode=='export' else 'New scene copy imported at '+safe(str(target)))+'. Draft and desktop selection unchanged.'
+            self.status(self.exchange_notice)
+        except asyncio.CancelledError:
+            self.exchange_notice='Scene exchange interrupted. Inspect '+safe(str(destination)).replace('\n','\\n')+' before retrying; a partial or complete new copy may exist. Draft and prior previews retained.'
+            if not self.leaving:self.status(self.exchange_notice)
+        except (OSError,ValueError) as exc:
+            self.exchange_notice='Scene exchange did not complete. Inspect '+safe(str(destination)).replace('\n','\\n')+' before retrying; existing copies were not rolled back. Draft and desktop selection unchanged.'
+            if not self.leaving:self.status('Cannot exchange scene: '+str(exc))
+        finally:
+            if not self.leaving:
+                for field in fields:self.query_one('#'+field,Button).disabled=False
+                self.update_controls();self.update_preview_state()
+        if target is not None and mode=='import' and not self.leaving:
+            # Import itself never replaces the draft. Reuse the normal explicit
+            # Open/dirty-replacement gate, and revalidate again if Open is chosen.
+            self.capture_edit()
+            self.push_screen(OpenView(str(target),self.history.dirty),lambda chosen:self.open_exchanged_scene(chosen,target))
+
+    def open_exchanged_scene(self,source,target):
+        if source is None:self.status('Imported copy remains at '+str(target)+'. Draft unchanged; nothing activated.')
+        else:self.load(source)
 
     def start_export(self,kind,snapshot,destination):
         if destination is None:self.status('Export cancelled before writing. Prior snapshots and files unchanged.')
@@ -997,7 +1103,7 @@ class ConfiguratorApp(App):
 
     @work(exclusive=True,group='preview')
     async def export_render(self,kind,snapshot,destination):
-        fields=('preview','resources','framing-sheet','export-image','export-sheet','load','library','stock','save','save-continue','capture-cloud','capture-observations','handoff')
+        fields=('preview','resources','framing-sheet','month-sheet','export-image','export-sheet','load','library','stock','save','save-continue','capture-cloud','capture-observations','capture-norad','capture-eclipse','import-eclipse','handoff','exchange-export','exchange-import')
         for field in fields:self.query_one('#'+field,Button).disabled=True
         self.query_one('#cancel-preview').display=True;self.query_one('#cancel-preview',Button).label='Cancel export'
         self.status('Preparing a durable copy of the retained snapshot… Existing destinations will not be overwritten.')
@@ -1014,18 +1120,19 @@ class ConfiguratorApp(App):
 
     def start_comparison(self,confirmed,review,renderer):
         if confirmed:self.preview_job=self.render_comparison(review,renderer)
-        else:self.status('Framing set cancelled before rendering; draft and prior previews unchanged.')
+        else:self.status('Comparison set cancelled before rendering; draft and prior previews unchanged.')
 
     @work(exclusive=True,group='preview')
     async def render_comparison(self,review,renderer):
-        fields=('preview','resources','save','save-continue','recovery','framing-sheet','open-sheet','load','library','stock','compare','capture-cloud','capture-observations','inspect-native','edit-native','handoff','selected-scene','moon-scales')
+        fields=('preview','resources','save','save-continue','recovery','framing-sheet','month-sheet','open-sheet','load','library','stock','compare','capture-cloud','capture-observations','capture-norad','capture-eclipse','import-eclipse','inspect-native','edit-native','handoff','selected-scene','moon-scales','exchange-export','exchange-import')
         for field in fields:self.query_one('#'+field,Button).disabled=True
-        self.query_one('#cancel-preview',Button).label='Cancel framing set';self.query_one('#cancel-preview',Button).display=True
+        label='Imagery-month' if review.parameter=='month' else 'Framing'
+        self.query_one('#cancel-preview',Button).label='Cancel comparison set';self.query_one('#cancel-preview',Button).display=True
         try:
-            result=await render_set(self.workspace,review,renderer,config_bytes=self.document.config,progress=lambda index,total:self.status(f'Rendering framing snapshot {index}/{total}… Ctrl-C cancels; second Ctrl-C exits.'))
-            self.status(f'Three framing snapshots ready at {review.epoch}. Open framing sheet explicitly. Draft, ordinary previews and desktop unchanged. Temporary sheet: {result.index}')
+            result=await render_set(self.workspace,review,renderer,config_bytes=self.document.config,progress=lambda index,total:self.status(f'Rendering {label.lower()} snapshot {index}/{total}… Ctrl-C cancels; second Ctrl-C exits.'))
+            self.status(f'Three {label.lower()} snapshots ready at {review.epoch}. Open the comparison sheet explicitly. Draft, ordinary previews and desktop unchanged. Temporary sheet: {result.index}')
         except asyncio.CancelledError:
-            if not self.leaving:self.status('Framing set cancelled. Prior complete sheet, previews and draft retained.')
+            if not self.leaving:self.status(label+' set cancelled. Prior complete sheet, previews and draft retained.')
         except (ValueError,OSError) as exc:
             if not self.leaving:self.status(str(exc))
         finally:
@@ -1038,7 +1145,7 @@ class ConfiguratorApp(App):
             self.status('Save cancelled. Nothing was written.')
             return
         try:
-            self.saved = (save_named if Path(destination).suffix.lower()=='.conf' else save_view)(destination,view,renderer,config_bytes=self.document.config,capture=self.workspace.capture_for(view),observations=self.workspace.observations_for(view))
+            self.saved = (save_named if Path(destination).suffix.lower()=='.conf' else save_view)(destination,view,renderer,config_bytes=self.document.config,capture=self.workspace.capture_for(view),observations=self.workspace.observations_for(view),astronomy=self.workspace.astronomy_for(view))
             if keep_open:
                 try:document=open_view(self.saved)
                 except (ValueError,OSError) as exc:
@@ -1100,17 +1207,20 @@ class ConfiguratorApp(App):
         active=self.workspace.busy or (self.preview_job is not None and self.preview_job.state.name in ('PENDING','RUNNING'))
         if active and not self.cancelling_operation and not self.leaving:
             self.cancelling_operation=True
+            operation=self.workspace.operation
             if self.preview_job is not None:self.preview_job.cancel()
-            self.run_worker(self.cancel_active_operation())
+            self.run_worker(self.cancel_active_operation(operation))
         else:
             self.termination_signal=signal.SIGINT
             if self.cancelling_operation:self.workspace.kill_owned()
             self.run_worker(self.action_force_cancel())
 
-    async def cancel_active_operation(self):
+    async def cancel_active_operation(self,operation=None):
+        operation=operation or self.workspace.operation
         try:
             await self.workspace.stop()
-            if not self.leaving:self.status('Operation cancelled. Draft and last successful preview retained. Ctrl-C while idle exits; Ctrl-D/Ctrl-Q requests exit.')
+            if not self.leaving and operation=='exchange':self.status('Scene exchange interrupted. Inspect the chosen destination before retrying; a partial or complete new copy may exist. Draft and prior previews retained.')
+            elif not self.leaving:self.status('Operation cancelled. Draft and last successful preview retained. Ctrl-C while idle exits; Ctrl-D/Ctrl-Q requests exit.')
         finally:self.cancelling_operation=False
 
     async def action_force_cancel(self):

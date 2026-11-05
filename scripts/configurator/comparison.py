@@ -7,7 +7,7 @@ from dataclasses import dataclass,replace
 from datetime import datetime,timezone
 import asyncio,hashlib,html,json,os,shutil,stat,tempfile
 from pathlib import Path
-from .model import NUMERIC_FIELDS,View
+from .model import NUMERIC_FIELDS,View,MONTHS
 from .fileio import fingerprint
 from .resources import binary_signature,verified_identity,identity
 from .workspace import Workspace,renderer_path,read_bounded
@@ -22,6 +22,7 @@ class ComparisonPlan:
     views:tuple[View,...]
     parameter:str
     epoch:str
+    months:tuple=()
 
 @dataclass(frozen=True)
 class ComparisonSet:
@@ -36,10 +37,16 @@ class ComparisonSet:
         except (OSError,ValueError,RuntimeError):return False
 
 
-def reason(view):
-    if view.projection!='space':return 'Framing sheets need a space view; map projections do not use these framing controls.'
-    if view.camera_mode!='centre':return 'This first framing sheet supports body-centre cameras; lunar orbital camera comparisons are not implemented.'
-    if view.uses_capture() or view.uses_observations():return 'Framing sheets currently require static imagery/layers. Current-data captures are not relabeled as fixed-time observations.'
+def reason(view,kind='framing'):
+    if kind not in ('framing','months'):return 'Choose framing or bundled imagery months.'
+    if kind=='months':
+        if view.target!='earth':return 'Imagery-month sheets are Earth-only.'
+        if view.map_family=='stock':return 'Choose an existing bundled monthly map family first; stock imagery has no month selection.'
+    if kind=='framing' and view.projection!='space':return 'Framing sheets need a space view; map projections do not use these framing controls.'
+    if kind=='framing' and view.camera_mode!='centre':return 'This first framing sheet supports body-centre cameras; lunar orbital camera comparisons are not implemented.'
+    if 'norad' in view.uses_astronomy():return 'Current NORAD cannot be relabeled as a fixed-time comparison sheet; turn the layer Off to retain its capture.'
+    if view.uses_capture() or view.uses_observations():return 'Comparison sheets currently require static imagery/layers. Current-data captures are not relabeled as fixed-time observations.'
+    if kind=='months':return ''
     parameter=view.framing;value=getattr(view,parameter,None)
     if parameter not in ('radius','fov') or type(value) not in (int,float):return 'Enter valid radius or field-of-view framing first.'
     _,low,high=NUMERIC_FIELDS[parameter]
@@ -47,14 +54,21 @@ def reason(view):
     return ''
 
 
-def plan(view,*,now=None):
-    view.validate();problem=reason(view)
+def plan(view,*,now=None,kind='framing',months=None):
+    view.validate();problem=reason(view,kind)
     if problem:raise ValueError(problem)
     epoch=(now or datetime.now(timezone.utc)).astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ') if view.time_mode=='now' else view.utc
     frozen=replace(view,time_mode='fixed',utc=epoch,geometry=GEOMETRY)
-    views=tuple(replace(frozen,**{view.framing:getattr(view,view.framing)*factor}) for factor in (.75,1,1.25))
+    if set(frozen.uses_astronomy())!=set(view.uses_astronomy()):raise ValueError('Freezing Now would change astronomy eligibility; choose the intended fixed event time explicitly or turn the layer Off.')
+    if kind=='months':
+        months=tuple(f'{(int(view.month)-1+shift)%12+1:02d}' for shift in (0,4,8)) if months is None else months
+        if not isinstance(months,(tuple,list)) or len(months)!=3 or any(not isinstance(value,str) or value not in MONTHS for value in months) or len(set(months))!=3:raise ValueError('Choose three distinct bundled imagery months.')
+        months=tuple(months);views=tuple(replace(frozen,month=month) for month in months);parameter='month'
+    else:
+        if months is not None:raise ValueError('Framing sheets do not accept imagery-month overrides.')
+        views=tuple(replace(frozen,**{view.framing:getattr(view,view.framing)*factor}) for factor in (.75,1,1.25));parameter=view.framing;months=()
     for candidate in views:candidate.validate()
-    return ComparisonPlan(view,views,view.framing,epoch)
+    return ComparisonPlan(view,views,parameter,epoch,months)
 
 
 def png_bytes(path):
@@ -77,14 +91,14 @@ def write(path,data):
 async def render_set(workspace,review,renderer,*,config_bytes=None,progress=None):
     if workspace.busy:raise ValueError('Another finite operation is running.')
     # A caller cannot smuggle a historical live-data scene through a forged plan.
-    expected=plan(review.source,now=datetime.strptime(review.epoch,'%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=timezone.utc))
+    expected=plan(review.source,now=datetime.strptime(review.epoch,'%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=timezone.utc),kind='months' if review.parameter=='month' else 'framing',months=review.months if review.parameter=='month' else None)
     if review!=expected:raise ValueError('Comparison plan changed; review again.')
     child=Workspace();directory=None;published=False
     workspace.busy=True;workspace.operation='comparison';workspace.comparison_workspace=child
     workspace.comparison_outcome='running';workspace.comparison_error=None
     deadline=asyncio.get_running_loop().time()+WAIT_BUDGET
     try:
-        child.reset_captures(workspace.capture_for(review.source),workspace.observations_for(review.source))
+        child.reset_captures(workspace.capture_for(review.source),workspace.observations_for(review.source),tuple(workspace.astronomy_for(review.source).values()))
         binary=renderer_path(renderer);stamp,binary_hash=binary_signature(binary)
         directory=Path(tempfile.mkdtemp(prefix='comparison-',dir=workspace.root));frames=[];rows=[]
         for index,view in enumerate(review.views,1):
@@ -95,9 +109,9 @@ async def render_set(workspace,review,renderer,*,config_bytes=None,progress=None
             stamp=verified_identity(binary,stamp,binary_hash)
             raw=png_bytes(image);name=f'frame-{index}.png';write(directory/name,raw);frames.append(directory/name)
             rows.append({'file':name,'sha256':hashlib.sha256(raw).hexdigest(),'parameter':review.parameter,'value':getattr(view,review.parameter),'epoch':review.epoch})
-        caption=f'{review.source.target.title()} framing · {review.epoch} · {GEOMETRY}'
+        caption=f'{review.source.target.title()} '+('bundled 2004 imagery months · '+review.source.map_family if review.parameter=='month' else 'framing')+f' · {review.epoch} · {GEOMETRY}'
         figures=''.join('<figure><img src="'+row['file']+'" alt="'+html.escape(row['parameter']+' '+str(row['value']),quote=True)+'"><figcaption>'+html.escape(row['parameter']+' = '+str(row['value']))+'</figcaption></figure>' for row in rows)
-        page='''<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' file:; style-src 'unsafe-inline'; base-uri 'none'; object-src 'none'"><title>Framing comparison</title><style>body{background:#17171c;color:#eee;font:16px system-ui;margin:2rem}main{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1rem}figure{margin:0}img{width:100%;height:auto}figcaption{padding:.5rem}p{max-width:90ch}</style><h1>'''+html.escape(caption)+'''</h1><p>Three finite snapshots, not live output. Scene time is held fixed; a Now draft is frozen once for this reviewed set. Only framing changes; original draft, native files and desktop stay unchanged. These 16:9 images do not certify another display geometry, texture epoch or scientific accuracy. Actual resource resolution is not certified. No external resources or scripts.</p><main>'''+figures+'''</main><p>Temporary results: this sheet and images are removed when the editor closes. A later failure/cancellation retains the previous complete set.</p></html>'''
+        page='''<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' file:; style-src 'unsafe-inline'; base-uri 'none'; object-src 'none'"><title>Scene comparison</title><style>body{background:#17171c;color:#eee;font:16px system-ui;margin:2rem}main{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1rem}figure{margin:0}img{width:100%;height:auto}figcaption{padding:.5rem}p{max-width:90ch}</style><h1>'''+html.escape(caption)+'''</h1><p>Three finite snapshots, not live output. Scene time is held fixed; a Now draft is frozen once for this reviewed set. Only the reviewed comparison parameter changes; original draft, native files and desktop stay unchanged. Imagery months are not different simulated scene times or certified historical conditions. These 16:9 images do not certify another display geometry, texture epoch or scientific accuracy. Actual resource resolution is not certified. No external resources or scripts.</p><main>'''+figures+'''</main><p>Temporary results: this sheet and images are removed when the editor closes. A later failure/cancellation retains the previous complete set.</p></html>'''
         write(directory/'index.html',page.encode())
         write(directory/'comparison.json',(json.dumps({'schema':1,'epoch':review.epoch,'geometry':GEOMETRY,'renderer_sha256':binary_hash.hex(),'frames':rows},indent=2)+'\n').encode())
         stamp=verified_identity(binary,stamp,binary_hash)

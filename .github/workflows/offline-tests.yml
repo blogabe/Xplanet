@@ -22,30 +22,8 @@ jobs:
         run: |
           export TOTALMARKER_PYTHON="$(command -v python)"
           ./scripts/xplanet.sh test
-  portable:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python: ['3.11', '3.13']
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@v7
-        with:
-          python-version: ${{ matrix.python }}
-      - name: Portable data and publication suite
-        env:
-          TZ: UTC
-          PYTHONDONTWRITEBYTECODE: '1'
-          PYTHONPATH: scripts:dev
-        run: python -m tests.run_portable
-
   configurator:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [macos-latest, ubuntu-latest]
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v7
         with:

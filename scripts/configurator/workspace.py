@@ -11,6 +11,7 @@ import sys
 import re
 import tempfile
 from .cloud_capture import FrozenCloud, IMAGE_FILE, META_FILE, IMAGE_LIMIT, META_LIMIT, describe_capture
+from .astronomy_capture import FrozenAstronomy,FILES as ASTRONOMY_FILES,META_LIMIT as ASTRONOMY_META_LIMIT,LIMIT as ASTRONOMY_LIMIT,ICON_LIMIT as ASTRONOMY_ICON_LIMIT,ICON_NAME as ASTRONOMY_ICON_NAME,payload_names as astronomy_payload_names,describe as describe_astronomy
 from .geography import PLACE_FILE, ROUTE_FILE
 from .observation_capture import FrozenObservations,PRODUCTS as OBS_PRODUCTS,META_FILE as OBS_META,payload_names,describe as describe_observations,TEXT_LIMIT,ICON_LIMIT
 from totalmarker.paths import RootFS
@@ -61,7 +62,7 @@ def renderer_path(value):
     return path
 
 
-def configuration_issues(view, renderer, config_bytes=None, capture=None, observations=None,capability_report=None):
+def configuration_issues(view, renderer, config_bytes=None, capture=None, observations=None,capability_report=None,astronomy=None):
     """Read-only configuration preflight shared by health, render and save."""
     issues = view.issues()+capability_issues(capability_report,view,renderer)
     problem=view.capture_problem(capture)
@@ -81,6 +82,15 @@ def configuration_issues(view, renderer, config_bytes=None, capture=None, observ
             facts=observations.metadata['products'].get(product,{})
             if facts and (observations.freshness(product) in ('stale','invalid') or facts['last_outcome']=='failed'):
                 issues.append(Issue('warning','observations_id',f'{product}: saved source is stale/invalid or had a failed refresh; verified frozen output is retained.'))
+    problem=view.astronomy_problem(astronomy)
+    if problem:issues.append(Issue('blocking','astronomy',problem))
+    for product,frozen in (astronomy or {}).items():
+        if not isinstance(frozen,FrozenAstronomy):continue
+        issues.append(Issue('info',product+'_layer',describe_astronomy(frozen)))
+        if product in view.uses_astronomy():
+            available,reason=frozen.availability(target=view.target,time_mode=view.time_mode,utc=view.utc)
+            issues.append(Issue('info' if available else 'blocking',product+'_layer',reason))
+            if frozen.metadata['facts']['last_outcome']=='failed':issues.append(Issue('warning',product+'_layer','Saved producer reported failure; validated last-good bytes were captured. No provider request was made.'))
     try:
         renderer_path(renderer)
     except (ValueError, OSError, RuntimeError) as exc:
@@ -112,6 +122,7 @@ class PreviewSnapshot:
     observation_provenance: bytes | None = None
     binary_identity: tuple | None = None
     image_identity: tuple | None = None
+    astronomy_provenance: tuple = ()
 
     def matches(self, view, renderer, config_bytes):
         try:
@@ -136,6 +147,7 @@ class Workspace:
         self.last_resources=None
         self.captures = {}
         self.observations = {}
+        self.astronomy = {}
         self.operation = None
         self.comparison_workspace=None
         self.comparison_latest=None
@@ -144,29 +156,54 @@ class Workspace:
         self.stopping=None
         self.hard_killed=None
 
+    def capture_bytes(self):
+        return sum(len(item.image) for item in self.captures.values())+sum(item.byte_size for item in self.observations.values())+sum(item.byte_size for item in self.astronomy.values())
+
     def register_capture(self,capture):
         if not isinstance(capture,FrozenCloud):raise ValueError('Invalid frozen capture.')
-        if capture.identity not in self.captures and sum(len(item.image) for item in self.captures.values())+sum(item.byte_size for item in self.observations.values())+len(capture.image)>CAPTURE_BUDGET:
+        if capture.identity not in self.captures and self.capture_bytes()+len(capture.image)>CAPTURE_BUDGET:
             raise ValueError('Capture history reached 128 MiB. Save a new copy and reopen it before capturing again; existing captures are retained.')
         self.captures[capture.identity]=capture
         return capture.identity
 
-    def reset_captures(self,capture=None,observations=None):
-        self.captures={capture.identity:capture} if capture is not None else {}
-        self.observations={observations.identity:observations} if observations is not None else {}
+    def reset_captures(self,capture=None,observations=None,astronomy=()):
+        captures={capture.identity:capture} if capture is not None else {}
+        observed={observations.identity:observations} if observations is not None else {}
+        sky={item.identity:item for item in astronomy}
+        size=sum(len(item.image) for item in captures.values())+sum(item.byte_size for item in observed.values())+sum(item.byte_size for item in sky.values())
+        if size>CAPTURE_BUDGET:raise ValueError('Retained captures exceed the session budget.')
+        self.captures,self.observations,self.astronomy=captures,observed,sky
 
     def capture_for(self,view):
         return self.captures.get(view.capture_id)
 
     def register_observations(self,frozen):
         if not isinstance(frozen,FrozenObservations):raise ValueError('Invalid frozen observations.')
-        used=sum(len(item.image) for item in self.captures.values())+sum(item.byte_size for item in self.observations.values())
+        used=self.capture_bytes()
         if frozen.identity not in self.observations and used+frozen.byte_size>CAPTURE_BUDGET:
             raise ValueError('Capture history reached 128 MiB; save a copy and reopen it before capturing again.')
         self.observations[frozen.identity]=frozen
         return frozen.identity
 
     def observations_for(self,view):return self.observations.get(view.observations_id)
+
+    def astronomy_for(self,view):
+        return {product:self.astronomy[identity] for product in ASTRONOMY_FILES if (identity:=getattr(view,product+'_id')) in self.astronomy}
+
+    def register_astronomy(self,frozen):
+        if not isinstance(frozen,FrozenAstronomy):raise ValueError('Invalid frozen astronomy capture.')
+        if frozen.identity not in self.astronomy and self.capture_bytes()+frozen.byte_size>CAPTURE_BUDGET:raise ValueError('Capture history reached 128 MiB; save an inactive copy and reopen it before capturing again.')
+        self.astronomy[frozen.identity]=frozen
+        return frozen.identity
+
+    async def capture_astronomy(self,source_root,config,product,timeout=10):
+        if product not in ASTRONOMY_FILES:raise ValueError('Choose NORAD or eclipse capture.')
+        return await self._capture(source_root,config,timeout,None,astronomy_product=product)
+
+    async def import_eclipse_file(self,source,claimed_url,timeout=10,*,first_row_date=None):
+        try:source=Path(source).expanduser();source.resolve()
+        except RuntimeError as exc:raise ValueError('Local eclipse path cannot be resolved safely.') from exc
+        return await self._capture(None,None,timeout,None,astronomy_product='eclipse',local_eclipse=(str(source),claimed_url,first_row_date))
 
     async def capture_cloud(self,source_root,config,timeout=10):
         return await self._capture(source_root,config,timeout,None)
@@ -175,17 +212,19 @@ class Workspace:
         if not products or not set(products)<=set(OBS_PRODUCTS):raise ValueError('Choose supported observations.')
         return await self._capture(source_root,config,timeout,tuple(products))
 
-    async def _capture(self,source_root,config,timeout,products):
+    async def _capture(self,source_root,config,timeout,products,*,astronomy_product=None,local_eclipse=None):
         if self.busy:raise ValueError('A finite operation is already running.')
         self.busy=True;self.operation='capture';work=None;spawn=None
         try:
             work=Path(tempfile.mkdtemp(prefix='capture-',dir=self.root))
             env={**os.environ,'PYTHONPATH':str(ROOT/'scripts'),'PYTHONDONTWRITEBYTECODE':'1'}
-            module='configurator.observation_capture' if products else 'configurator.cloud_capture'
-            extra=['--products',','.join(products)] if products else []
+            module='configurator.astronomy_capture' if astronomy_product else 'configurator.observation_capture' if products else 'configurator.cloud_capture'
+            extra=['--product',astronomy_product] if astronomy_product else ['--products',','.join(products)] if products else []
+            source_args=['--root',source_root,'--config',config]
+            if local_eclipse:source_args=['--local-eclipse',local_eclipse[0],'--reference-url',local_eclipse[1]]+(['--first-row-date',local_eclipse[2]] if local_eclipse[2] is not None else []);extra=[]
             with tempfile.TemporaryFile() as log:
                 spawn=asyncio.create_task(asyncio.create_subprocess_exec(
-                    sys.executable,'-B','-m',module,'--root',source_root,'--config',config,
+                    sys.executable,'-B','-m',module,*source_args,
                     '--output',str(work),*extra,cwd=work,env=env,stdout=log,stderr=log,start_new_session=True))
                 try:
                     self.process=await asyncio.shield(spawn)
@@ -195,7 +234,11 @@ class Workspace:
                         detail=' '.join(log.read().decode('utf-8',errors='replace').split())
                         raise ValueError(detail or 'Capture failed; previous capture retained.')
                     fs=RootFS(work)
-                    if products:
+                    if astronomy_product:
+                        meta_name=f'frozen-{astronomy_product}.json';raw=read_stable(fs,meta_name,ASTRONOMY_META_LIMIT)
+                        contents={meta_name:raw,**{name:read_stable(fs,name,ASTRONOMY_ICON_LIMIT if ASTRONOMY_ICON_NAME.fullmatch(name) else ASTRONOMY_LIMIT) for name in astronomy_payload_names(raw)}}
+                        frozen=FrozenAstronomy.from_files(contents,astronomy_product);self.register_astronomy(frozen)
+                    elif products:
                         raw=read_stable(fs,OBS_META,16384)
                         contents={OBS_META:raw,**{name:read_stable(fs,name,ICON_LIMIT if name.endswith('.png') else TEXT_LIMIT) for name in payload_names(raw)}}
                         frozen=FrozenObservations.from_files(contents);self.register_observations(frozen)
@@ -236,6 +279,36 @@ class Workspace:
             finally:
                 if child is not None:await child.close_output()
 
+    async def exchange_scene(self,mode,source,destination,*,renderer=None,preview=None,timeout=30):
+        """Supervise the existing inert CLI; no detached thread can publish later."""
+        if self.busy:raise ValueError('Wait for the current operation before exchanging a scene.')
+        if mode not in ('export','import'):raise ValueError('Choose scene export or import.')
+        try:
+            source=Path(source).expanduser();target=Path(destination).expanduser()
+            source.resolve();resolved=target.resolve()
+            if preview is not None:preview=Path(preview).expanduser();preview.resolve()
+            binary=renderer_path(renderer or '') if mode=='import' else None
+        except RuntimeError as exc:raise ValueError('Exchange paths cannot be resolved safely; choose real absolute paths without loops or unknown users.') from exc
+        if resolved.is_relative_to(self.root):raise ValueError('Choose a destination outside the temporary preview workspace.')
+        if not source.is_absolute() or not target.is_absolute():raise ValueError('Choose absolute source and destination paths.')
+        args=[sys.executable,'-B','-m','configurator.exchange','--'+mode,str(source),'--destination',str(target)]
+        if mode=='import':
+            if preview is not None:raise ValueError('Import does not accept a preview override.')
+            args+=['--renderer',str(binary)]
+        elif preview is not None:args+=['--preview',str(preview)]
+        self.busy=True;self.operation='exchange';work=None;log=BoundedLog()
+        try:
+            work=Path(tempfile.mkdtemp(prefix='exchange-',dir=self.root))
+            env={**os.environ,'PYTHONPATH':str(ROOT/'scripts'),'PYTHONDONTWRITEBYTECODE':'1','HOME':str(work),'TMPDIR':str(work)}
+            code=await self._run_child(args,work,env,log,timeout)
+            if code:raise ValueError('Scene exchange did not complete. '+(log.ending() or f'Worker exit {code}.')+' Inspect the destination before retrying; no overwrite or activation occurred.')
+            return target
+        except asyncio.TimeoutError as exc:
+            raise ValueError('Scene exchange exceeded its wait budget and was stopped. Inspect the destination before retrying; a partial or complete new copy may exist.') from exc
+        finally:
+            self.busy=False;self.operation=None
+            if work is not None:shutil.rmtree(work,ignore_errors=True)
+
     async def preview(self, view, renderer, timeout=30, *, config_bytes=None,diagnostic=False):
         if self.busy:raise ValueError('A preview is already running; cancel it or wait.')
         self.busy=True;self.operation='preview';self.last_outcome='running'
@@ -243,13 +316,14 @@ class Workspace:
         if diagnostic:self.last_resources=None
         deadline=asyncio.get_running_loop().time()+timeout
         try:
-            require_valid(configuration_issues(view,renderer,config_bytes,self.capture_for(view),self.observations_for(view),None if diagnostic else self.capabilities))
+            require_valid(configuration_issues(view,renderer,config_bytes,self.capture_for(view),self.observations_for(view),None if diagnostic else self.capabilities,astronomy=self.astronomy_for(view)))
             args=view.arguments();binary=renderer_path(renderer);binary_stamp,binary_hash=binary_signature(binary);body=view.body()
             try:
                 work=Path(tempfile.mkdtemp(prefix='preview-',dir=self.root));config=work/'xp.conf';output=work/'earth.png';config.write_bytes(body)
                 files=view.auxiliary_files(active_only=True)
                 if view.uses_observations():files.update(self.observations_for(view).files(products=view.uses_observations()))
                 if view.uses_capture():files[IMAGE_FILE]=self.capture_for(view).image
+                for product in view.uses_astronomy():files.update(self.astronomy_for(view)[product].files())
                 for name,data in files.items():(work/name).write_bytes(data)
             except OSError as exc:raise ValueError('Cannot prepare preview output. Check temporary-directory permissions and free space: '+str(exc)) from exc
             env={**os.environ,'HOME':str(work),'TMPDIR':str(work),'XDG_CACHE_HOME':str(work),'PYTHONDONTWRITEBYTECODE':'1'}
@@ -278,9 +352,14 @@ class Workspace:
             except ValueError as exc:raise ValueError('Renderer changed during preview; rerun with the current executable. Output was not retained.') from exc
             if diagnostic and self.capabilities.status=='reported' and self.capabilities.binary_identity[:4]==binary_stamp[:4]:
                 self.capabilities=replace(self.capabilities,binary_identity=binary_stamp)
+            # A valid preflight is not a lease on a time-sensitive capture.
+            # Publish only while the completed request is still eligible.
+            for product in view.uses_astronomy():
+                available,reason=self.astronomy_for(view)[product].availability(target=view.target,time_mode=view.time_mode,utc=view.utc)
+                if not available:raise ValueError('Astronomy became unavailable during rendering: '+reason)
             snapshot=PreviewSnapshot(output,view,binary,view.render_digest(),datetime.now(timezone.utc).isoformat(timespec='seconds'),detail,
                                      self.capture_for(view).provenance if view.uses_capture() else None,
-                                     self.observations_for(view).provenance if view.uses_observations() else None,binary_identity=binary_stamp,image_identity=identity(output))
+                                     self.observations_for(view).provenance if view.uses_observations() else None,binary_identity=binary_stamp,image_identity=identity(output),astronomy_provenance=tuple((product,self.astronomy_for(view)[product].provenance) for product in view.uses_astronomy()))
             obsolete=self.previous.path.parent if self.previous else None
             self.previous,self.latest=self.latest,snapshot;self.last_outcome,self.last_error='succeeded',None
             return output
@@ -340,11 +419,12 @@ class Workspace:
         self.temporary.cleanup()
 
 
-def save_view(destination, view, renderer, *, config_bytes=None, capture=None, observations=None):
+def save_view(destination, view, renderer, *, config_bytes=None, capture=None, observations=None,astronomy=None):
     """Create a new native config pair, never replace any existing destination."""
-    require_valid(configuration_issues(view, renderer, config_bytes, capture,observations))
+    require_valid(configuration_issues(view, renderer, config_bytes, capture,observations,astronomy=astronomy))
     binary = renderer_path(renderer)
     files={**view.auxiliary_files(), **(capture.files() if view.capture_id else {}),**(observations.files() if observations else {})}
+    for frozen in (astronomy or {}).values():files.update(frozen.files())
     return new_directory(destination,[('xp.conf',view.body()),('xp.def',view.definition(binary).encode()),*files.items()])
 
 
@@ -359,10 +439,14 @@ def read_bounded(fd,bound):
 
 def saved_limit(name,prefix):
     short=name[len(prefix):] if prefix and name.startswith(prefix) else name
+    if ASTRONOMY_ICON_NAME.fullmatch(short):return ASTRONOMY_ICON_LIMIT
     if short==ORIGIN_FILE:return 256
     if short==IMAGE_FILE:return IMAGE_LIMIT
     if short==META_FILE:return META_LIMIT
     if short==OBS_META:return 16384
+    for product,names in ASTRONOMY_FILES.items():
+        if short==f'frozen-{product}.json':return ASTRONOMY_META_LIMIT
+        if short in names:return ASTRONOMY_LIMIT
     for product in OBS_PRODUCTS:
         if short=='observed-'+product+'.png':return ICON_LIMIT
         if short in ('observed-'+product+'.markers','observed-'+product+'.arcs'):return TEXT_LIMIT
@@ -414,6 +498,10 @@ def open_view(source):
                 if contents[name].startswith(tuple((header+'\n').encode() for header,version in SCENE_HEADERS.items() if version>=6)) and any(re.fullmatch(b'XPLANET_CLOUD_CAPTURE=[0-9a-f]{64}',line) for line in lines):
                     names.extend((prefix+IMAGE_FILE,prefix+META_FILE))
                 if contents[name].startswith(tuple((header+'\n').encode() for header,version in SCENE_HEADERS.items() if version>=10)) and any(re.fullmatch(b'XPLANET_OBSERVATIONS=[0-9a-f]{64}',line) for line in lines):names.append(prefix+OBS_META)
+            if name==def_name and contents[name].startswith(tuple((header+'\n').encode() for header,version in SCENE_HEADERS.items() if version>=16)):
+                for product,files in ASTRONOMY_FILES.items():
+                    if any(re.fullmatch(('XPLANET_'+product.upper()+'_CAPTURE=[0-9a-f]{64}').encode(),line) for line in contents[name].split(b'\n')):names.append(prefix+f'frozen-{product}.json')
+            if name in tuple(prefix+f'frozen-{product}.json' for product in ASTRONOMY_FILES):names.extend(prefix+item for item in astronomy_payload_names(contents[name]))
             if name==prefix+OBS_META:names.extend(prefix+item for item in payload_names(contents[name]))
         for name, fd, before in opened:
             expected = (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns, before.st_ctime_ns)
@@ -430,7 +518,7 @@ def open_view(source):
                                         places=contents.get(prefix+PLACE_FILE),routes=contents.get(prefix+ROUTE_FILE),
                                         capture=FrozenCloud(contents[prefix+IMAGE_FILE],contents[prefix+META_FILE]) if prefix+IMAGE_FILE in contents else None,
                                         observations=FrozenObservations.from_files(contents,prefix) if prefix+OBS_META in contents else None,
-                                        origin=contents.get(prefix+ORIGIN_FILE),asset_prefix=prefix),source=selected if named else directory,named_source=named,native_files=tuple(contents.items()))
+                                        origin=contents.get(prefix+ORIGIN_FILE),asset_prefix=prefix,astronomy=tuple(FrozenAstronomy.from_files(contents,product,prefix) for product in ASTRONOMY_FILES if prefix+f'frozen-{product}.json' in contents)),source=selected if named else directory,named_source=named,native_files=tuple(contents.items()))
     finally:
         for _, fd, _ in opened:
             os.close(fd)

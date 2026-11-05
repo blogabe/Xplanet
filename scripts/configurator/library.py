@@ -19,8 +19,8 @@ def entries(fd):
         return rows
 
 
-def save_named(destination,view,renderer,*,config_bytes=None,capture=None,observations=None):
-    require_valid(configuration_issues(view,renderer,config_bytes,capture,observations))
+def save_named(destination,view,renderer,*,config_bytes=None,capture=None,observations=None,astronomy=None):
+    require_valid(configuration_issues(view,renderer,config_bytes,capture,observations,astronomy=astronomy))
     binary=renderer_path(renderer);target=Path(destination).expanduser()
     if not target.is_absolute() or target.suffix!='.conf' or any(c in str(target) for c in '\r\n\0'):
         raise ValueError('Choose an absolute new scene-name.conf path.')
@@ -45,6 +45,7 @@ def save_named(destination,view,renderer,*,config_bytes=None,capture=None,observ
         auxiliary={**view.auxiliary_files(),**(capture.files() if view.capture_id else {})}
         files=[(prefix+name,data) for name,data in auxiliary.items()]
         if observations is not None:files.extend(observations.files(prefix).items())
+        for frozen in (astronomy or {}).values():files.extend(frozen.files(prefix).items())
         files += [(target.name,view.body(prefix)),(target.stem+'.def',view.definition(binary,asset_prefix=prefix).encode())]
         # Exclude our temporary reservation from the final entry count. Refuse
         # publication before writing files that would make browsing fail.

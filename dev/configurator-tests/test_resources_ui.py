@@ -76,4 +76,4 @@ class ResourceUITests(unittest.IsolatedAsyncioTestCase):
             await click(pilot,'#preview');self.assertIn('16,777,216',str(self.app.query_one('#status',Static).render()))
             self.app.query_one('#geometry',Input).value='2160x1080';self.app.query_one('#destination',Input).value=str(source);await pilot.pause()
             await click(pilot,'#save');await click(pilot,'#confirm-save');await pilot.pause()
-        self.assertEqual(open_view(source).view.geometry,'2160x1080');self.assertIn(b'scene v15',source.with_suffix('.def').read_bytes())
+        self.assertEqual(open_view(source).view.geometry,'2160x1080');self.assertIn(b'scene v16',source.with_suffix('.def').read_bytes())

@@ -55,6 +55,7 @@ def main():
     finally:
         if app is not None and app.recovery:app.recovery.close()
         workspace.close()
+        if app is not None and getattr(app,'exchange_notice',''):print(app.exchange_notice)
 
 
 if __name__ == '__main__':

@@ -118,7 +118,7 @@ def render_product(existing, prefix, timestamp, now, warning, colors, *,
 
 def render_cloud(existing, source_created_at, now, warning, colors, *, append=True):
     return render_product(existing, PREFIX, source_created_at, now, warning,
-                          colors, append=append, second_coordinate=-12)
+                          colors, append=append, second_coordinate=-13)
 
 
 def render_volcano(existing, successful_at, now, warning, colors, *, append=True):

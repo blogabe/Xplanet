@@ -20,7 +20,7 @@ versioned xp.def and matching xp.conf. `shlex` tokenizes literal paths without
 expansion or execution. V8 adds explicit target; V7 adds composition. V6 adds a bounded frozen cloud asset and provenance; V5 adds whitelisted bundled layer settings; V4 adds bounded native surface
 annotation files; V3 adds map family/month, night texture, whole-degree
 twilight, grid and label; v2 camera/time and original foundation pairs remain
-explicit recognition cases with appearance defaults. V14 stores bounded preview geometry; new copies use v15 with an optional frozen lunar camera row and frame-centre percentages. Pre-v14 scenes retain 800×600; v14 preserves its stored dimensions. Saved
+explicit recognition cases with appearance defaults. V14 stores bounded preview geometry; V15 adds an optional frozen lunar camera row and frame-centre percentages; new copies use v16 with independent astronomy capture associations and a provenance-bound eclipse interval. Pre-v14 scenes retain 800×600; v14 preserves its stored dimensions. Saved
 executables and asset roots are never adopted by the UI. Native files stay the
 scene record; there is no sidecar settings store.
 
@@ -672,3 +672,37 @@ and no detached thread continues after exit. Export receipts omit executable/sou
 paths and raw private diagnostics; embedded image metadata is intentionally retained.
 `export_ui.py` owns explicit destination/confirmation only. Private temporary originals
 and user-owned durable copies have separate lifetimes. See [export contracts](configurator-export.md).
+
+## Scene exchange boundary
+
+`configurator.exchange` is a stdlib data boundary separate from Apply and rendering.
+It normalizes recognized generated scene snapshots with fixed portable renderer/asset
+placeholders, hashes bounded stored-ZIP members, and validates a private staging copy
+before exclusive publication. Import rebinds only the renderer and asset root to the
+recipient. It never evaluates shell definitions, probes the renderer or performs
+selection. Optional PNGs lose ancillary metadata and have bounded pixel streams.
+Frozen provider captures remain outside exchange v1 rather than being silently omitted.
+The small exchange forms collect explicit saved source/destination and optional PNG;
+Workspace supervises the same stdlib CLI through its existing owned process/stop path.
+No detached thread writes destinations after cancellation. The draft is not an export
+source, import never adopts an archived executable, and optional Open uses the existing
+fresh dirty-replacement gate. Cancellation truthfully leaves destination inspection to
+the user; output inside the temporary workspace is refused. See
+[format, workflows and limits](configurator-exchange.md).
+
+The [astronomy capture integration](configurator-astronomy-capture.md) validates
+existing NORAD and dated eclipse products without producer operations. V16 retains
+independent product IDs/files, including inactive choices, in named/legacy saves,
+preview identity/provenance and byte-preserving native copies. Recovery schema2 adds
+bounded astronomy blobs for both current and baseline IDs. Exact old schema1 fields
+normalize to Off in memory; unknown fields or versions remain refused without rewriting
+original records. Session quotas include all capture kinds.
+
+NORAD activates only on Earth Now, with epoch revalidation for preview/save, and
+central handoff command construction refuses active NORAD at both bundle and immutable
+revision paths. No runtime-expiry enforcement is implied. Eclipse activates only for
+Fixed UTC within its metadata-bound interval; Now omits references deterministically.
+Static eclipse handoff uses the existing immutable snapshot and timewarp0. Weather's
+Now-only policy stays intact. Framing sheets preserve captures in their owned child
+workspace and refuse conversions that would change eligibility. No zsh lifecycle,
+provider or deployment service code changes are required.

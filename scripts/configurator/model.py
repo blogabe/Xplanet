@@ -5,6 +5,7 @@ import math
 import hashlib
 from .cloud_capture import FrozenCloud, IMAGE_FILE, META_FILE
 from .observation_capture import FrozenObservations,PRODUCTS as OBS_PRODUCTS,names as observation_names
+from .astronomy_capture import FrozenAstronomy,FILES as ASTRONOMY_FILES
 from .geometry import DEFAULT_GEOMETRY,LEGACY_GEOMETRY,geometry
 from .geography import COLORS, PLACE_FILE, ROUTE_FILE, HEADERS, validate_rows, read_rows
 from pathlib import Path
@@ -54,7 +55,8 @@ SYSTEMS={parent:tuple(body for body,primary in MOON_PARENTS.items() if primary==
 # Longest configured moon periods in reviewed Xplanet 1.3.1 (days).
 SYSTEM_PERIOD_DAYS={'mars':1.2624407,'jupiter':16.6890184,'saturn':550.48,'uranus':1.41347925,'pluto':6.38723}
 MOON_SCALE_BODIES=tuple(body for members in SYSTEMS.values() for body in members)
-HEADER = '# Xplanet configurator scene v15; saving does not apply it.'
+HEADER = '# Xplanet configurator scene v16; saving does not apply it.'
+V15_HEADER = '# Xplanet configurator scene v15; saving does not apply it.'
 V14_HEADER = '# Xplanet configurator scene v14; saving does not apply it.'
 V13_HEADER = '# Xplanet configurator scene v13; saving does not apply it.'
 V12_HEADER = '# Xplanet configurator scene v12; saving does not apply it.'
@@ -78,14 +80,15 @@ LAYER_ASSETS = {
     'specular': 'assets/maps/specular/specular.png',
     'clouds': 'assets/maps/clouds/clouds_26Aug2011_2048.jpeg',
 }
-SCENE_HEADERS={HEADER:15,V14_HEADER:14,V13_HEADER:13,V12_HEADER:12,V11_HEADER:11,V10_HEADER:10,V9_HEADER:9,V8_HEADER:8,V7_HEADER:7,V6_HEADER:6,V5_HEADER:5,V4_HEADER:4,V3_HEADER:3,V2_HEADER:2}
+SCENE_HEADERS={HEADER:16,V15_HEADER:15,V14_HEADER:14,V13_HEADER:13,V12_HEADER:12,V11_HEADER:11,V10_HEADER:10,V9_HEADER:9,V8_HEADER:8,V7_HEADER:7,V6_HEADER:6,V5_HEADER:5,V4_HEADER:4,V3_HEADER:3,V2_HEADER:2}
 
 ORIGIN_FILE='camera.origin'
 LUNAR_BODY=('\n# Xplanet configurator lunar orbital observer v15.\n[moon]\nmap='+PLANET_MAPS['moon']+'\ngrid=false\n').encode()
 
 LOCAL_REFERENCES=(('marker_file',PLACE_FILE),('arc_file',ROUTE_FILE),('cloud_map',IMAGE_FILE),
                   *((key,name) for product in OBS_PRODUCTS for key,name in
-                    (('marker_file',observation_names(product)[0]),('arc_file',observation_names(product)[1]))))
+                    (('marker_file',observation_names(product)[0]),('arc_file',observation_names(product)[1]))),
+                  ('satellite_file',ASTRONOMY_FILES['norad'][0]),('marker_file',ASTRONOMY_FILES['eclipse'][0]),('arc_file',ASTRONOMY_FILES['eclipse'][1]))
 
 LEGACY_HEADER = '# Earth sample from the configurator; saving does not apply it.'
 
@@ -191,7 +194,7 @@ def choice_rules():
                ('relief_shadow', ('night','shade'), 'Choose relief shadows from night imagery or shaded day map.'),
                ('specular', ('off','bundled'), 'Choose specular reflection off or bundled.'),
                ('clouds', ('off','snapshot2011','captured'), 'Choose clouds off, the bundled 2011 image or an explicit frozen TotalMarker capture.')]
-    choices.extend((p+'_layer',('off','captured'),'Choose observations off or frozen capture.') for p in OBS_PRODUCTS)
+    choices.extend((p+'_layer',('off','captured'),'Choose observations off or frozen capture.') for p in (*OBS_PRODUCTS,*ASTRONOMY_FILES))
     return choices
 
 
@@ -240,6 +243,11 @@ class View:
     volcano_layer: str = 'off'
     storm_layer: str = 'off'
     observations_id: str = ''
+    norad_layer: str = 'off'
+    norad_id: str = ''
+    eclipse_layer: str = 'off'
+    eclipse_id: str = ''
+    eclipse_window: str = ''
     composition: str = 'target'
     satellite_scale: float = 1
     orbit_paths: str = 'off'
@@ -291,8 +299,10 @@ class View:
             if self.composition=='system':fields|={'satellite_scale','orbit_paths','moon_scales'}
             if self.uses_orbits():fields|={'orbit_color','orbit_width'}
         if self.target=='earth':
-            fields|={p+'_layer' for p in OBS_PRODUCTS}
+            fields|={p+'_layer' for p in (*OBS_PRODUCTS,*ASTRONOMY_FILES)}
             if self.uses_observations():fields.add('observations_id')
+            for product in self.uses_astronomy():fields.add(product+'_id')
+            if 'eclipse' in self.uses_astronomy():fields.add('eclipse_window')
         if self.target!='earth':fields.add('planet_shade')
         if self.target!='earth':
             fields-={'map_family','month','night','twilight','places','places_text','place_color','place_size',
@@ -302,6 +312,14 @@ class View:
 
     def issues(self):
         issues = []
+        for product in ASTRONOMY_FILES:
+            value=getattr(self,product+'_id')
+            if not isinstance(value,str) or value and not re.fullmatch('[0-9a-f]{64}',value):issues.append(Issue('blocking',product+'_id','Invalid frozen astronomy identity.'))
+        if self.eclipse_window:
+            try:self.eclipse_bounds()
+            except (ValueError,TypeError):issues.append(Issue('blocking','eclipse_window','Invalid frozen eclipse interval.'))
+        if self.target=='earth' and self.norad_layer=='captured' and self.time_mode!='now':issues.append(Issue('info','norad_layer','NORAD is inactive outside Now; selection and captured bytes are retained.'))
+        if self.target=='earth' and self.eclipse_layer=='captured' and 'eclipse' not in self.uses_astronomy():issues.append(Issue('info','eclipse_layer','Eclipse is inactive: choose Fixed UTC within captured central-path sample coverage; selection and bytes are retained.'))
         try:geometry(self.geometry)
         except ValueError as exc:issues.append(Issue('blocking','geometry',str(exc)))
         try:overrides=parse_moon_scales(self.moon_scales)
@@ -495,6 +513,8 @@ class View:
         layers=[f'{field}={getattr(self,field)}'+(' (inactive for fixed UTC)' if field=='clouds' and self.clouds=='captured' and self.time_mode=='fixed' else '') for field in ('relief','specular','clouds') if getattr(self,field)!='off']
         selected=[p for p in OBS_PRODUCTS if getattr(self,p+'_layer')=='captured']
         if selected:text+='; frozen observations '+', '.join(selected)+(' (inactive outside Now)' if self.time_mode!='now' else '')
+        astronomy=[p for p in ASTRONOMY_FILES if getattr(self,p+'_layer')=='captured']
+        if astronomy:text+='; astronomy '+', '.join(p+(' active' if p in self.uses_astronomy() else ' inactive') for p in astronomy)
         return text+('; '+', '.join(layers) if layers else '')
 
     def resource_paths(self):
@@ -569,7 +589,40 @@ class View:
             marker,arc,_=observation_names(product)
             body+=f'marker_file={marker}\n'.encode()
             if product=='storm':body+=f'arc_file={arc}\n'.encode()
+        for product in self.uses_astronomy():
+            first,second=ASTRONOMY_FILES[product]
+            body+=(f'satellite_file={first}\n' if product=='norad' else f'marker_file={first}\narc_file={second}\n').encode()
         return body_names(body,asset_prefix)
+
+    def eclipse_bounds(self):
+        parts=self.eclipse_window.split('/')
+        if len(parts)!=2:raise ValueError('Invalid eclipse interval.')
+        start,end=map(utc_date,parts)
+        if not start<end or (end-start).total_seconds()>86400:raise ValueError('Invalid eclipse interval.')
+        return start,end
+
+    def uses_astronomy(self):
+        if self.target!='earth':return ()
+        active=[]
+        if self.norad_layer=='captured' and self.time_mode=='now':active.append('norad')
+        if self.eclipse_layer=='captured' and self.time_mode=='fixed':
+            try:
+                start,end=self.eclipse_bounds()
+                if start<=utc_date(self.utc)<=end:active.append('eclipse')
+            except (ValueError,TypeError):pass
+        return tuple(active)
+
+    def astronomy_problem(self,astronomy):
+        astronomy=astronomy or {}
+        if not isinstance(astronomy,dict) or not set(astronomy)<=set(ASTRONOMY_FILES):return 'Unexpected frozen astronomy association.'
+        for product in ASTRONOMY_FILES:
+            identity=getattr(self,product+'_id');frozen=astronomy.get(product)
+            if identity:
+                if not isinstance(frozen,FrozenAstronomy) or frozen.product!=product or frozen.identity!=identity:return 'Retained '+product+' capture is missing or mismatched; reopen or capture explicitly.'
+            elif frozen is not None:return 'Unexpected '+product+' data does not match this scene.'
+            if product=='eclipse' and self.eclipse_window!=(frozen.window_token if frozen else ''):return 'Eclipse interval does not match retained provenance.'
+            if self.target=='earth' and getattr(self,product+'_layer')=='captured' and self.time_mode==('now' if product=='norad' else 'fixed') and not identity:return 'Explicitly capture '+product+' before Preview or Save.'
+        return None
 
     def uses_observations(self):
         return tuple(p for p in OBS_PRODUCTS if getattr(self,p+'_layer')=='captured') if self.target=='earth' and self.time_mode=='now' else ()
@@ -612,15 +665,18 @@ class View:
             digest.update(name.encode());digest.update(data)
         if self.uses_capture():digest.update(self.capture_id.encode())
         if self.uses_observations():digest.update(self.observations_id.encode())
+        for product in self.uses_astronomy():digest.update(getattr(self,product+'_id').encode())
+        if 'eclipse' in self.uses_astronomy():digest.update(self.eclipse_window.encode())
         return digest.hexdigest()
 
-    def definition(self, renderer, *, version=15, asset_root=ROOT, asset_prefix=''):
+    def definition(self, renderer, *, version=16, asset_root=ROOT, asset_prefix=''):
         self.validate()
         scene_prefix(asset_prefix)
         mode = 'space' if self.projection == 'space' else 'map'
         projection = '' if mode == 'space' else self.projection
         if version not in SCENE_HEADERS.values():raise ValueError('Unsupported scene version.')
         header = next(header for header,value in SCENE_HEADERS.items() if value==version)
+        if version<16 and (self.norad_layer!='off' or self.norad_id or self.eclipse_layer!='off' or self.eclipse_id or self.eclipse_window):raise ValueError('Older formats cannot retain astronomy captures.')
         if version<15 and (self.camera_mode!='centre' or (self.orbit_latitude,self.orbit_longitude,self.orbit_range,self.frame_x,self.frame_y)!=(0,145,2,50,50)):raise ValueError('Older formats cannot retain orbital camera or frame-centre settings.')
         if version<14 and self.geometry!=LEGACY_GEOMETRY:raise ValueError('Older formats require the legacy 800x600 geometry.')
         if version<13 and self.moon_scales:raise ValueError('Older formats cannot retain individual moon overrides.')
@@ -669,6 +725,7 @@ class View:
         if version>=12:extra+=f'XPLANET_ORBIT_PATHS={self.orbit_paths}\nXPLANET_ORBIT_COLOR={self.orbit_color}\nXPLANET_ORBIT_WIDTH={number(self.orbit_width)}\n'
         if version>=13:extra+=f'XPLANET_MOON_SCALES={shlex.quote(self.moon_scales)}\n'
         if version>=15:extra+=(f'XPLANET_CAMERA_MODE={self.camera_mode}\nXPLANET_ORBIT_LATITUDE={number(self.orbit_latitude)}\nXPLANET_ORBIT_LONGITUDE={number(self.orbit_longitude)}\nXPLANET_ORBIT_RANGE={number(self.orbit_range)}\nXPLANET_FRAME_X={number(self.frame_x)}\nXPLANET_FRAME_Y={number(self.frame_y)}\nXPLANET_ORIGIN_FILE={asset_prefix+ORIGIN_FILE if self.uses_lunar_camera() else ""}\n')
+        if version>=16:extra+=(f'XPLANET_NORAD_LAYER={self.norad_layer}\nXPLANET_NORAD_CAPTURE={self.norad_id}\nXPLANET_ECLIPSE_LAYER={self.eclipse_layer}\nXPLANET_ECLIPSE_CAPTURE={self.eclipse_id}\nXPLANET_ECLIPSE_WINDOW={self.eclipse_window}\n')
         return (f'{header}\nXPLANET_BIN={shlex.quote(str(renderer))}\n'
                 'XPLANET_HOME="$project_root"\nXPLANET_CONFIG="$project_root/config"\n'
                 f'XPLANET_SCENE_MODE={mode}\nXPLANET_PROJECTION={projection}\n'
@@ -699,11 +756,13 @@ class ViewDocument:
     named_source: bool = False
     observations: FrozenObservations | None = None
     native_files: tuple = field(default=(),repr=False)
+    astronomy: tuple = field(default=(),repr=False)
 
 
-def parse_saved_view(definition: bytes, config: bytes, *, places=None, routes=None, capture=None, observations=None, origin=None, asset_prefix=''):
+def parse_saved_view(definition: bytes, config: bytes, *, places=None, routes=None, capture=None, observations=None, origin=None, asset_prefix='', astronomy=()):
     """Recognize versioned exact native output formats, not arbitrary shell syntax."""
     try:
+        if not isinstance(astronomy,tuple) or any(not isinstance(item,FrozenAstronomy) for item in astronomy):raise ValueError('Invalid astronomy association.')
         scene_prefix(asset_prefix)
         text = definition.decode('utf-8')
         lines = text.split('\n')
@@ -757,6 +816,7 @@ def parse_saved_view(definition: bytes, config: bytes, *, places=None, routes=No
                     if len(scales)!=1:raise ValueError('Invalid moon scale metadata.')
                     view=replace(view,moon_scales=scales[0])
                 if version>=15:view=replace(view,camera_mode=values['XPLANET_CAMERA_MODE'],orbit_latitude=float(values['XPLANET_ORBIT_LATITUDE']),orbit_longitude=float(values['XPLANET_ORBIT_LONGITUDE']),orbit_range=float(values['XPLANET_ORBIT_RANGE']),frame_x=float(values['XPLANET_FRAME_X']),frame_y=float(values['XPLANET_FRAME_Y']))
+                if version>=16:view=replace(view,norad_layer=values['XPLANET_NORAD_LAYER'],norad_id=values['XPLANET_NORAD_CAPTURE'],eclipse_layer=values['XPLANET_ECLIPSE_LAYER'],eclipse_id=values['XPLANET_ECLIPSE_CAPTURE'],eclipse_window=values['XPLANET_ECLIPSE_WINDOW'])
                 expected = view.definition(renderer,version=version,asset_root=roots[0],asset_prefix=asset_prefix)
             else:
                 expected = view.definition(renderer, version=2)
@@ -767,11 +827,12 @@ def parse_saved_view(definition: bytes, config: bytes, *, places=None, routes=No
             raise ValueError
         # Duplicates, unknowns, ordering, quoting and expansions must reproduce
         # exactly. Dictionary extraction does not make this a general importer.
+        if len({item.product for item in astronomy})!=len(astronomy) or view.astronomy_problem({item.product:item for item in astronomy}):raise ValueError
         if view.capture_problem(capture) or view.observation_problem(observations):raise ValueError
         if origin!=view.origin_data():raise ValueError
         if text != expected or config != (view.body(asset_prefix) if version>=3 else SAMPLE.read_bytes()):
             raise ValueError
-        return ViewDocument(view, renderer, config, capture=capture,observations=observations)
+        return ViewDocument(view, renderer, config, capture=capture,observations=observations,astronomy=tuple(astronomy))
     except (ValueError, KeyError, IndexError, UnicodeError) as exc:
         raise ValueError('Unsupported saved view. Open only a recognized configurator-produced '
                          'xp.def/xp.conf pair; arbitrary or edited shell/config files are not imported.') from exc
@@ -820,6 +881,17 @@ def recognized_body(config):
             for key,name in LOCAL_REFERENCES:
                 text=text.replace(f'{key}={prefixes[0]}{name}\n',f'{key}={name}\n')
             config=text.encode()
+        astronomy_refs=[]
+        for product in ASTRONOMY_FILES:
+            first,second=ASTRONOMY_FILES[product]
+            refs=[f'satellite_file={first}\n'] if product=='norad' else [f'marker_file={first}\n',f'arc_file={second}\n']
+            counts=[text.count(line) for line in refs]
+            if any(counts):
+                if any(count!=1 for count in counts):return False
+                astronomy_refs.extend(refs)
+        if astronomy_refs:
+            for line in astronomy_refs:text=text.replace(line,'')
+            return recognized_body(text.encode())
         observed={}
         for product in OBS_PRODUCTS:
             marker,arc,_=observation_names(product)

@@ -72,10 +72,20 @@ class LabelTests(Sandbox):
         self.assertIn('color=Yellow image=none position=pixel', result)
         self.assertEqual(cloud_timestamp(result), timestamp)
 
+    def test_new_cloud_uses_minus13_without_migrating_existing_minus12(self):
+        colors=("Green","Yellow","Red")
+        new=render_cloud('',100000,100000,21600,colors)
+        self.assertTrue(new.startswith('-53 -13 "Cloud Map Last Updated '))
+        old='-53 -12 "Cloud Map Last Updated UNKNOWN" color=Red image=none position=pixel\n'
+        updated=render_cloud(old,100000,100000,21600,colors)
+        self.assertTrue(updated.startswith('-53 -12 "Cloud Map Last Updated '))
+        self.assertEqual(updated.count('Cloud Map Last Updated'),1)
+        self.assertIn('color=Green image=none position=pixel',updated)
+
     def test_new_cloud_offset_and_row_count(self):
         other = '# header\n-53 -13 "Earthquake Information Last Updated UNKNOWN" color=Red\n'
         text = render_cloud(other, None, 100, 21600, ("Green", "Yellow", "Red"))
-        self.assertIn('-68 -12 "Cloud Map Last Updated UNKNOWN" color=Red', text)
+        self.assertIn('-68 -13 "Cloud Map Last Updated UNKNOWN" color=Red', text)
         self.assertTrue(text.startswith(other))
         self.assertEqual(render_cloud(other, None, 100, 10, ("Green", "Yellow", "Red"),
                                       append=False), other)

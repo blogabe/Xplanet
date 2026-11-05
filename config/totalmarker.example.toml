@@ -14,7 +14,7 @@ log = "logs/totalmarker/events.jsonl"
 
 [labels]
 # Product operations refresh existing rows and retain their coordinates/order.
-# Clouds use the intentional -12 second coordinate; other product rows use -13.
+# New product rows use -13 as the second coordinate; existing values are retained.
 enabled = true
 warning_cloud_seconds = 21600
 warning_quake_seconds = 10800

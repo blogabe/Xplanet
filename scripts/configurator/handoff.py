@@ -43,6 +43,7 @@ def file_record(path,limit=FILE_LIMIT,*,missing=False):
 
 
 def command(view,binary,root,config,search,dimensions):
+    if 'norad' in view.uses_astronomy():raise ValueError('NORAD desktop handoff is unavailable: runtime epoch expiry is not enforced. Turn the NORAD layer Off to retain its capture without displaying it.')
     prefix=Path(config).stem+'.'
     args=view.arguments(asset_prefix=prefix,geometry_override=dimensions)
     if '-dynamic_origin' in args:

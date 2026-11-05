@@ -431,13 +431,13 @@ class CameraTimeTests(unittest.TestCase):
             save_view(root / 'v2-copy', document.view, sys.executable, config_bytes=document.config)
             self.assertEqual(open_view(root / 'v2-copy').view, view)
             self.assertEqual((source / 'xp.def').read_bytes(), definition)
-            self.assertIn(b'scene v15', (root / 'v2-copy/xp.def').read_bytes())
+            self.assertIn(b'scene v16', (root / 'v2-copy/xp.def').read_bytes())
         with self.assertRaises(ValueError):
             View(observer='moon').legacy_definition('/trusted/xplanet')
 
     def test_versioned_format_rejects_ambiguous_mode_and_executable_payloads(self):
         definition = View(projection='space', observer='moon', time_mode='fixed').definition('/trusted/xplanet')
-        for changed in (definition.replace('scene v15', 'scene v999'),
+        for changed in (definition.replace('scene v16', 'scene v999'),
                         definition.replace('XPLANET_SCENE_MODE=space', 'XPLANET_SCENE_MODE=map'),
                         definition.replace('XPLANET_PROJECTION=\n', 'XPLANET_PROJECTION=orthographic\n'),
                         definition + 'XPLANET_OBSERVER=sun\n',
