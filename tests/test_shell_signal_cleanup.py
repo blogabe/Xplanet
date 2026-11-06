@@ -30,3 +30,30 @@ class ShellSignalCleanupTests(unittest.TestCase):
                 self.assertEqual(list((root/'config').glob('.totalmarker.python.*')),[])
             finally:
                 if process.poll() is None:os.killpg(process.pid,signal.SIGKILL);process.communicate(timeout=5)
+
+    def test_bootstrap_hup_and_term_remove_only_owned_download_directory(self):
+        for sig in (signal.SIGHUP,signal.SIGTERM):
+            with self.subTest(signal=sig),tempfile.TemporaryDirectory() as directory:
+                root=Path(directory).resolve();tools=root/'bin';tools.mkdir()
+                downloads=root/'downloads';downloads.mkdir()
+                keep=downloads/'unrelated';keep.write_bytes(b'preserve unrelated bytes')
+                entry=root/'xplanet.sh';entry.write_bytes((PROJECT/'scripts/xplanet.sh').read_bytes());entry.chmod(0o700)
+                git=tools/'git';git.write_text('#!/bin/sh\nexit 0\n');git.chmod(0o700)
+                ready=root/'download-ready'
+                curl=tools/'curl';curl.write_text('#!'+sys.executable+'\nimport pathlib,sys,time\nargs=sys.argv[1:]\ntarget=pathlib.Path(args[args.index("--output")+1])\ntarget.write_text("partial owned download")\npathlib.Path('+repr(str(ready))+').write_text(str(target.parent))\ntime.sleep(20)\n');curl.chmod(0o700)
+                env={**os.environ,'HOME':str(root),'ZDOTDIR':str(root),'PATH':str(tools)+':/usr/bin:/bin','TMPDIR':str(downloads)}
+                env.pop('XPLANET_BOOTSTRAP_REF',None)
+                process=subprocess.Popen(['/bin/zsh','-f',str(entry),'bootstrap'],env=env,stdout=subprocess.PIPE,stderr=subprocess.PIPE,start_new_session=True)
+                try:
+                    deadline=time.monotonic()+5
+                    while not ready.exists() and process.poll() is None and time.monotonic()<deadline:time.sleep(.005)
+                    self.assertTrue(ready.exists(),'owned download barrier was not reached')
+                    owned=Path(ready.read_text());self.assertEqual(owned.parent,downloads);self.assertTrue(owned.is_dir())
+                    os.killpg(process.pid,sig);out,err=process.communicate(timeout=5)
+                    self.assertNotEqual(process.returncode,0,(out,err))
+                    self.assertFalse(owned.exists(),'bootstrap signal left its owned download directory')
+                    self.assertEqual(keep.read_bytes(),b'preserve unrelated bytes')
+                    self.assertEqual(list(downloads.iterdir()),[keep])
+                    self.assertFalse((root/'.xplanet').exists())
+                finally:
+                    if process.poll() is None:os.killpg(process.pid,signal.SIGKILL);process.communicate(timeout=5)

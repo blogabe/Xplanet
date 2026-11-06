@@ -1,5 +1,5 @@
 """Deterministic overlap with fake launchctl; never host services or renderer."""
-import fcntl,json,os,shlex,subprocess,sys,time
+import fcntl,json,os,shlex,signal,subprocess,sys,time
 from pathlib import Path
 from .support import Sandbox,copy_launcher
 
@@ -246,3 +246,34 @@ raise SystemExit(4)
         self.script(self.bin/'launchctl',code,python=True)
         child=self.invoke(self.entry,'start','A');out,err=child.communicate(timeout=10)
         self.assertEqual(child.returncode,0,(out,err));self.assertTrue(self.jobs.exists())
+
+    def test_running_earth_selection_refuses_restart_before_any_service_change(self):
+        self.env.update(HOME=str(self.base),ZDOTDIR=str(self.base))
+        with (self.root/'config/xp.def').open('a') as definition:definition.write('EARTH_MAP_PRE=world/world\n')
+        maps=self.root/'maps/world';maps.mkdir(parents=True)
+        for month in range(1,13):(maps/f'world.2004{month:02d}.3x5400x2700.png').write_bytes(b'owned monthly map')
+        images=self.root/'images';images.mkdir()
+        link=images/'earth.png';link.symlink_to('../maps/world/world.200401.3x5400x2700.png')
+        self.script(self.bin/'date','printf "11\\n"\n')
+        ready=self.base/'earth-link-ready';release=self.base/'earth-link-release'
+        self.script(self.bin/'ln','import os,sys,time\nfrom pathlib import Path\nPath('+repr(str(ready))+').write_text("owned map lock held")\nwhile not Path('+repr(str(release))+').exists():time.sleep(.005)\nos.execv("/bin/ln",["/bin/ln",*sys.argv[1:]])\n',python=True)
+        original=self.jobs.read_bytes()
+        earth=subprocess.Popen([str(self.entry),'earth'],env=self.env,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,start_new_session=True)
+        try:
+            deadline=time.monotonic()+5
+            while not ready.exists() and earth.poll() is None and time.monotonic()<deadline:time.sleep(.005)
+            self.assertTrue(ready.exists(),'Earth selection never reached the owned link barrier')
+            lock=self.root/'.state/totalmarker/map.lock.d';self.assertTrue(lock.is_dir())
+            child=self.invoke(self.entry,'restart','A');out,err=child.communicate(timeout=5)
+            self.assertEqual(child.returncode,2,(out,err));self.assertIn('Earth map selection is locked',err);self.assertIn('rmdir',err)
+            self.assertEqual(self.jobs.read_bytes(),original);self.assertFalse(self.trace.exists())
+            release.write_text('finish owned selection');out,err=earth.communicate(timeout=5)
+            self.assertEqual(earth.returncode,0,(out,err));self.assertFalse(lock.exists())
+            self.assertEqual(link.readlink(),Path('../maps/world/world.200411.3x5400x2700.png'))
+            child=self.invoke(self.entry,'restart','A');out,err=child.communicate(timeout=10)
+            self.assertEqual(child.returncode,0,(out,err))
+            calls=[json.loads(line) for line in self.trace.read_text().splitlines()]
+            self.assertIn(['A','kickstart','end'],calls)
+        finally:
+            release.touch()
+            if earth.poll() is None:os.killpg(earth.pid,signal.SIGKILL);earth.communicate(timeout=5)
