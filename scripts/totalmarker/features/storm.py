@@ -113,8 +113,9 @@ def _source_key(fs, options):
         style.pop(name)
     for name in ["marker", "arc"]:
         style[name] = str(fs.resolve(getattr(options, name), write=True).relative_to(fs.root))
-    # Version 8 revalidates cached snapshots against advisory reissue rules.
-    style["parser_version"] = 8
+    # Version 9 revalidates cached snapshots for literal-safe, bounded marker
+    # text and RGB color-key transparency syntax.
+    style["parser_version"] = 9
     style["sources"] = "NHC-ATCF+JTWC-RSS-warning-KMZ-ABPW-ABIO"
     return hashlib.sha256(json.dumps(style, sort_keys=True).encode()).hexdigest()
 

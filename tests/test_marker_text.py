@@ -1,5 +1,12 @@
 """Provider labels cannot escape Xplanet's literal quote parser."""
+import json
 import unittest
+from dataclasses import replace
+
+from totalmarker.config import load_bytes, QuakeOptions, VolcanoOptions
+from totalmarker.errors import ConfigError, FeedError
+from totalmarker.marker_text import encode_marker_lines, rgb_color_key, transparency_option
+from .support import Sandbox
 from totalmarker.marker_text import quoted_label
 from totalmarker.quake_geojson import _quoted as quake_quote
 from totalmarker.volcano_cap import _quoted as volcano_quote
@@ -14,3 +21,72 @@ class MarkerTextTests(unittest.TestCase):
                 self.assertEqual(quote(raw),expected)
                 self.assertEqual(quote(raw).count('"'),2)
                 self.assertNotIn('\\',quote(raw))
+
+
+class MarkerConfigurationTests(Sandbox):
+    def test_ini_and_native_toml_rgb_triplets_are_canonical_without_rewriting(self):
+        for raw in ("{0,255,12}", "0,255,12", " { 000 , 255 , 012 } "):
+            for product in ("quake", "volcano", "storm"):
+                key = product.title() + "ImageTransparent"
+                ini = (key + "=" + raw + "\n").encode()
+                toml = (f"[{product}]\nimage_transparent = " + json.dumps(raw) + "\n").encode()
+                for payload, name in ((ini, "config.ini"), (toml, "config.toml")):
+                    with self.subTest(product=product, raw=raw, syntax=name):
+                        settings = load_bytes(self.fs, payload, name)
+                        self.assertEqual(getattr(settings, product).image_transparent, "{0,255,12}")
+        self.assertEqual(list(self.root.iterdir()), [])
+
+    def test_scalar_and_invalid_color_keys_are_refused_with_actionable_guidance(self):
+        for product in ("quake", "volcano", "storm"):
+            key = product.title() + "ImageTransparent"
+            for raw in ("30", "0", "255", "50%", "{0,0}", "{0,0,256}", "{-1,0,0}",
+                        "{0.0,0,0}", "{true,0,0}", "{٠,0,0}", "{0,0,0", "0,0,0}",
+                        "{0,0,0} image=other.png", "{0,0,\n0}"):
+                payload = (f"[{product}]\nimage_transparent = " + json.dumps(raw) + "\n").encode()
+                with self.subTest(product=product, raw=raw), self.assertRaises(ConfigError) as error:
+                    load_bytes(self.fs, payload, "config.toml")
+                self.assertIn(key, str(error.exception))
+                self.assertIn("RGB color key", str(error.exception))
+                self.assertIn("scalar opacity values are unsupported", str(error.exception))
+                self.assertIn("leave this setting empty", str(error.exception))
+            with self.subTest(product=product), self.assertRaises(ConfigError) as error:
+                load_bytes(self.fs, (key + "=30\n").encode(), "config.ini")
+            self.assertIn("RGB color key", str(error.exception))
+        settings = load_bytes(self.fs, b'', "config.ini")
+        self.assertTrue(all(getattr(settings, name).image_transparent == ""
+                            for name in ("quake", "volcano", "storm")))
+
+    def test_color_key_emission_has_no_scalar_opacity_interpretation(self):
+        self.assertEqual(transparency_option("0, 128, 255"), " transparent={0,128,255}")
+        self.assertEqual(transparency_option(""), "")
+        for invalid in ("30", "{0,0,999}", True, 30, (0, 0, 0)):
+            with self.subTest(invalid=invalid), self.assertRaises(FeedError):
+                transparency_option(invalid)
+        self.assertEqual(rgb_color_key("{ 0, 128, 255 }"), "{0,128,255}")
+
+    def test_line_limit_counts_encoded_bytes_and_preserves_content_at_boundary(self):
+        for text in ("x" * 510, "é" * 255):
+            with self.subTest(text=text[:5]):
+                self.assertEqual(encode_marker_lines([text, 'next']), (text + '\nnext\n').encode())
+        for text in ("x" * 511, "é" * 256, "first\nsecond", "first\rsecond"):
+            with self.subTest(text=text[:5]), self.assertRaisesRegex(FeedError, "510-byte limit"):
+                encode_marker_lines([text, 'next'])
+        self.assertEqual(encode_marker_lines([]), b'\n')
+
+    def test_every_emitter_refuses_unvalidated_scalar_options(self):
+        from totalmarker.quake_geojson import render_body as quake_body, parse_geojson
+        from totalmarker.volcano_cap import render_body as volcano_body, parse_cap
+        from totalmarker.storm_model import render_bodies, StormStyle
+        from .test_quake import feed, feature
+        from .test_volcano import synthetic_info
+        from .test_storm_model import snapshot, sample_storm, REQUIRED
+        calls = [lambda: quake_body(parse_geojson(feed(feature()), 6)[0],
+                                    replace(QuakeOptions(), image="quake.png", image_transparent="30")),
+                 lambda: volcano_body(parse_cap(synthetic_info()),
+                                      replace(VolcanoOptions(), image="volcano.png", image_transparent="30")),
+                 lambda: render_bodies(snapshot(sample_storm()),
+                                       replace(StormStyle(), image="storm.png", image_transparent="30"),
+                                       required_groups=REQUIRED)]
+        for emit in calls:
+            with self.subTest(emit=emit), self.assertRaisesRegex(FeedError, "RGB color key"):
+                emit()

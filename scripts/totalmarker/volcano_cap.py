@@ -8,7 +8,7 @@ import xml.etree.ElementTree as ET
 from .errors import FeedError
 from .xmlsafe import parse as parse_xml
 from .labels import legacy_time
-from .marker_text import quoted_label
+from .marker_text import encode_marker_lines, quoted_label, transparency_option
 
 CAP_NAMESPACES = {"urn:oasis:names:tc:emergency:cap:1.1",
                   "urn:oasis:names:tc:emergency:cap:1.2", ""}
@@ -177,7 +177,7 @@ def render_body(events, options):
                 line = (f"{coord} {_quoted(event.name)} align={options.name_align} "
                         f"color={options.name_color} image={options.image}")
                 if options.image_transparent:
-                    line += f" transparent={options.image_transparent}"
+                    line += transparency_option(options.image_transparent)
             else:
                 line = (f"{coord} {_quoted(event.name)} color={outer_color} "
                         f"symbolsize={outer_size} align={options.name_align}")
@@ -198,7 +198,7 @@ def render_body(events, options):
                 detail = detail.replace(token, value)
             lines.append(f"{coord} {_quoted(detail)} color={options.detail_color} "
                          f"align={options.detail_align} image=none")
-    return ("\n".join(lines) + "\n").encode("utf-8")
+    return encode_marker_lines(lines)
 
 
 def render_marker(body, installed_at):
