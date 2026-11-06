@@ -170,7 +170,7 @@ _start_xplanet() {
         }
     fi
     launchctl kickstart "$desktop_domain/$desktop_label" || fail "could not start desktop job"
-    interactive_note "Xplanet display started."
+    interactive_note "Xplanet desktop start requested; launchd accepted the request. Rendering is asynchronous."
 }
 
 # Reinstall only needs to know whether this user has Xplanet processes to replace.

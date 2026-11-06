@@ -67,7 +67,24 @@ def excerpt(stream):
     return head.decode('utf-8','replace')+'\n[... diagnostic log middle omitted ...]\n'+tail.decode('utf-8','replace'),size,True
 
 
-def safe(text):return '\n'.join(''.join(c if c.isprintable() else ascii(c)[1:-1] for c in line) for line in str(text).split('\n'))
+def safe(text):return '\n'.join(''.join(c if c.isprintable() else ascii(c)[1:-1] for c in line) for line in str(text).expandtabs(4).split('\n'))
+
+
+def identity_summary(stamp):
+    """Readable evidence only; retain the exact tuple for identity comparisons."""
+    if (len(stamp) != 5 or any(type(value) is not int or value < 0 or value.bit_length() > 64 for value in stamp)):
+        return 'Recorded file identity: unavailable'
+    device, inode, size, modified, changed = stamp
+    def timestamp(value):
+        try:
+            seconds, nanos = divmod(value, 1_000_000_000)
+            return datetime.fromtimestamp(seconds, timezone.utc).strftime('%Y-%m-%d %H:%M:%S') + f'.{nanos:09d} UTC'
+        except (ValueError, OverflowError, OSError, TypeError):
+            return 'unavailable'
+    return (f'Recorded file identity:\n  Device: {device}; inode: {inode}\n'
+            f'  Size: {size:,} bytes ({size / (1024 * 1024):.2f} MiB)\n'
+            f'  Modified: {timestamp(modified)}\n'
+            f'  Metadata changed: {timestamp(changed)}')
 
 
 @dataclass(frozen=True)
@@ -87,7 +104,7 @@ class Capabilities:
         except (OSError,ValueError,RuntimeError):return False
 
     def sections(self):
-        return [safe('Binary capability probe: '+self.status+'\nExecutable: '+str(self.renderer)+'\nUTC: '+self.completed_utc+'\nRecorded file identity (device, inode, bytes, mtime_ns, ctime_ns): '+str(self.binary_identity)),
+        return [safe('Binary capability probe: '+self.status+'\nExecutable: '+str(self.renderer)+'\nUTC: '+self.completed_utc+'\n'+identity_summary(self.binary_identity)),
                 'Self-reported compiled support: '+(safe(', '.join(self.features)) if self.status=='reported' else 'unknown; an inconclusive/failed probe does not establish missing support.'),
                 'This does not recover the original configure/compiler flags, package receipt, kernel coverage or runtime resource availability. Static libraries may not appear in a linked-library listing.',
                 f'Probe exit: {self.exit_code}; bytes: {self.log_bytes}; truncated: {self.truncated}.\nRaw version evidence (bounded):\n'+safe(self.raw)]

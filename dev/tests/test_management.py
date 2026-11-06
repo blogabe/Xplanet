@@ -503,7 +503,7 @@ class ManagementTests(Sandbox):
         self.assertIn('Update has no remote-tracking upstream.', output)
         self.assertIn('Stop was not run.', output)
         last_screen = output.rsplit('\x1b[H\x1b[J', 1)[-1]
-        self.assertIn('Last action: [+] Done - Start completed.', last_screen)
+        self.assertIn('Last action: [+] Done - Start request accepted; rendering runs asynchronously.', last_screen)
         self.assertEqual(self.calls(), ['start'])
         self.assertEqual(output.count('\x1b[?1049h'), output.count('\x1b[?1049l'))
 
@@ -836,3 +836,63 @@ class ManagementTests(Sandbox):
             code,output=self.terminal('h\n',pause_key=key)
             self.assertEqual(code,expected,output);self.assertEqual(output.count('\x1b[?1049h'),1)
             self.assertTrue(output.endswith('\x1b[?1049l'));self.assertEqual(self.calls(),[])
+
+    def test_dashboard_spacing_groups_facts_without_hiding_short_terminal_status(self):
+        self.enhanced_terminal()
+        for rows, cols in ((40, 120), (30, 80), (24, 60)):
+            with self.subTest(rows=rows, cols=cols):
+                self.env.update(TEST_ROWS=str(rows), TEST_COLS=str(cols))
+                code, output = self.terminal('q\n')
+                self.assertEqual(code, 0, output)
+                import re
+                plain = re.sub(r'\x1b\[[0-9;?]*[A-Za-z]|\x1b[78]', '', output).replace('\r', '')
+                self.assertIn('\n\nSaved data  ', plain)
+                for label in ('Desktop  ', 'Next start  ', 'Running scene  ',
+                              'Binary evidence  ', 'Legacy setup  ', 'q) Exit'):
+                    self.assertIn(label, plain)
+                if rows >= 35:
+                    self.assertIn('\n\nNext start  ', plain)
+                    self.assertIn('\n\nLegacy setup  ', plain)
+                else:
+                    self.assertNotIn('\n\nNext start  ', plain)
+
+    def test_missing_configurator_can_decline_preparation_without_writes(self):
+        self.write_script(self.scripts/'run-configurator', 'exit 4\n')
+        before = self.snapshot()
+        code, output = self.terminal('2\nn\nq\n')
+        self.assertEqual(code, 0, output)
+        self.assertIn('Prepare the configurator now? [y/N]', output)
+        self.assertNotIn('Press any key', output)
+        self.assertEqual(before, self.snapshot())
+        self.assertEqual(self.calls(), [])
+
+    def test_explicit_preparation_runs_once_then_opens_configurator(self):
+        self.write_script(self.scripts/'run-configurator',
+            'case "$1" in --prepare) echo prepare >> "$TRACE"; touch "$TRACE.ready"; exit 0;; esac\n'
+            '[ -f "$TRACE.ready" ] && exit 3\nexit 4\n')
+        code, output = self.terminal('2\ny\nq\n')
+        self.assertEqual(code, 0, output)
+        self.assertEqual(self.calls(), ['prepare'])
+        self.assertIn('downloads pinned packages from PyPI', output)
+        self.assertIn('Configurator cancelled', output)
+
+    def test_failed_preparation_is_visible_and_does_not_reopen(self):
+        self.write_script(self.scripts/'run-configurator',
+            'case "$1" in --prepare) echo prepare >> "$TRACE"; echo fixture-failure >&2; exit 2;; esac\nexit 4\n')
+        code, output = self.terminal('2\ny\n', pause_key=b'x', after_pause='q\n')
+        self.assertEqual(code, 0, output)
+        self.assertEqual(self.calls(), ['prepare'])
+        self.assertIn('fixture-failure', output)
+        self.assertIn('Configurator exited 2', output)
+
+    def test_existing_unready_environment_is_not_replaced_by_menu(self):
+        runtime = self.root/'.state/configurator/venv'
+        runtime.mkdir(parents=True)
+        (runtime/'keep').write_bytes(b'user runtime')
+        self.write_script(self.scripts/'run-configurator', 'exit 4\n')
+        before = self.snapshot()
+        code, output = self.terminal('2\n', pause_key=b'x', after_pause='q\n')
+        self.assertEqual(code, 0, output)
+        self.assertNotIn('Prepare the configurator now?', output)
+        self.assertIn('preserve recovery drafts', output)
+        self.assertEqual(before, self.snapshot())

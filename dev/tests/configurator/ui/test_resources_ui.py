@@ -77,3 +77,26 @@ class ResourceUITests(unittest.IsolatedAsyncioTestCase):
             self.app.query_one('#geometry',Input).value='2160x1080';self.app.query_one('#destination',Input).value=str(source);await pilot.pause()
             await click(pilot,'#save');await click(pilot,'#confirm-save');await pilot.pause()
         self.assertEqual(open_view(source).view.geometry,'2160x1080');self.assertIn(b'scene v16',source.with_suffix('.def').read_bytes())
+
+    async def check_readable_evidence(self, size):
+        from configurator.app import ReportScreen
+        from configurator.resources import Capabilities
+        report = Capabilities(Path('/example/xplanet'), (7, 42, 1048576, 1_000_000_001, 2_000_000_002),
+                              'reported', ('PNG', 'Mac OS X'), '\tPNG\n\tMac OS X\nunsafe\x1b[31m', 40, 'now')
+        async with self.app.run_test(size=size) as pilot:
+            self.app.push_screen(ReportScreen('Binary evidence', report.sections()))
+            await pilot.pause()
+            text = '\n'.join(str(widget.render()) for widget in self.app.screen.query(Static))
+            self.assertIn('    Mac OS X', text)
+            self.assertNotIn(r'\tMac OS X', text)
+            self.assertIn('Size: 1,048,576 bytes', text)
+            self.assertIn('Modified: 1970-01-01', text)
+            self.assertIn(r'unsafe\x1b[31m', text)
+            self.assertNotIn('unsafe\x1b[31m', text)
+            await click(pilot, '#close-report')
+
+    async def test_evidence_readable_at_narrow_width(self):
+        await self.check_readable_evidence((60, 25))
+
+    async def test_evidence_readable_at_wide_width(self):
+        await self.check_readable_evidence((120, 45))

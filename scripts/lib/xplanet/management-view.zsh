@@ -50,7 +50,7 @@ management_screen_open() {
         management_size=$(stty size < /dev/tty 2>/dev/null)
         read -r rows cols <<< "$management_size"
         management_partial=false
-        if [[ "$rows" == <-> && "$cols" == <-> ]] && (( rows >= 31 && cols >= 100 )) &&
+        if [[ "$rows" == <-> && "$cols" == <-> ]] && (( rows >= 34 && cols >= 100 )) &&
             [[ -n "$management_save" && -n "$management_restore" && -n "$management_erase_line" && ${#management_row_up} == 10 ]]; then
             management_partial=true
         fi
@@ -178,14 +178,19 @@ management_draw() {
     if (( ${#management_binary} + 17 > ${cols:-0} || ${#management_selection} + 12 > ${cols:-0} || ${#management_health} + 12 > ${cols:-0} || ${#management_last_result} + 40 > ${cols:-0} )); then management_partial=false; fi
     print -r -- "${management_heading}Xplanet management${management_reset}"
     print -r -- "Desktop  $process_style$process_icon xplanet: $management_process$management_reset | Job: $management_job"
+    # Keep the menu reachable in short terminals; roomy screens separate facts
+    # by ownership: desktop, saved evidence, then setup and last action.
+    (( ${rows:-0} >= 35 )) && print
     print -r -- "Next start  $management_selection"
     print -r -- "Running scene  [?] Not identified; process/job presence does not verify a scene"
     print -r -- "Binary evidence  $management_binary"
+    print
     print -r -- "Saved data  $management_health"
     if [[ -n "$management_health_time" ]]; then
         print -r -- "Snapshot  $management_health_time (saved evidence, not a live access check; 7 refreshes)"
         print -r -- "Key  [+] current  [!] stale/unverified  [x] failed  [?] unassessed  [-] disabled"
     fi
+    (( ${rows:-0} >= 35 )) && print
     print -r -- "Legacy setup  $state; scene studio (2)"
     if [[ -n "$management_last_result" ]]; then
         management_result_line

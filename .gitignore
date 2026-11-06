@@ -31,8 +31,6 @@
 !/dev/tests/**
 !/dev/examples/
 !/dev/examples/*.example.toml
-!/dev/release/
-!/dev/release/build_candidate.py
 # Existing assets stay tracked; adding assets requires deliberate git add -f.
 # Unknown imagery/configuration under assets remains excluded by default.
 !/config/

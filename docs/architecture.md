@@ -63,16 +63,15 @@ sampled clock identifies an attempt; it is not a per-request network audit trail
 | `config/totalmarker.python` | User-selected absolute interpreter path; shared by the data launcher and scheduled jobs unless explicitly overridden |
 | `.state/totalmarker/storm-rejected.json` | Bounded latest rejected public-source evidence; preserve for diagnosis |
 | `logs/` | Diagnostic history; not required for new saved product error facts |
-| Preview, test temporary directories, release staging | Disposable development output |
+| Preview and test temporary directories | Disposable development output |
 
 The existing self-contained installation paths remain. Stock maps come from the
 installed renderer; seasonal maps use the checkout's committed assets. Packages
-must supply the documented map months. The optional local release builder exports
-committed source and regular committed assets, excludes local-only files, and
-verifies a fresh one-commit candidate before publishing its local manifest. Unknown
-local asset files stay ignored; adding a shipped asset requires deliberate `git add -f`
-and provenance review. The builder verifies committed asset bytes and modes, not only
-working-tree cleanliness.
+must supply the documented map months. Standalone repository tests check tracked
+source privacy and regular asset bytes/modes directly against the Git index; no
+release builder or fresh-history export is required. Unknown local asset files
+stay ignored; adding a shipped asset requires deliberate `git add -f` and
+provenance review.
 
 ## Verification boundaries
 
@@ -88,7 +87,9 @@ existing login trigger calls public start. There is no KeepAlive. Public start
 selects the current map on the legacy path even when the job is already running;
 a selected studio revision retains its reviewed seasonal map. Stop first removes
 the desktop job, then stops all current-user Xplanet processes; restart uses the
-same broad stop before start. No process-identity database or native ABI is used.
+same broad stop before start. Start/restart success confirms launchd accepted
+the request; rendering and wallpaper updates happen asynchronously. No
+process-identity database or native ABI is used.
 
 Setup validates on-disk plists with plutil and leaves registered labels alone.
 Loaded settings are explicitly unverified; presence is not configuration equality.
@@ -103,8 +104,8 @@ to Homebrew/uv without owning package or machine migration; see
 
 Finished runtime textures, including all planetary maps, remain committed and
 bundled. Source tiles, stitching work, a duplicate composite and source archives
-are preserved locally under ignored `dev/`; they are not runtime inputs or export
-inputs. The exporter continues to use only committed regular assets. See
+are preserved locally under ignored `dev/`; they are not runtime inputs or public
+inputs. See
 [asset credits](asset-credits.md) for third-party terms separate from the project's
 MIT license. Old Git history is preserved; this is a current-tree cleanup.
 

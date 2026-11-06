@@ -50,7 +50,7 @@ done
 python_bin="$project_root/.state/configurator/venv/bin/python"
 if [ "$runtime_safe" != true ] || [ ! -x "$python_bin" ] || ! "$python_bin" -P -s -B -m configurator.runtime --check "$project_root"; then
     printf '%s\n' 'Configurator runtime is not ready. No dependencies were installed.' \
-        'To explicitly prepare its isolated Textual environment: scripts/xplanet.sh config --prepare' >&2
+        'For explicit preparation or rebuilding instructions: scripts/xplanet.sh config --guide' >&2
     exit 4
 fi
 exec "$python_bin" -P -s -B -m configurator --root "$project_root" "$@"
