@@ -467,8 +467,10 @@ class ManagementTests(Sandbox):
                           'print -u2 "late failure"; return 17; }\n')
         code, output = self.terminal('3\ny\n', pause_key=b' ', after_pause='q\n')
         self.assertEqual(code, 0)
-        for n in range(1, 101):
-            self.assertIn(f'detail {n}\r\n', output)
+        # PTY output processing can add a carriage return during mode changes.
+        # Check every complete line in order without requiring one CR spelling.
+        details = re.findall(r'\bdetail (\d+)\r*\n', output)
+        self.assertEqual(details, [str(n) for n in range(1, 101)])
         self.assertIn('late failure', output)
         self.assertIn('Last action: [!] Problem - Start exited 17.', output)
         self.assertEqual(output.count('Press any key to continue'), 1)
