@@ -45,7 +45,7 @@ class ReleaseContentTests(unittest.TestCase):
             if name.startswith("scripts/launchd/"):
                 self.assertTrue(name.endswith(".plist.example"), name)
             if name.startswith("dev/"):
-                self.assertTrue(name.startswith(("dev/tests/", "dev/examples/")), name)
+                self.fail("dev must remain local-only: " + name)
                 self.assertNotIn(".tmp", parts, name)
             if name.startswith("assets/"):
                 self.assertFalse(any(part in {".DS_Store", "__MACOSX", "Thumbs.db",
@@ -62,28 +62,28 @@ class ReleaseContentTests(unittest.TestCase):
         self.assertEqual(entrypoints, {"scripts/xplanet.sh", "scripts/xp-setup.sh",
                                        "scripts/xp-bootstrap.sh",
                                        "scripts/run-totalmarker", "scripts/run-configurator"})
-        self.assertFalse(any(name.startswith("dev/examples/") and name.endswith(".ini")
+        self.assertFalse(any(name.startswith("examples/") and name.endswith(".ini")
                              for name in names))
 
     def test_privacy_policy_rejects_private_names_inside_source_directories(self):
         from . import release_policy as release
         unsafe = (
-            "dev/tests/.tmp/capture.json", "dev/tests/configurator/.tmp/session.json",
-            "dev/tests/configurator/ui/.tmp/session.json", "dev/tests/.state/state.json",
-            "dev/tests/.cache/token.json", "dev/tests/__pycache__/module.pyc",
-            "dev/tests/.git/config", "dev/tests/.GiT/config", "dev/tests/.DS_Store",
-            "dev/tests/._fixture.json", "dev/tests/.env", "dev/tests/.env.local",
-            "dev/tests/.env-data/token.json", "dev/tests/result.log", "dev/tests/private.key",
-            "dev/tests/private.pem", "dev/tests/private.ini", "dev/tests/module.pyc",
-            "dev/tests/module.pyo", "dev/tests/module.pyd",
+            "tests/.tmp/capture.json", "tests/configurator/.tmp/session.json",
+            "tests/configurator/ui/.tmp/session.json", "tests/.state/state.json",
+            "tests/.cache/token.json", "tests/__pycache__/module.pyc",
+            "tests/.git/config", "tests/.GiT/config", "tests/.DS_Store",
+            "tests/._fixture.json", "tests/.env", "tests/.env.local",
+            "tests/.env-data/token.json", "tests/result.log", "tests/private.key",
+            "tests/private.pem", "tests/private.ini", "tests/module.pyc",
+            "tests/module.pyo", "tests/module.pyd",
         )
         for name in unsafe:
             with self.subTest(name=name), self.assertRaisesRegex(RuntimeError, "unsafe source entry"):
                 release.check_source_paths({name: "100644 blob " + "0" * 40})
         safe = (
-            "config/totalmarker.example.toml", "dev/examples/custom.example.toml",
-            "dev/tests/fixtures/example.toml", "dev/tests/fixtures/example.json",
-            "dev/tests/fixtures/cache/response.json", "dev/tests/test_log_trim.py",
+            "config/totalmarker.example.toml", "examples/custom.example.toml",
+            "tests/fixtures/example.toml", "tests/fixtures/example.json",
+            "tests/fixtures/cache/response.json", "tests/test_log_trim.py",
             "scripts/launchd/local.xplanet.start.plist.example", ".gitignore",
             ".gitattributes", ".github/workflows/offline-tests.yml",
         )
@@ -93,7 +93,7 @@ class ReleaseContentTests(unittest.TestCase):
 
     def test_privacy_policy_rejects_force_tracked_private_fixture(self):
         from . import release_policy as release
-        for name in ("dev/tests/.env.local", "dev/tests/configurator/ui/.tmp/capture.json"):
+        for name in ("tests/.env.local", "tests/configurator/ui/.tmp/capture.json"):
             with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
                 private = root / name
@@ -112,11 +112,11 @@ class ReleaseContentTests(unittest.TestCase):
             "dev/configurator-foundation-20261102/verification.md",
             "scripts/configurator/__pycache__/module.pyc",
             "scripts/configurator/.env.local", "scripts/configurator/private.key",
-            "dev/tests/configurator/ui/.tmp/capture", "dev/tests/configurator/ui/result.log",
+            "tests/configurator/ui/.tmp/capture", "tests/configurator/ui/result.log",
             "dev/reference/private/file",
             "dev/recovery/archive", "dev/validation/frame.png",
             "dev/todel/snapshot", "dev/preview/earth-render.png",
-            "dev/tests/.tmp/capture", "assets/maps/personal.png",
+            "tests/.tmp/capture", "assets/maps/personal.png",
             ".state/totalmarker/state.json", "logs/totalmarker/events.jsonl",
         )
         for path in private:
@@ -170,7 +170,7 @@ class ReleaseContentTests(unittest.TestCase):
 
     def test_public_toml_examples_contain_no_credentials(self):
         examples = [PROJECT / "config/totalmarker.example.toml"]
-        examples.extend((PROJECT / "dev/examples").glob("*.example.toml"))
+        examples.extend((PROJECT / "examples").glob("*.example.toml"))
         for path in examples:
             with self.subTest(path=path.name):
                 cloud = tomllib.loads(path.read_text())["cloud"]

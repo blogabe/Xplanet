@@ -43,7 +43,7 @@ class RuntimeFixture(Sandbox):
         for name in ("config", "assets/maps", "images", "markers"):
             (self.root / name).mkdir(parents=True, exist_ok=True)
         (self.root / "config/totalmarker.toml").write_bytes(
-            (PROJECT / "dev/examples/custom.example.toml").read_bytes())
+            (PROJECT / "examples/custom.example.toml").read_bytes())
         (self.root / "config/earth").write_text(
             '# User-selected cities and optional dates\n'
             '# 12 34 "A commented city"\n'
@@ -160,10 +160,10 @@ class ProductCliIntegrationTests(RuntimeFixture):
     def setUp(self):
         super().setUp()
         self.env["PYTHONPATH"] = os.pathsep.join((str(PROJECT / "scripts"),
-                                                    str(PROJECT / "dev")))
+                                                    str(PROJECT)))
 
     def test_quake_cli_uses_fixture_transport_from_unrelated_directory(self):
-        fixture = PROJECT / "dev/tests/fixtures/usgs_quake_selected_20261019.geojson"
+        fixture = PROJECT / "tests/fixtures/usgs_quake_selected_20261019.geojson"
         before_config = snapshot(self.root / "config")
         result = self.command(["-c", QUAKE_DRIVER, str(self.root), str(fixture)])
         self.assertEqual(result.returncode, 0, result.stderr + result.stdout)

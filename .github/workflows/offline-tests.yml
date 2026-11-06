@@ -33,9 +33,9 @@ jobs:
           python-version: '3.11'
       - name: Isolated configurator interactions
         env:
-          PYTHONPATH: scripts:dev
+          PYTHONPATH: scripts:.
           PYTHONDONTWRITEBYTECODE: '1'
         run: |
           python -m venv "$RUNNER_TEMP/configurator"
           "$RUNNER_TEMP/configurator/bin/python" -m pip install --require-hashes --only-binary=:all: -r scripts/configurator/requirements.txt
-          "$RUNNER_TEMP/configurator/bin/python" -B -m unittest discover -s dev/tests/configurator/ui -v
+          "$RUNNER_TEMP/configurator/bin/python" -B -m unittest discover -s tests/configurator/ui -v

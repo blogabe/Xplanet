@@ -1,2 +1,2 @@
-dev/tests/fixtures/storm/jtwc-abpw-20261026-2230.txt -text
-dev/tests/fixtures/storm/live-20261105-slash-reissue/jtwc-abio-advisory.txt -text
+tests/fixtures/storm/jtwc-abpw-20261026-2230.txt -text
+tests/fixtures/storm/live-20261105-slash-reissue/jtwc-abio-advisory.txt -text

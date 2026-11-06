@@ -12,7 +12,7 @@ class CloudTemplateTests(Sandbox):
         return load(self.fs, "templates.toml")
 
     def example(self, provider="custom"):
-        text = (PROJECT / "dev/examples/custom.example.toml").read_text()
+        text = (PROJECT / "examples/custom.example.toml").read_text()
         return text.replace('provider = "custom"', 'provider = "' + provider + '"', 1)
 
     def test_one_resolution_changes_url_and_local_output_for_both_providers(self):
@@ -178,7 +178,7 @@ class CloudTemplateTests(Sandbox):
 
     def test_both_safe_toml_examples_include_both_providers_and_shared_settings(self):
         for name in ("custom.example.toml", "xeric.example.toml"):
-            doc = tomllib.loads((PROJECT / "dev" / "examples" / name).read_text())
+            doc = tomllib.loads((PROJECT / "examples" / name).read_text())
             self.assertIn("xeric", doc["cloud"])
             self.assertIn("custom", doc["cloud"])
             self.assertEqual(doc["cloud"]["resolution"], 4096)

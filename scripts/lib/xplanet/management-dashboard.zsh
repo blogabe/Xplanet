@@ -1,4 +1,4 @@
-# Read-only metadata and explicit saved-health snapshots. No Python on entry.
+# Read-only metadata and bounded saved-health snapshots; no live refresh.
 management_selection_facts() {
     management_selection='legacy configuration (no selector)'
     local selector="$project_root/config/desktop.scene" description
@@ -24,12 +24,59 @@ management_selection_facts() {
     fi
 }
 
+# A private job group bounds UI latency, including interpreter discovery. Only
+# this read-only worker group is signalled; direct health commands are unchanged.
+management_health_records() (
+    setopt monitor || return 2
+    unsetopt notify
+    local capture result attempt worker=''
+    capture=$(mktemp "${TMPDIR:-/tmp}/xplanet-health.XXXXXXXX") || return 2
+    trap '[[ "$worker" == <-> ]] && { kill -TERM -- -"$worker" 2>/dev/null; kill -KILL -- -"$worker" 2>/dev/null; wait "$worker" 2>/dev/null; }; rm -f -- "$capture"' EXIT
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
+    trap 'exit 129' HUP
+    (ulimit -f 32 || exit 2; exec "$script_dir/run-totalmarker" health --dashboard) >"$capture" 2>&1 &
+    worker=$!
+    unsetopt monitor
+    for attempt in {1..50}; do
+        kill -0 "$worker" 2>/dev/null || break
+        sleep 0.1
+    done
+    if kill -0 "$worker" 2>/dev/null; then
+        print -- "Saved health exceeded the five-second menu budget; data remains unknown. Choose Saved health (7) to retry."
+        return 124
+    fi
+    wait "$worker"
+    result=$?
+    cat -- "$capture"
+    return "$result"
+)
+
+management_initial_health() {
+    if [[ ! -f "$project_root/config/totalmarker.toml" ]]; then
+        management_health='[?] Health needs configuration; choose Guided setup (1)'
+        return 0
+    fi
+    management_screen_open
+    print -- "Reading saved health (local only; up to five seconds)..."
+    management_saved_health >/dev/null 2>&1
+    local result=$?
+    if (( result > 1 )); then
+        management_last_kind=error
+        management_last_result="Saved health inspection unavailable (exit $result); choose Saved health (7) for details."
+    fi
+    management_screen_reset
+}
+
 management_saved_health() {
     local records result kind title summary detail style badge count=0 header=false compact='' note='' snapshot_time=''
-    records=$("$script_dir/xplanet.sh" health --dashboard)
+    records=$(management_health_records 2>/dev/null)
     result=$?
     management_health='[?] Inspection failed; no verified snapshot'
     management_health_time=''
+    if (( result == 124 )); then
+        management_health='[?] Saved health timed out; choose Saved health (7) to retry'
+    fi
     # An exit 2 is a real inspection/storage error, even if rows were returned.
     # Keep its details visible, and never keep an earlier green snapshot.
     if (( result > 2 )) || [[ "$records" != snapshot$'\t'* ]]; then
@@ -58,7 +105,10 @@ management_saved_health() {
             *) return 2 ;;
         esac
         print -r -- "$style$title: $summary${detail:+ — $detail}$management_reset"
-        compact+="${compact:+ }$style$badge $title$management_reset"
+        if (( count == 5 )); then compact+=$'\n'
+        elif [[ -n "$compact" ]]; then compact+='  '
+        fi
+        compact+="$style$badge $title$management_reset"
     done <<< "$records"
     [[ "$header" == true && "$count" == 7 ]] || return 2
     if (( result == 2 )); then management_health_time='';return 2;fi
@@ -67,8 +117,8 @@ management_saved_health() {
     return "$result"
 }
 
-# Historical evidence only: no interpreter, executable, legacy definitions or
-# providers run on menu entry. The explicit diagnostic validates current identity.
+# Binary evidence is historical: this reader does not probe an executable or
+# execute definitions. The explicit diagnostic validates current identity.
 management_binary_facts() {
     management_binary='not checked; run diagnostics explicitly'
     local evidence="$project_root/.state/configurator/binary-evidence.json" folder size stamp outcome schema

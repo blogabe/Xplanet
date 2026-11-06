@@ -1,10 +1,17 @@
 # Terminal management groundwork
 
 Run `scripts/xplanet.sh` without arguments in a terminal to open management.
-Opening, leaving or cancelling the menu changes nothing. `q` or EOF exits;
+Opening management assesses saved health once when configured; it does not refresh providers or change configuration. Leaving or cancelling makes no operational changes. `q` or EOF exits;
 Ctrl-C interrupts. In capable terminals, Up/Down moves the highlight, digits 1–9 or h
 highlight an option, and Enter activates it; q exits immediately. Limited terminals
-use numbered line input. With redirected input or output, no arguments prints usage instead. `--help` and named commands retain their direct behavior.
+use numbered line input. Windows smaller than 100 columns × 34 rows also use
+numbered input and normal scrollback so full status remains available instead
+of scrolling off the alternate screen. Enlarging then reopening restores arrows. With redirected input or output, no arguments prints usage instead. `--help` and named commands retain their direct behavior.
+
+After a manual clone into a new directory, bare `xplanet.sh` is the interactive
+front door. Direct `install` provisions Xplanet/Python and continues to setup;
+`setup` prepares configuration/data/schedules using existing prerequisites.
+Neither means overwriting or cloning over an existing checkout.
 
 Guided install/setup checks prerequisites only when selected. It proposes missing
 Homebrew installations before asking for approval; Homebrew itself must already
@@ -47,8 +54,8 @@ nothing; stopping after configuration review retains preparation already done.
 `setup --check` still uses 1 for preparation needed and 0 for ready;
 `setup --dry-run` uses 0 for a successful inspection.
 
-Saved health gives a setup hint when `config/totalmarker.toml` is absent; it does
-not create configuration or invoke health automatically. Update explains when
+When `config/totalmarker.toml` is absent, saved health shows a setup hint without
+starting Python or creating configuration. Update explains when
 this checkout lacks a remote-tracking upstream before asking for confirmation.
 The direct update command retains all of its validation and race checks.
 Health exit 1 means the assessment completed and found source issues; management
@@ -68,15 +75,22 @@ Navigation repaints only the old and new selected rows. Narrow terminals or miss
 cursor capabilities use a full redraw with cached status. Geometry is checked on
 the next key after a resize, before repainting; that key is retained across the
 full refresh. There is no idle input/status polling. The data-health
-area starts **not checked in this session**. Option 7 explicitly inspects saved
-TotalMarker state and caches a dated per-product snapshot in memory. It shows
-current, failed/stale, uncertain and disabled sources using the same semantics as
-normal health. This is saved evidence, never a live access check or automatic
-refresh; select 7 again to refresh. Inspection failure clears the cached snapshot.
-Ordinary `health`, `--verbose`, `--json` and explicit `--live` remain available as
-direct commands; the compact `health --dashboard` records are a presentation format,
-not a replacement for detailed diagnostics.
-Opening management never starts Python, fetches feeds or executes configuration.
+area is populated once on standalone interactive entry from saved TotalMarker
+state and local output checks. A brief loading message appears first; the menu
+worker has a five-second time budget and a bounded disposable capture. Timeout,
+missing Python or inspection failure leaves health unknown with a clear retry
+hint; it never starts installation, publication recovery or provider access.
+Option 7 explicitly repeats the local assessment and shows details. Navigation,
+action return and resize use the cached dated snapshot rather than rerunning it.
+Current, failed/stale, uncertain and disabled sources retain normal health
+semantics. This is saved evidence, never a live access check or refresh.
+Direct `health`, `--verbose`, `--json` and explicit `--live` remain unchanged;
+`health --dashboard` records are a presentation format, not a diagnostic replacement.
+Automatic saved health may start the selected Python; it never executes `xp.def`,
+a renderer, provider refresh or lifecycle command. Without a terminal, bare
+invocation still prints usage and does not run health. Wide dashboards align
+labels and values with horizontal spacing; narrow screens preserve the full text
+with compact spacing rather than truncation.
 Legacy setup status counts files; it does not validate settings. Next-start scene
 metadata is hash-checked and labeled separately; assets and the executable are
 revalidated only by the start path. Invalid/unavailable selectors are shown as

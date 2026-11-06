@@ -87,7 +87,7 @@ class ConfigurationTests(Sandbox):
 
     def test_safe_toml_examples_load_without_rewriting(self):
         from .support import PROJECT
-        for path in sorted((PROJECT / "dev" / "examples").glob("*.example.toml")):
+        for path in sorted((PROJECT / "examples").glob("*.example.toml")):
             with self.subTest(example=path.name):
                 raw = path.read_bytes()
                 (self.root / "example.toml").write_bytes(raw)

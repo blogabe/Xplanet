@@ -47,6 +47,11 @@ Stock files are starting points; your changes save under a new user-scene name.
 Their `.def` files use illustrative `/path/to/xplanet` executable and `/xplanet`
 asset-root metadata, not installation instructions. Opening a scene retains your
 current renderer choice; saving a new copy records that validated executable.
+The initial local choice uses an explicit `--renderer` first, then a literal
+`XPLANET_BIN` in this project’s `config/xp.def`, PATH, and standard Homebrew
+locations. Setup already writes the project setting, including custom prefixes.
+Discovery never executes definitions or a renderer; computed/ambiguous settings
+need an explicit choice instead of a silent fallback.
 `XPLANET_HOME` refers to the project root, not the executable.
 **Scene library…** browses your own matching `.conf`/`.def` pairs in `config/scenes`.
 

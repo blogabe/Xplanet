@@ -271,7 +271,8 @@ def parse_advisory(raw, kind):
                 paragraph = disturbance[item.end():end_block]
                 if re.fullmatch(r"NO OTHER SUSPECT AREAS\.?,?", paragraph.strip()):
                     continue
-                codes = INVEST.findall(paragraph)
+                # Repeated narrative mentions are one identity; different IDs remain ambiguous.
+                codes = tuple(dict.fromkeys(INVEST.findall(paragraph)))
                 if len(codes) != 1 or codes[0][-1] not in letters:
                     raise FeedError("Storm JTWC disturbance lacks one basin-valid invest code")
                 code = codes[0]

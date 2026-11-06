@@ -19,7 +19,7 @@ from totalmarker.volcano_cap import parse_cap, render_body
 from .support import PROJECT, Sandbox, ScriptedTransport
 
 NOW = 1_700_000_000
-SAMPLE = (PROJECT / "dev/tests/fixtures/legacy_gvp_cap.xml").read_bytes()
+SAMPLE = (PROJECT / "tests/fixtures/legacy_gvp_cap.xml").read_bytes()
 # Keep the authentic parser fixture intact; provider tests use coverage current
 # at their fixed clock, including its mocked CLI invocation below.
 CURRENT = SAMPLE.replace(b"22 May-28 May 2013", b"2 November-8 November 2023").replace(
