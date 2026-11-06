@@ -108,7 +108,7 @@ state=Path(__file__).with_suffix('.json')
 doc=json.loads(state.read_text()) if state.exists() else None
 if os.environ.get('MOCK_LAUNCHCTL_TRACE'):
     with open(os.environ['MOCK_LAUNCHCTL_TRACE'],'a') as stream: stream.write(' '.join(args)+'\n')
-if args[0]=='list': raise SystemExit(0 if doc else 3)
+if args[0] in ('list','print'): raise SystemExit(0 if doc else 3)
 if args[0]=='bootstrap':
     if doc: raise SystemExit(5)
     doc=plistlib.loads(Path(args[2]).read_bytes())

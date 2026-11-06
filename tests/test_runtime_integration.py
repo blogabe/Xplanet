@@ -40,7 +40,7 @@ def snapshot(path):
 class RuntimeFixture(Sandbox):
     def setUp(self):
         super().setUp()
-        for name in ("config", "assets/maps", "images", "markers"):
+        for name in ("config", "maps", "images", "markers"):
             (self.root / name).mkdir(parents=True, exist_ok=True)
         (self.root / "config/totalmarker.toml").write_bytes(
             (PROJECT / "examples/custom.example.toml").read_bytes())
@@ -50,8 +50,8 @@ class RuntimeFixture(Sandbox):
             '56 78 "A selected city" # 2020-06-23\n')
         (self.root / "config/xp.conf").write_text("cloud_map=clouds-4096.jpg\n")
         (self.root / "config/xp.def").write_text("XPLANET_HOME=fixture\n")
-        (self.root / "assets/maps/earth.jpg").write_bytes(b"synthetic static map")
-        (self.root / "images/earth.jpg").symlink_to("../assets/maps/earth.jpg")
+        (self.root / "maps/earth.jpg").write_bytes(b"synthetic static map")
+        (self.root / "images/earth.jpg").symlink_to("../maps/earth.jpg")
         (self.root / "markers/earth").symlink_to("../config/earth")
         self.elsewhere = self.base / "unrelated-cwd"
         self.elsewhere.mkdir()
@@ -88,7 +88,7 @@ class RuntimePathIntegrationTests(RuntimeFixture):
 
     def test_cloud_and_label_commands_obey_agreed_root_layout(self):
         input_before = snapshot(self.root / "config")
-        asset_before = snapshot(self.root / "assets")
+        asset_before = snapshot(self.root / "maps")
         map_link = os.readlink(self.root / "images/earth.jpg")
         city_link = os.readlink(self.root / "markers/earth")
         cloud = self.command(["-c", CLOUD_DRIVER, str(self.root)])
@@ -108,7 +108,7 @@ class RuntimePathIntegrationTests(RuntimeFixture):
         self.assertEqual(json.loads(labels.stdout)["outcome"], "unchanged")
         self.assertEqual(label.read_bytes(), before_label)
         self.assertEqual(snapshot(self.root / "config"), input_before)
-        self.assertEqual(snapshot(self.root / "assets"), asset_before)
+        self.assertEqual(snapshot(self.root / "maps"), asset_before)
         self.assertEqual(os.readlink(self.root / "images/earth.jpg"), map_link)
         self.assertEqual(os.readlink(self.root / "markers/earth"), city_link)
         self.assertEqual((self.root / "markers/earth").read_text(),

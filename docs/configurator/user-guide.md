@@ -76,7 +76,7 @@ on Retina/scaled displays), plus other displays. This is a read-only snapshot at
 launch; reopening the studio checks again. Saved and stock scenes keep their own
 dimensions, and editing the geometry stays explicit. If detection is unavailable
 or the primary size exceeds preview limits, the field uses 1920×1080 and explains
-why. This does not change macOS display settings or the installation's legacy
+why. This does not change macOS display settings or the installation's custom
 geometry. Desktop geometry is still reviewed separately in Handoff review.
 
 Use the mouse, **Tab / Shift-Tab** to move focus, and **Enter** to activate buttons.
@@ -197,7 +197,7 @@ Inspect it with **Selected scene…** or:
 
 Restart through management/the lifecycle CLI only when ready; it stops all your
 Xplanet processes before starting the selected desktop. A running display does not
-silently adopt library edits. No selector preserves legacy behavior; an invalid
+silently adopt library edits. No selector preserves custom configuration behavior; an invalid
 selector fails clearly rather than falling back. For exact export/selection/restore
 commands, see [Apply and guarded recovery](apply-design.md).
 

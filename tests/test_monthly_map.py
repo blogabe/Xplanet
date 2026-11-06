@@ -19,7 +19,7 @@ class MonthlyMapTests(Sandbox):
     def setUp(self):
         super().setUp()
         (self.root / "images").mkdir()
-        (self.root / "assets/maps/world").mkdir(parents=True)
+        (self.root / "maps/world").mkdir(parents=True)
         (self.root / "config").mkdir()
         scripts = self.root / "scripts"
         scripts.mkdir()
@@ -37,12 +37,12 @@ class MonthlyMapTests(Sandbox):
         date.chmod(0o700)
         self.current = 6
         self.filename = f"world.2004{self.current:02d}.3x5400x2700.png"
-        self.chosen = self.root / "assets/maps/world" / self.filename
+        self.chosen = self.root / "maps/world" / self.filename
         self.chosen.write_bytes(b"selected map fixture")
-        self.old = self.root / "assets/maps/world/world.200401.3x5400x2700.png"
+        self.old = self.root / "maps/world/world.200401.3x5400x2700.png"
         self.old.write_bytes(b"old map fixture")
         self.link = self.root / "images/earth.png"
-        self.link.symlink_to("../assets/maps/world/world.200401.3x5400x2700.png")
+        self.link.symlink_to("../maps/world/world.200401.3x5400x2700.png")
         self.definition = self.root / "config/xp.def"
         self.write_definition("world/world")
 
@@ -83,7 +83,7 @@ class MonthlyMapTests(Sandbox):
         before = self.chosen.read_bytes()
         first = self.run_earth()
         self.assertEqual(first.returncode, 0, first.stderr)
-        self.assertEqual(self.link.readlink(), Path("../assets/maps/world/" + self.filename))
+        self.assertEqual(self.link.readlink(), Path("../maps/world/" + self.filename))
         self.assertEqual(self.chosen.read_bytes(), before)
         self.assertIn("Earth map unchanged", self.run_earth().stdout)
 
@@ -91,11 +91,11 @@ class MonthlyMapTests(Sandbox):
         for month in range(1, 13):
             with self.subTest(month=month):
                 filename = f"world.2004{month:02d}.3x5400x2700.png"
-                image = self.root / "assets/maps/world" / filename
+                image = self.root / "maps/world" / filename
                 image.write_bytes(f"month {month}".encode())
                 result = self.run_earth(month=month)
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(self.link.readlink(), Path("../assets/maps/world/" + filename))
+                self.assertEqual(self.link.readlink(), Path("../maps/world/" + filename))
                 self.assertEqual(image.read_bytes(), f"month {month}".encode())
 
     def test_map_month_follows_local_calendar_at_utc_year_boundary(self):
@@ -103,25 +103,25 @@ class MonthlyMapTests(Sandbox):
         for timezone, month in (("UTC", 1), ("America/Los_Angeles", 12)):
             with self.subTest(timezone=timezone):
                 filename = f"world.2004{month:02d}.3x5400x2700.png"
-                (self.root / "assets/maps/world" / filename).write_bytes(b"boundary map")
+                (self.root / "maps/world" / filename).write_bytes(b"boundary map")
                 result = self.run_earth(timezone=timezone, epoch=1704069000)
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(self.link.readlink(), Path("../assets/maps/world/" + filename))
+                self.assertEqual(self.link.readlink(), Path("../maps/world/" + filename))
 
     def test_configured_topographic_pattern_and_missing_month(self):
-        selected = self.root / "assets/maps/world.topo.bathy"
+        selected = self.root / "maps/world.topo.bathy"
         selected.mkdir()
         image = selected / f"world.topo.bathy.2004{self.current:02d}.3x5400x2700.png"
         image.write_bytes(b"bathy fixture")
         self.write_definition("world.topo.bathy/world.topo.bathy")
         done = self.run_earth()
         self.assertEqual(done.returncode, 0, done.stderr)
-        self.assertEqual(self.link.readlink(), Path("../assets/maps/world.topo.bathy/" + image.name))
+        self.assertEqual(self.link.readlink(), Path("../maps/world.topo.bathy/" + image.name))
         image.unlink()
         missing = self.run_earth()
         self.assertEqual(missing.returncode, 2)
         self.assertIn("Monthly map is absent", missing.stderr)
-        self.assertEqual(self.link.readlink(), Path("../assets/maps/world.topo.bathy/" + image.name))
+        self.assertEqual(self.link.readlink(), Path("../maps/world.topo.bathy/" + image.name))
 
     def test_invalid_prefix_and_custom_destination_are_preserved(self):
         original = self.link.readlink()
@@ -153,9 +153,25 @@ class MonthlyMapTests(Sandbox):
         self.assertIn("not a regular file", result.stderr)
         self.assertEqual(external.read_bytes(), b"outside fixture")
         self.chosen.unlink()
-        folder = self.root / "assets/maps/world"
-        folder.rename(self.root / "assets/maps/world.saved")
+        folder = self.root / "maps/world"
+        folder.rename(self.root / "maps/world.saved")
         folder.symlink_to(self.base)
         result = self.run_earth()
         self.assertEqual(result.returncode, 2)
         self.assertIn("real directory", result.stderr)
+
+    def test_known_old_map_link_moves_to_current_layout_during_normal_selection(self):
+        self.link.unlink();self.link.symlink_to('../assets/maps/world/world.200401.3x5400x2700.png')
+        result=self.run_earth()
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertEqual(self.link.readlink(),Path('../maps/world/'+self.filename))
+        self.assertEqual(self.link.read_bytes(),b'selected map fixture')
+        self.assertEqual(self.old.read_bytes(),b'old map fixture')
+
+    def test_unknown_old_custom_map_link_is_not_silently_relocated(self):
+        old='../assets/maps/bathymetry/custom.png'
+        self.link.unlink();self.link.symlink_to(old)
+        result=self.run_earth()
+        self.assertEqual(result.returncode,2,result.stderr)
+        self.assertIn('unrecognized old map link',result.stderr)
+        self.assertEqual(str(self.link.readlink()),old)

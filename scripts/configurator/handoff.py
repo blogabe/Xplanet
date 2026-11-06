@@ -5,6 +5,7 @@ import hashlib,json,os,re,stat
 from .fileio import OwnedFiles,fingerprint
 from .workspace import open_view,renderer_path,read_bounded
 from .geometry import geometry
+from .model import current_map_body
 
 MANIFEST='handoff.json'
 LEGACY=('config/xp.def','config/xp.conf')
@@ -72,6 +73,8 @@ def create_plan(root,scene,binary,dimensions,*,_verify=True):
     doc=open_view(source)
     if not doc.named_source or not doc.native_files:raise ValueError('A complete recognized named scene is required.')
     geometry(dimensions);binary=renderer_path(binary)
+    if current_map_body(doc.config) != doc.config:
+        raise ValueError('This scene uses the previous map layout. Save a new copy in the configurator, then review that copy for selection; the original is unchanged.')
     native=dict(doc.native_files)
     if MANIFEST in native or len(native)>63 or sum(map(len,native.values()))>NATIVE_LIMIT:raise ValueError('Scene exceeds the handoff snapshot bound.')
     native_records={}
@@ -89,7 +92,7 @@ def create_plan(root,scene,binary,dimensions,*,_verify=True):
           'unbound_stock_lookups':[name.decode('ascii') for name in unbound],
           'proposed_argv':command(doc.view,binary,root,'@bundle@/'+source.name,'@bundle@',dimensions),
           'notes':['This review artifact alone does not select a scene or invoke services.',
-                   'Legacy definitions are hashed, never executed or included as content.',
+                   'Custom definitions are hashed, never executed or included as content.',
                    'Native/captured scene files are frozen; bundled assets remain hash-bound references, not copied.',
                    'Stock lookups, incidental-body textures, fonts and compiled renderer resources are not fully bound.',
                    'Executable and file structure checks do not certify rendering or desktop capability.',
@@ -108,7 +111,7 @@ def recheck(plan):
         fresh=create_plan(data['root'],Path(data['root'])/data['scene'],data['renderer']['path'],data['geometry'],_verify=False)
         if fresh.record!=plan.record or dict(fresh.native)!=dict(plan.native):raise ValueError('Input identity or bytes changed.')
     except (KeyError,TypeError,ValueError) as exc:
-        raise ValueError('Scene, asset, renderer or legacy baseline changed, or the plan was altered; export a fresh review.') from exc
+        raise ValueError('Scene, asset, renderer or custom configuration baseline changed, or the plan was altered; export a fresh review.') from exc
 
 
 def stage_plan(plan,destination):

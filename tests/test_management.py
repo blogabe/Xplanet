@@ -184,7 +184,7 @@ class ManagementTests(Sandbox):
             before = self.snapshot()
             code, output = self.terminal('q\n')
             self.assertEqual(code, 0)
-            self.assertRegex(output, f'Legacy setup +{expected};')
+            self.assertRegex(output, f'Custom setup +{expected};')
             self.assertEqual(before, self.snapshot())
         self.assertEqual(self.calls(), ['health --dashboard'])
 
@@ -686,7 +686,7 @@ class ManagementTests(Sandbox):
         self.assertEqual(probes.read_text().splitlines(), ['process', 'jobs'])
         self.assertEqual(output.count('Xplanet management'), 1)
         self.assertIn('Compact terminal: numbered input',output)
-        self.assertIn('process/job presence does not verify a scene',output)
+        self.assertRegex(output,r'Running scene +\[\?\] Not identified')
         self.assertNotIn('\x1b[?1049h',output)
         self.assertNotIn('\x1b7', output)
 
@@ -744,7 +744,7 @@ class ManagementTests(Sandbox):
         (self.root/'config').mkdir();(self.root/'config/desktop.scene').write_text('invalid')
         before=self.snapshot();code,output=self.terminal('q\n')
         self.assertEqual(code,0,output);self.assertIn('invalid or unavailable selector',output)
-        self.assertNotRegex(output,r'Next start +legacy');self.assertEqual(before,self.snapshot());self.assertEqual(self.calls(),[])
+        self.assertNotRegex(output,r'Next start +custom');self.assertEqual(before,self.snapshot());self.assertEqual(self.calls(),[])
 
     def test_selection_dashboard_binds_metadata_without_certifying_resources(self):
         import hashlib,plistlib
@@ -797,13 +797,13 @@ class ManagementTests(Sandbox):
         evidence=self.root/'.state/configurator/binary-evidence.json';evidence.parent.mkdir(parents=True)
         evidence.write_text(json.dumps({'schema':1,'report':{'status':'reported','completed_utc':'2026-11-04T01:02:03+00:00'}}))
         before=self.snapshot();code,output=self.terminal('q\n')
-        self.assertEqual(code,0);self.assertIn('Binary evidence',output)
+        self.assertEqual(code,0);self.assertIn('Xplanet build',output)
         self.assertIn('reported 2026-11-04T01:02:03Z',output)
-        self.assertIn('not revalidated for next start/running',output)
+        self.assertIn('Features reported 2026-11-04T01:02:03Z; not rechecked',output)
         self.assertEqual(self.calls(),[]);self.assertEqual(before,self.snapshot())
         evidence.write_text('{broken')
         code,output=self.terminal('q\n');self.assertEqual(code,0)
-        self.assertIn('not checked; run diagnostics explicitly',output);self.assertEqual(self.calls(),[])
+        self.assertIn('Build features not checked; choose Diagnostics (9)',output);self.assertEqual(self.calls(),[])
 
     def test_diagnostic_and_help_entries_are_discoverable_without_activation(self):
         self.enhanced_terminal();before=self.snapshot()
@@ -860,11 +860,11 @@ class ManagementTests(Sandbox):
                 plain = re.sub(r'\x1b\[[0-9;?]*[A-Za-z]|\x1b[78]', '', output).replace('\r', '')
                 self.assertRegex(plain,r'\n\n +Saved data +')
                 for label in ('Desktop', 'Next start', 'Running scene',
-                              'Binary evidence', 'Legacy setup', 'q) Exit'):
+                              'Xplanet build', 'Custom setup', 'q) Exit'):
                     self.assertIn(label, plain)
                 if rows >= 35:
                     self.assertRegex(plain,r'\n\n +Next start +')
-                    self.assertRegex(plain,r'\n\n +Legacy setup +')
+                    self.assertRegex(plain,r'\n\n +Custom setup +')
                 else:
                     self.assertNotRegex(plain,r'\n\n +Next start +')
 
@@ -961,15 +961,15 @@ class ManagementTests(Sandbox):
         code,output=self.terminal('q')
         self.assertEqual(code,0,output)
         plain=re.sub(r'\x1b\[[0-9;?]*[A-Za-z]|\x1b[78]','',output).replace('\r','')
-        for label in ('Desktop','Next start','Running scene','Binary evidence','Saved data','Legacy setup'):
+        for label in ('Desktop','Next start','Running scene','Xplanet build','Saved data','Custom setup'):
             line=next(line for line in plain.splitlines() if line.startswith('  '+label))
             self.assertEqual(line[2:17].rstrip(),label)
             self.assertEqual(line[17:19],'  ')
         self.env.update(TEST_ROWS='24',TEST_COLS='60')
         code,output=self.terminal('q\n')
         self.assertEqual(code,0,output)
-        self.assertIn('process/job presence does not verify a scene',output)
-        self.assertIn('not checked; run diagnostics explicitly',output)
+        self.assertRegex(output,r'Running scene +\[\?\] Not identified')
+        self.assertIn('Build features not checked; choose Diagnostics (9)',output)
 
     def test_startup_ctrl_c_restores_screen_and_cleans_owned_health_group(self):
         self.enhanced_terminal()

@@ -267,7 +267,7 @@ verify_target() {
     [[ "$resolved" == "$project_root/"* ]] || fail "$name points outside the project"
     local relative="${resolved#$project_root/}"
     if [[ "$name" == images/solarsystem ]]; then
-        [[ "$relative" == assets/maps/solarsystem || "$relative" == config/images/solarsystem ]] ||
+        [[ "$relative" == maps/solarsystem || "$relative" == config/images/solarsystem ]] ||
             fail "$name must point to retained solar-system imagery"
         real_dir "$relative"
     elif [[ "$name" == markers/earth ]]; then
@@ -280,11 +280,47 @@ verify_target() {
             [[ -f "$resolved" && ! -L "$resolved" ]] || fail "$name has an invalid target"
         fi
     else
-        [[ "$relative" == assets/maps/* ]] || fail "$name must point to an internal map asset"
+        [[ "$relative" == maps/* ]] || fail "$name must point to an internal map asset"
         real_dir "${relative:h}"
         [[ -f "$resolved" && ! -L "$resolved" ]] || fail "$name has an invalid target"
     fi
 }
+
+
+# Only exact links previously produced by setup are eligible for relocation.
+managed_map_replacement() {
+    local name="$1" previous="$2" proposed="$3" month
+    REPLY=''
+    if [[ "$name" == images/earth.png ]]; then
+        for month in {01..12}; do
+            if [[ "$previous" == "../assets/maps/$map_folder/$map_name.2004${month}.3x5400x2700.png" ]]; then
+                REPLY="../maps/$map_folder/$map_name.2004${month}.3x5400x2700.png"
+                return 0
+            fi
+        done
+    elif [[ "$name" == images/* && "$proposed" == ../maps/* &&
+            "$previous" == "../assets/${proposed#../}" ]]; then
+        REPLY="$proposed"
+        return 0
+    fi
+    return 1
+}
+
+migrate_map_link() (
+    local name="$1" previous="$2" target="$3" entry="$project_root/$1" temporary
+    real_dir "${name:h}"
+    [[ -L "$entry" && "$(readlink "$entry")" == "$previous" ]] ||
+        fail "Preparation stopped at $name: link changed during confirmation"
+    verify_target "$name" "$target"
+    temporary=$(mktemp -d "$project_root/${name:h}/.map-link.XXXXXXXX") || fail "Cannot prepare $name relocation"
+    trap 'rm -f -- "$temporary/link"; rmdir -- "$temporary"' EXIT
+    ln -s -- "$target" "$temporary/link" || fail "Cannot prepare $name relocation"
+    [[ -L "$entry" && "$(readlink "$entry")" == "$previous" ]] ||
+        fail "Preparation stopped at $name: link changed during confirmation"
+    # BSD mv -h replaces a directory symlink itself, including solarsystem.
+    mv -fh -- "$temporary/link" "$entry" || fail "Cannot relocate $name"
+    print -- "Relocated $name <- $target"
+)
 
 real_dir config
 personal_names=(config/xp.conf config/xp.def config/totalmarker.toml config/earth)
@@ -350,20 +386,22 @@ if [[ "$stock_maps" == false ]]; then
     [[ "$month" == <-> && "$month" -ge 1 && "$month" -le 12 ]] || fail "Cannot determine Earth map month"
     # Legacy links for personal high-resolution seasonal maps.
     link_names=(images/earth.png images/lights.tiff images/bump.png images/specular.png markers/earth)
-    link_targets=("../assets/maps/$map_folder/$map_name.2004${month}.3x5400x2700.png"
-                  ../assets/maps/lights/earth_lights_4800.tiff
-                  ../assets/maps/bump/gebco_08_rev_elev_21600x10800.png
-                  ../assets/maps/specular/specular.png ../config/earth)
+    link_targets=("../maps/$map_folder/$map_name.2004${month}.3x5400x2700.png"
+                  ../maps/lights/earth_lights_4800.tiff
+                  ../maps/bump/gebco_08_rev_elev_21600x10800.png
+                  ../maps/specular/specular.png ../config/earth)
 fi
 solar_notice=''
-if [[ -d "$project_root/assets/maps/solarsystem" && ! -L "$project_root/assets/maps/solarsystem" ]] ||
+if [[ -d "$project_root/maps/solarsystem" && ! -L "$project_root/maps/solarsystem" ]] ||
    entry_exists "$project_root/images/solarsystem"; then
     link_names+=(images/solarsystem)
-    link_targets+=(../assets/maps/solarsystem)
+    link_targets+=(../maps/solarsystem)
 else
-    solar_notice='No images/solarsystem link planned: assets/maps/solarsystem is absent.'
+    solar_notice='No images/solarsystem link planned: maps/solarsystem is absent.'
 fi
 missing_links=()
+migration_links=()
+previous_links=()
 for (( index=1; index<=${#link_names}; index++ )); do
     name="$link_names[index]"
     entry="$project_root/$name"
@@ -371,7 +409,15 @@ for (( index=1; index<=${#link_names}; index++ )); do
         verify_target "$name" "$link_targets[index]"
         missing_links+=("$index")
     elif [[ -L "$entry" ]]; then
-        verify_target "$name" "$(readlink "$entry")"
+        previous=$(readlink "$entry") || fail "Cannot read $name"
+        if managed_map_replacement "$name" "$previous" "$link_targets[index]"; then
+            verify_target "$name" "$REPLY"
+            migration_links+=("$index")
+            previous_links[index]="$previous"
+            link_targets[index]="$REPLY"
+        else
+            verify_target "$name" "$previous"
+        fi
     elif [[ "$name" == images/solarsystem ]]; then
         [[ -d "$entry" ]] || fail "$name must be a real directory or safe internal link"
     else
@@ -384,14 +430,17 @@ if [[ "$setup_mode" == --dry-run ]]; then
     for index in "${missing_links[@]}"; do
         print -- "Would link $link_names[index] <- $link_targets[index]"
     done
+    for index in "${migration_links[@]}"; do
+        print -- "Would relocate $link_names[index]: $previous_links[index] -> $link_targets[index]"
+    done
     [[ -z "$solar_notice" ]] || print -- "$solar_notice"
     for index in "${missing_personal[@]}"; do
         print -- "Would copy $personal_names[index] <- $personal_examples[index]"
     done
     exit 0
 elif [[ "$setup_mode" == --check ]]; then
-    if (( ${#missing_dirs} || ${#missing_links} || ${#missing_personal} )); then
-        print -- "Preparation needed: $((${#missing_dirs} + ${#missing_links} + ${#missing_personal})) entries"
+    if (( ${#missing_dirs} || ${#missing_links} || ${#migration_links} || ${#missing_personal} )); then
+        print -- "Preparation needed: $((${#missing_dirs} + ${#missing_links} + ${#migration_links} + ${#missing_personal})) entries"
         [[ -z "$solar_notice" ]] || print -- "$solar_notice"
         exit 1
     fi
@@ -443,6 +492,9 @@ print -- "        Review $project_root/config/totalmarker.toml before any refres
 print -- "Step 2: optionally update the cloud image through your configured Xeric or custom provider."
 print -- "Step 3: optionally install and register Xplanet launchd jobs; this may start Xplanet."
 print -- "No Python package or virtual environment will be installed."
+for index in "${migration_links[@]}"; do
+    print -- "Relocate managed link $link_names[index]: $previous_links[index] -> $link_targets[index]"
+done
 if ! ask "Step 1) Continue with Xplanet preparation?"; then
     print -- "Setup cancelled without preparing files."
     exit 3
@@ -529,6 +581,9 @@ for index in "${missing_links[@]}"; do
     entry_exists "$entry" && fail "Preparation stopped at $name: destination changed"
     ln -s -- "$target" "$entry" || fail "Preparation stopped at $name"
     print -- "Prepare link $name <- $target"
+done
+for index in "${migration_links[@]}"; do
+    migrate_map_link "$link_names[index]" "$previous_links[index]" "$link_targets[index]"
 done
 [[ -z "$solar_notice" ]] || print -- "$solar_notice"
 if [[ ! -e "$project_root/config/totalmarker.python" && ! -L "$project_root/config/totalmarker.python" ]]; then

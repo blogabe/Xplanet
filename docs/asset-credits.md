@@ -20,13 +20,13 @@ at the end of this page for provenance, not as current instructions.
 
 | Files / family | Source and credit | Terms / mapping limits |
 | --- | --- | --- |
-| `assets/maps/world/`, `world.topo/`, `world.topo.bathy/` (36 monthly maps) | NASA [Blue Marble: Next Generation](https://science.nasa.gov/earth/earth-observatory/blue-marble-next-generation/), produced by Reto Stöckli, NASA Earth Observatory. Credit: **NASA Earth Observatory**. | NASA explicitly requests this credit for use/republication. Apply its [media guidelines](https://www.nasa.gov/nasa-brand-center/images-and-media/), including third-party exceptions; this is not MIT imagery. Local files have not been matched byte-for-byte against current upstream downloads. |
-| Finished files in `assets/maps/lights/` | The guide identifies NASA's [legacy city lights](https://svs.gsfc.nasa.gov/30003/) and [2012 Earth at Night](https://science.nasa.gov/earth/earth-observatory/night-lights-2012-map-79765/). Underlying DMSP/OLS and VIIRS observations differ by image. | Preserve the source-page credits and NASA conditions. The guide's preferred 1994–95 lights must not be confused with newer alternatives. Exact source/processing mapping for every retained variant remains incomplete. |
-| `assets/maps/bump/gebco_08_rev_elev_21600x10800.png`, `assets/maps/bathymetry/gebco_bathy.21601x10801.jpg` | Filenames identify GEBCO-derived elevation/bathymetry; the guide describes the bump layer. | [GEBCO terms](https://www.gebco.net/data-products/gridded-bathymetry/terms-of-use) allow copying/adaptation with acknowledgement and disclaimers. The local images' original conversion/producer and applicable historical attribution still need exact mapping; do not infer rights from the filename alone. |
-| `assets/maps/specular/specular.png` | Assembled for the guide from Jestr's Celestia Motherlode tiles using ImageMagick. All 512 renamed source tiles match level 4 of the preserved `JestrEarthSpecular PNG.zip`. Its README identifies NASA landcover inputs and Jestr's manual edits. | Credit **Jestr**, the NASA landcover source, and the guide's assembly. [Motherlode's legal page](https://celestiamotherlode.net/legal.html) retains creator copyrights and describes qualified noncommercial distribution; the README is attribution, not a separate blanket license grant. |
-| `assets/maps/clouds/clouds_26Aug2011_*.jpeg` (three static sizes) | The guide distinguishes [NASA Blue Marble static clouds](https://science.nasa.gov/earth/earth-observatory/collections/blue-marble/) from live subscription imagery. | Exact download/producer mapping of these three 2011 JPEGs remains unconfirmed. Do not classify them as MIT or assume that subscription terms apply to them. |
-| `assets/maps/solarsystem/` (204 files, including `celestia-textures/`) | Preserved optional planetary texture collection. Xplanet's [map-source directory](https://xplanet.sourceforge.net/maps.php.html) and [Celestia Motherlode](https://celestiamotherlode.net/) are source references, not per-file licenses. | Individual creator/version mapping is incomplete. Filename initials are not sufficient attribution or license evidence; no blanket NASA, GPL or MIT license is asserted for these textures. |
-| `assets/maps/xplanet projections.jpg` | Preserved projection reference image. | Original image credit/terms are not yet mapped. |
+| `maps/world/`, `world.topo/`, `world.topo.bathy/` (36 monthly maps) | NASA [Blue Marble: Next Generation](https://science.nasa.gov/earth/earth-observatory/blue-marble-next-generation/), produced by Reto Stöckli, NASA Earth Observatory. Credit: **NASA Earth Observatory**. | NASA explicitly requests this credit for use/republication. Apply its [media guidelines](https://www.nasa.gov/nasa-brand-center/images-and-media/), including third-party exceptions; this is not MIT imagery. Local files have not been matched byte-for-byte against current upstream downloads. |
+| Finished files in `maps/lights/` | The guide identifies NASA's [legacy city lights](https://svs.gsfc.nasa.gov/30003/) and [2012 Earth at Night](https://science.nasa.gov/earth/earth-observatory/night-lights-2012-map-79765/). Underlying DMSP/OLS and VIIRS observations differ by image. | Preserve the source-page credits and NASA conditions. The guide's preferred 1994–95 lights must not be confused with newer alternatives. Exact source/processing mapping for every retained variant remains incomplete. |
+| `maps/bump/gebco_08_rev_elev_21600x10800.png`, `maps/bathymetry/gebco_bathy.21601x10801.jpg` | Filenames identify GEBCO-derived elevation/bathymetry; the guide describes the bump layer. | [GEBCO terms](https://www.gebco.net/data-products/gridded-bathymetry/terms-of-use) allow copying/adaptation with acknowledgement and disclaimers. The local images' original conversion/producer and applicable historical attribution still need exact mapping; do not infer rights from the filename alone. |
+| `maps/specular/specular.png` | Assembled for the guide from Jestr's Celestia Motherlode tiles using ImageMagick. All 512 renamed source tiles match level 4 of the preserved `JestrEarthSpecular PNG.zip`. Its README identifies NASA landcover inputs and Jestr's manual edits. | Credit **Jestr**, the NASA landcover source, and the guide's assembly. [Motherlode's legal page](https://celestiamotherlode.net/legal.html) retains creator copyrights and describes qualified noncommercial distribution; the README is attribution, not a separate blanket license grant. |
+| `maps/clouds/clouds_26Aug2011_*.jpeg` (three static sizes) | The guide distinguishes [NASA Blue Marble static clouds](https://science.nasa.gov/earth/earth-observatory/collections/blue-marble/) from live subscription imagery. | Exact download/producer mapping of these three 2011 JPEGs remains unconfirmed. Do not classify them as MIT or assume that subscription terms apply to them. |
+| `maps/solarsystem/` (204 files, including `celestia-textures/`) | Preserved optional planetary texture collection. Xplanet's [map-source directory](https://xplanet.sourceforge.net/maps.php.html) and [Celestia Motherlode](https://celestiamotherlode.net/) are source references, not per-file licenses. | Individual creator/version mapping is incomplete. Filename initials are not sufficient attribution or license evidence; no blanket NASA, GPL or MIT license is asserted for these textures. |
+| `maps/xplanet projections.jpg` | Preserved projection reference image. | Original image credit/terms are not yet mapped. |
 | `scripts/totalmarker/data/gdacs_volcano_coordinates_20261019.json` | GDACS coordinate-only responses, transformed as documented in the adjacent [data README](../scripts/totalmarker/data/README.md). | Retain [GDACS terms/disclaimer](https://www.gdacs.org/About/termofuse.aspx); public access alone is not an MIT grant. Provider fixtures likewise retain their respective source terms. |
 
 The stock `earth.jpg` / `night.jpg` resolve from the separately installed Xplanet
@@ -35,7 +35,7 @@ comments; those data are not relicensed here. Live [Xeric cloud imagery](https:/
 is acquired by each configured subscriber, not bundled from a user's download;
 subscription access does not grant this project blanket redistribution rights.
 
-The raw GEBCO JPEG is now at `assets/maps/bathymetry/gebco_bathy.21601x10801.jpg`
+The raw GEBCO JPEG is now at `maps/bathymetry/gebco_bathy.21601x10801.jpg`
 (previously `assets/maps/other/gebco_bathy.21601x10801.jpg`). Update any custom
 references to the old path explicitly. Setup does not link this JPEG or rewrite
 custom links; its separate monthly and bump-map links are unchanged.
@@ -66,3 +66,18 @@ plain-text provenance references, not current navigation links or license grants
 - Original Perl marker workflow: `https://blog.rajab.us/xplanet/markerfiles/`
 
 Use the current primary-source links and terms above for the bundled assets.
+
+## Solar-system folder names
+
+`maps/solarsystem/` uses `SS-BB-name`: a two-digit system number and a
+local body-order number. `00-00-sun` is the Sun; `03-01-moon` belongs to
+Earth's system; primary bodies use `00`. Pluto remains system `09` in this
+collection; that folder number does not classify it as a planet. `celestia-textures`
+and `body-maps.txt` retain their names. These are collection names, not NAIF IDs.
+
+Among the retained moons, the order follows increasing mean orbital distance
+within each system, checked against [JPL's satellite mean elements](https://ssd.jpl.nasa.gov/sats/elem/sep.html).
+It is not a complete list of satellites, a display order requirement or an
+ephemeris. Directory names do not certify image provenance. Empty local placeholders for Ariel, Umbriel, Titania,
+Oberon, Triton and Nereid are not packaged as textures or advertised as supported
+configurator targets. No new imagery or scientific certification is implied.

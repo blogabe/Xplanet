@@ -233,12 +233,12 @@ class LauncherRenderTests(Sandbox):
     def test_start_catches_up_monthly_map_even_when_display_already_running(self):
         env, table, trace, capture = self.lifecycle_env()
         (self.root / "images").mkdir()
-        maps = self.root / "assets/maps/world"
+        maps = self.root / "maps/world"
         maps.mkdir(parents=True)
         for month in (1, 6, 7):
             (maps / f"world.2004{month:02d}.3x5400x2700.png").write_bytes(b"map")
         link = self.root / "images/earth.png"
-        link.symlink_to("../assets/maps/world/world.200401.3x5400x2700.png")
+        link.symlink_to("../maps/world/world.200401.3x5400x2700.png")
         definition = self.root / "config/xp.def"
         definition.write_text(definition.read_text() + "EARTH_MAP_PRE=world/world\n")
         date = Path(env["PATH"].split(":")[0]) / "date"
@@ -247,7 +247,7 @@ class LauncherRenderTests(Sandbox):
             date.chmod(0o700)
             result = self.invoke("start", env)
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(link.readlink(), Path(f"../assets/maps/world/world.2004{month:02d}.3x5400x2700.png"))
+            self.assertEqual(link.readlink(), Path(f"../maps/world/world.2004{month:02d}.3x5400x2700.png"))
         self.assertFalse(trace.exists())
 
     def test_start_without_geometry_leaves_size_to_xplanet(self):

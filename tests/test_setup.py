@@ -46,7 +46,7 @@ class SetupTests(Sandbox):
 
     def test_public_stock_templates_prepare_without_private_maps(self):
         scripts, env, _ = self._shell_fixture()
-        shutil.rmtree(self.root / "assets")
+        shutil.rmtree(self.root / "maps")
         for name in ("xp.conf", "xp.def"):
             example = (PROJECT / "config" / f"{name}.example").read_text()
             if name == "xp.def":
@@ -101,14 +101,14 @@ class SetupTests(Sandbox):
         (config / "totalmarker.example.toml").write_bytes(b"personal example\n")
         (config / "earth.example").write_bytes(b"earth example\n")
         self.sources = {
-            "assets/maps/lights/earth_lights_4800.tiff": b"lights",
-            "assets/maps/bump/gebco_08_rev_elev_21600x10800.png": b"bump",
-            "assets/maps/specular/specular.png": b"specular",
+            "maps/lights/earth_lights_4800.tiff": b"lights",
+            "maps/bump/gebco_08_rev_elev_21600x10800.png": b"bump",
+            "maps/specular/specular.png": b"specular",
         }
         # Setup selects the local calendar month. Supply the complete fixture
         # set so an inherited UTC runner and a local shell cannot disagree.
         self.sources.update({
-            f"assets/maps/world/world.2004{month:02d}.3x5400x2700.png": b"map"
+            f"maps/world/world.2004{month:02d}.3x5400x2700.png": b"map"
             for month in range(1, 13)
         })
         for name, data in self.sources.items():
@@ -146,23 +146,23 @@ class SetupTests(Sandbox):
 
     def test_bathymetry_asset_does_not_change_monthly_or_bump_links(self):
         scripts, env, _ = self._shell_fixture()
-        bathymetry = self.root / "assets/maps/bathymetry/gebco_bathy.21601x10801.jpg"
+        bathymetry = self.root / "maps/bathymetry/gebco_bathy.21601x10801.jpg"
         bathymetry.parent.mkdir()
         bathymetry.write_bytes(b"bathymetry")
         definition = self.root / "config/xp.def"
         definition.write_text(definition.read_text().replace(
             "EARTH_MAP_PRE=world/world", "EARTH_MAP_PRE=world.topo.bathy/world.topo.bathy"))
-        maps = self.root / "assets/maps/world.topo.bathy"
+        maps = self.root / "maps/world.topo.bathy"
         maps.mkdir()
         for month in range(1, 13):
             (maps / f"world.topo.bathy.2004{month:02d}.3x5400x2700.png").write_bytes(b"monthly")
         done = self._inspect(scripts, env, input="y\nq\n")
         self.assertEqual(done.returncode, 3, done.stderr)
         earth = (self.root / "images/earth.png").readlink()
-        self.assertEqual(earth.parent, Path("../assets/maps/world.topo.bathy"))
+        self.assertEqual(earth.parent, Path("../maps/world.topo.bathy"))
         self.assertRegex(earth.name, r"^world\.topo\.bathy\.2004[01][0-9]\.3x5400x2700\.png$")
         self.assertEqual((self.root / "images/bump.png").readlink(),
-                         Path("../assets/maps/bump/gebco_08_rev_elev_21600x10800.png"))
+                         Path("../maps/bump/gebco_08_rev_elev_21600x10800.png"))
         self.assertEqual({p.name for p in (self.root / "images").iterdir()},
                          {"earth.png", "lights.tiff", "bump.png", "specular.png"})
         self.assertEqual(self._inspect(scripts, env, "--check").returncode, 0)
@@ -174,16 +174,16 @@ class SetupTests(Sandbox):
         images.mkdir()
         bump = images / "bump.png"
         bump.write_bytes(b"personal bump")
-        custom = self.root / "assets/maps/bathymetry/gebco_bathy.21601x10801.jpg"
+        custom = self.root / "maps/bathymetry/gebco_bathy.21601x10801.jpg"
         custom.parent.mkdir()
         custom.write_bytes(b"custom map")
         earth = images / "earth.png"
-        earth.symlink_to("../assets/maps/bathymetry/gebco_bathy.21601x10801.jpg")
+        earth.symlink_to("../maps/bathymetry/gebco_bathy.21601x10801.jpg")
         done = self._inspect(scripts, env, input="y\nq\n")
         self.assertEqual(done.returncode, 3, done.stderr)
         self.assertEqual(bump.read_bytes(), b"personal bump")
         self.assertFalse(bump.is_symlink())
-        self.assertEqual(earth.readlink(), Path("../assets/maps/bathymetry/gebco_bathy.21601x10801.jpg"))
+        self.assertEqual(earth.readlink(), Path("../maps/bathymetry/gebco_bathy.21601x10801.jpg"))
         self.assertEqual(self._inspect(scripts, env, "--check").returncode, 0)
 
     def test_missing_custom_old_bathymetry_link_is_refused_without_rewriting(self):
@@ -191,7 +191,7 @@ class SetupTests(Sandbox):
         images = self.root / "images"
         images.mkdir()
         earth = images / "earth.png"
-        target = Path("../assets/maps/other/gebco_bathy.21601x10801.jpg")
+        target = Path("../maps/other/gebco_bathy.21601x10801.jpg")
         earth.symlink_to(target)
         result = self._inspect(scripts, env, input="y\nq\n")
         self.assertEqual(result.returncode, 2, result.stderr)
@@ -293,7 +293,7 @@ class SetupTests(Sandbox):
         (self.root / "config/totalmarker.toml").write_bytes(b"custom toml")
         (self.root / "config/earth").write_bytes(b"custom earth")
         (self.root / "images/earth.png").write_bytes(b"custom map")
-        (self.root / "images/lights.tiff").symlink_to("../assets/maps/lights/earth_lights_4800.tiff")
+        (self.root / "images/lights.tiff").symlink_to("../maps/lights/earth_lights_4800.tiff")
         scripts, env, _ = self._shell_fixture()
         done = self._inspect(scripts, env, input="y\nq\n")
         self.assertEqual(done.returncode, 3, done.stderr)
@@ -302,13 +302,13 @@ class SetupTests(Sandbox):
                            ("images/earth.png", b"custom map")):
             self.assertEqual((self.root / name).read_bytes(), data)
         self.assertEqual((self.root / "images/lights.tiff").readlink(),
-                         Path("../assets/maps/lights/earth_lights_4800.tiff"))
+                         Path("../maps/lights/earth_lights_4800.tiff"))
 
     def test_external_dangling_and_parent_links_refuse_before_writes(self):
         scripts, env, _ = self._shell_fixture()
         (self.root / "images").mkdir()
         link = self.root / "images/earth.png"
-        for target in ("../../outside.png", "../assets/maps/world/missing.png"):
+        for target in ("../../outside.png", "../maps/world/missing.png"):
             with self.subTest(target=target):
                 link.symlink_to(target)
                 self.assertEqual(self._inspect(scripts, env).returncode, 2)
@@ -348,7 +348,7 @@ class SetupTests(Sandbox):
         self.assertIn("config/totalmarker.toml must be a real regular file", result.stderr)
         self.assertFalse((self.root / "arcs").exists())
         personal.unlink()
-        source = self.root / "assets/maps/specular/specular.png"
+        source = self.root / "maps/specular/specular.png"
         source.unlink()
         result = self._inspect(scripts, env)
         self.assertEqual(result.returncode, 2)
@@ -376,20 +376,20 @@ class SetupTests(Sandbox):
         scripts, env, _ = self._shell_fixture()
         dry = self._inspect(scripts, env, "--dry-run")
         self.assertEqual(dry.returncode, 0, dry.stderr)
-        self.assertIn("assets/maps/solarsystem is absent", dry.stdout)
+        self.assertIn("maps/solarsystem is absent", dry.stdout)
         self.assertNotIn("Would link images/solarsystem", dry.stdout)
-        source = self.root / "assets/maps/solarsystem"
+        source = self.root / "maps/solarsystem"
         source.mkdir()
         dry = self._inspect(scripts, env, "--dry-run")
-        self.assertIn("Would link images/solarsystem <- ../assets/maps/solarsystem", dry.stdout)
+        self.assertIn("Would link images/solarsystem <- ../maps/solarsystem", dry.stdout)
         done = self._inspect(scripts, env, input="y\nq\n")
         self.assertEqual(done.returncode, 3, done.stderr)
         solar_link = self.root / "images/solarsystem"
-        self.assertEqual(solar_link.readlink(), Path("../assets/maps/solarsystem"))
+        self.assertEqual(solar_link.readlink(), Path("../maps/solarsystem"))
         solar_link.unlink()
-        solar_link.symlink_to("../assets/maps/solarsystem")
+        solar_link.symlink_to("../maps/solarsystem")
         self.assertEqual(self._inspect(scripts, env, "--check").returncode, 0)
-        self.assertEqual(solar_link.readlink(), Path("../assets/maps/solarsystem"))
+        self.assertEqual(solar_link.readlink(), Path("../maps/solarsystem"))
         solar_link.unlink()
         solar_link.symlink_to(self.base)
         unsafe = self._inspect(scripts, env, "--dry-run")
@@ -954,3 +954,41 @@ class SetupTests(Sandbox):
         self.assertIn("overrides this setup invocation", done.stdout)
         self.assertIn("unpinned scheduled jobs use " + str(selected), done.stdout)
         self.assertEqual(choice.read_bytes(), before)
+
+    def test_upgrade_relocates_only_known_map_links_after_confirmation(self):
+        scripts, env, _ = self._shell_fixture()
+        images=self.root/'images';images.mkdir()
+        solar=self.root/'maps/solarsystem';solar.mkdir()
+        old={
+            'earth.png':'../assets/maps/world/world.200401.3x5400x2700.png',
+            'lights.tiff':'../assets/maps/lights/earth_lights_4800.tiff',
+            'bump.png':'../assets/maps/bump/gebco_08_rev_elev_21600x10800.png',
+            'specular.png':'../assets/maps/specular/specular.png',
+            'solarsystem':'../assets/maps/solarsystem',
+        }
+        for name,target in old.items():(images/name).symlink_to(target)
+        dry=self._inspect(scripts,env,'--dry-run')
+        self.assertEqual(dry.returncode,0,dry.stderr)
+        self.assertEqual(dry.stdout.count('Would relocate '),5)
+        self.assertEqual(self._inspect(scripts,env,'--check').returncode,1)
+        cancelled=self._inspect(scripts,env,input='n\n')
+        self.assertEqual(cancelled.returncode,3,cancelled.stderr)
+        for name,target in old.items():self.assertEqual(str((images/name).readlink()),target)
+        done=self._inspect(scripts,env,input='y\nq\n')
+        self.assertEqual(done.returncode,3,done.stderr)
+        for name,target in old.items():
+            self.assertEqual(str((images/name).readlink()),target.replace('../assets/maps/','../maps/'))
+            self.assertTrue((images/name).exists())
+        self.assertEqual(self._inspect(scripts,env,'--check').returncode,0)
+        self.assertNotIn('Would relocate',self._inspect(scripts,env,'--dry-run').stdout)
+
+    def test_upgrade_does_not_rewrite_custom_old_layout_link(self):
+        scripts,env,products=self._shell_fixture()
+        images=self.root/'images';images.mkdir()
+        custom=self.root/'maps/bathymetry/custom.png';custom.parent.mkdir();custom.write_bytes(b'custom')
+        link=images/'earth.png';link.symlink_to('../assets/maps/bathymetry/custom.png')
+        result=self._inspect(scripts,env,input='y\nq\n')
+        self.assertEqual(result.returncode,2,result.stderr)
+        self.assertEqual(str(link.readlink()),'../assets/maps/bathymetry/custom.png')
+        self.assertEqual(custom.read_bytes(),b'custom')
+        self.assertFalse(products.exists())

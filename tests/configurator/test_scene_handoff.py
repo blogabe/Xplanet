@@ -131,3 +131,11 @@ class HandoffTests(unittest.TestCase):
         forged=HandoffPlan(canonical(data),plan.native)
         with self.assertRaises(ValueError):stage_plan(forged,self.target)
         self.assertFalse(self.target.exists())
+
+    def test_previous_map_layout_requires_save_copy_before_handoff(self):
+        original=self.scene.read_bytes().replace(b'=maps/',b'=assets/maps/')
+        self.scene.write_bytes(original)
+        with self.assertRaisesRegex(ValueError,'Save a new copy'):
+            self.plan()
+        self.assertEqual(self.scene.read_bytes(),original)
+        self.assertFalse(self.target.exists())

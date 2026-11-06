@@ -59,7 +59,7 @@ successful refreshes. To display clouds with the stock maps, select 2048-pixel
 clouds in `config/totalmarker.toml` and enable `cloud_map=clouds-2048.jpg` in
 `config/xp.conf` after downloading a cloud image.
 
-The included `assets/maps/` directory has monthly Earth maps and optional lights,
+The included `maps/` directory has monthly Earth maps and optional lights,
 bump and specular textures. For example, select the included `world.topo` set with
 `EARTH_MAP_PRE=world.topo/world.topo` in `config/xp.def` and `map=earth.png` in
 `config/xp.conf`. The `earth` command points `images/earth.png` to the current
@@ -95,7 +95,7 @@ with uv-managed Python available as an explicit choice.
 | `config [--prepare]` | Open the scene studio; explicitly prepare its isolated UI if needed |
 | `update` | Fast-forward Git, then reinstall Xplanet if the tap formula changed |
 | `start` / `stop` / `restart` | Start, stop, or restart the desktop display |
-| `preview` / `render` | Render the legacy Earth configuration under `dev/preview/` |
+| `preview` / `render` | Render the custom Earth configuration under `dev/preview/` |
 | `earth` | Select the current seasonal Earth map |
 | `clouds`, `quake`, `storm`, `volcano` | Refresh that product and its labels |
 | `label` | Refresh update labels without fetching a product |
@@ -104,7 +104,7 @@ with uv-managed Python available as an explicit choice.
 | `norad`, `eclipse` | Run an explicitly configured optional product |
 | `test` | Run the offline test suite |
 
-`start` catches up the monthly map on the legacy configuration path and runs one
+`start` catches up the monthly map on the custom configuration path and runs one
 launchd-owned foreground desktop, without automatic respawn after stop. A selected
 studio scene keeps its reviewed map/time choices. `stop` stops **all** your Xplanet processes,
 including finite renders; `restart` performs that stop before starting a display.

@@ -50,12 +50,12 @@ sampled clock identifies an attempt; it is not a per-request network audit trail
 | Code, docs, tests, `config/*.example`, launchd examples | Shipped versioned inputs |
 | Personal config and `.plist` files | User-owned, preserved by setup, excluded from source |
 | `config/scenes/` | User-owned named native scene library and associated frozen data; explicit new-copy saves |
-| `config/desktop.scene` | Explicit selected-for-next-start reference; absence preserves legacy behavior |
+| `config/desktop.scene` | Explicit selected-for-next-start reference; absence preserves custom configuration behavior |
 | `.state/xplanet/scenes/` | Retained tool-managed scene revisions; validate native/resource hashes, not disposable cache |
 | `.state/configurator/venv/` | Explicitly prepared isolated UI runtime; separately replaceable |
 | `.state/configurator/drafts/` | Private recoverable user drafts; preserve separately from runtime rebuilds |
 | `.state/configurator/binary-evidence.json` | Bounded historical binary-support cache; not proof of running scene |
-| `assets/` | Committed static imagery; optional map selection, shipped with the checkout |
+| `maps/` | Committed static imagery; optional map selection, shipped with the checkout |
 | `images/`, `markers/`, `arcs/`, `satellites/` | Generated display inputs; preserve last-good output on failure |
 | `.state/totalmarker/state.json` and pending journals | Persistent provenance/recovery, not disposable cache |
 | `.state/totalmarker/job.lock` | Installation-local coordination; not a cross-machine sync lock |
@@ -84,7 +84,7 @@ can provide additional local evidence; live installation, Homebrew builds and
 GUI/login/launchd behavior still require their own native validation.
 The desktop is a foreground process owned by `local.xplanet.desktop`; the separate
 existing login trigger calls public start. There is no KeepAlive. Public start
-selects the current map on the legacy path even when the job is already running;
+selects the current map on the custom configuration path even when the job is already running;
 a selected studio revision retains its reviewed seasonal map. Stop first removes
 the desktop job, then stops all current-user Xplanet processes; restart uses the
 same broad stop before start. Start/restart success confirms launchd accepted

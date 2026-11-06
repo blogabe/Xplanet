@@ -16,32 +16,32 @@ SAMPLE = Path(__file__).with_name('samples') / 'earth.conf'
 MAP_PROJECTIONS = ('rectangular', 'orthographic')
 PROJECTIONS = (*MAP_PROJECTIONS, 'space')
 PLANET_MAPS={
-    'moon':'assets/maps/solarsystem/3moon/moon-4k.png',
-    'mercury':'assets/maps/solarsystem/1mercury/mercury.jpg',
-    'venus':'assets/maps/solarsystem/2venus/venussurface__praesepe.jpg',
-    'mars':'assets/maps/solarsystem/40mars/Mars_2k-050104.png',
-    'jupiter':'assets/maps/solarsystem/50jupiter/Jupiter.png',
-    'saturn':'assets/maps/solarsystem/60saturn/th_saturn.png',
-    'uranus':'assets/maps/solarsystem/70uranus/UranusJVV.png',
-    'neptune':'assets/maps/solarsystem/80neptune/neptune2k.jpg',
-    'phobos':'assets/maps/solarsystem/41phobos/2kPhobosMap.png',
-    'deimos':'assets/maps/solarsystem/42deimos/2kDeimos.png',
-    'io':'assets/maps/solarsystem/51io/Io.png',
-    'europa':'assets/maps/solarsystem/52europa/europa1_out.jpg',
-    'ganymede':'assets/maps/solarsystem/53ganymede/ganymede.jpg',
-    'callisto':'assets/maps/solarsystem/54callisto/callisto.jpg',
-    'mimas':'assets/maps/solarsystem/61mimas/mimas2kalb.jpg',
-    'enceladus':'assets/maps/solarsystem/62enceladus/Enceladus.png',
-    'tethys':'assets/maps/solarsystem/63tethys/tethys4kalb.jpg',
-    'dione':'assets/maps/solarsystem/64dione/JVV_Dione.png',
-    'rhea':'assets/maps/solarsystem/65rhea/rhea4kalb.jpg',
-    'titan':'assets/maps/solarsystem/66titan/Titan.png',
-    'hyperion':'assets/maps/solarsystem/67hyperion/JVV_Hyperion.png',
-    'iapetus':'assets/maps/solarsystem/68iapetus/iapetus4kalb.jpg',
-    'phoebe':'assets/maps/solarsystem/69phoebe/JVV_Phoebe.png',
-    'miranda':'assets/maps/solarsystem/71miranda/miranda3.jpg',
-    'pluto':'assets/maps/solarsystem/90pluto/JVV.Pluto.png',
-    'charon':'assets/maps/solarsystem/91charon/JVV.Charon.png',
+    'moon':'maps/solarsystem/03-01-moon/moon-4k.png',
+    'mercury':'maps/solarsystem/01-00-mercury/mercury.jpg',
+    'venus':'maps/solarsystem/02-00-venus/venussurface__praesepe.jpg',
+    'mars':'maps/solarsystem/04-00-mars/Mars_2k-050104.png',
+    'jupiter':'maps/solarsystem/05-00-jupiter/Jupiter.png',
+    'saturn':'maps/solarsystem/06-00-saturn/th_saturn.png',
+    'uranus':'maps/solarsystem/07-00-uranus/UranusJVV.png',
+    'neptune':'maps/solarsystem/08-00-neptune/neptune2k.jpg',
+    'phobos':'maps/solarsystem/04-01-phobos/2kPhobosMap.png',
+    'deimos':'maps/solarsystem/04-02-deimos/2kDeimos.png',
+    'io':'maps/solarsystem/05-01-io/Io.png',
+    'europa':'maps/solarsystem/05-02-europa/europa1_out.jpg',
+    'ganymede':'maps/solarsystem/05-03-ganymede/ganymede.jpg',
+    'callisto':'maps/solarsystem/05-04-callisto/callisto.jpg',
+    'mimas':'maps/solarsystem/06-01-mimas/mimas2kalb.jpg',
+    'enceladus':'maps/solarsystem/06-02-enceladus/Enceladus.png',
+    'tethys':'maps/solarsystem/06-03-tethys/tethys4kalb.jpg',
+    'dione':'maps/solarsystem/06-04-dione/JVV_Dione.png',
+    'rhea':'maps/solarsystem/06-05-rhea/rhea4kalb.jpg',
+    'titan':'maps/solarsystem/06-06-titan/Titan.png',
+    'hyperion':'maps/solarsystem/06-07-hyperion/JVV_Hyperion.png',
+    'iapetus':'maps/solarsystem/06-08-iapetus/iapetus4kalb.jpg',
+    'phoebe':'maps/solarsystem/06-09-phoebe/JVV_Phoebe.png',
+    'miranda':'maps/solarsystem/07-01-miranda/miranda3.jpg',
+    'pluto':'maps/solarsystem/09-00-pluto/JVV.Pluto.png',
+    'charon':'maps/solarsystem/09-01-charon/JVV.Charon.png',
 }
 TARGETS=('earth',*PLANET_MAPS)
 OBSERVERS=('geographic',*TARGETS,'sun','opposite_sun')
@@ -76,9 +76,9 @@ MONTHS = tuple(f'{month:02d}' for month in range(1, 13))
 NIGHT_MAPS = ('stock', 'lights2002')
 GRIDS = ('off', '30', '15', '10')
 LAYER_ASSETS = {
-    'relief': 'assets/maps/bump/gebco_08_rev_elev_21600x10800.png',
-    'specular': 'assets/maps/specular/specular.png',
-    'clouds': 'assets/maps/clouds/clouds_26Aug2011_2048.jpeg',
+    'relief': 'maps/bump/gebco_08_rev_elev_21600x10800.png',
+    'specular': 'maps/specular/specular.png',
+    'clouds': 'maps/clouds/clouds_26Aug2011_2048.jpeg',
 }
 SCENE_HEADERS={HEADER:16,V15_HEADER:15,V14_HEADER:14,V13_HEADER:13,V12_HEADER:12,V11_HEADER:11,V10_HEADER:10,V9_HEADER:9,V8_HEADER:8,V7_HEADER:7,V6_HEADER:6,V5_HEADER:5,V4_HEADER:4,V3_HEADER:3,V2_HEADER:2}
 
@@ -527,9 +527,9 @@ class View:
         if self.target in PLANET_MAPS:return [Path(PLANET_MAPS[self.target])]
         paths = []
         if self.map_family in MAP_FAMILIES[1:] and self.month in MONTHS:
-            paths.append(Path('assets/maps') / self.map_family / f'{self.map_family}.2004{self.month}.3x5400x2700.png')
+            paths.append(Path('maps') / self.map_family / f'{self.map_family}.2004{self.month}.3x5400x2700.png')
         if self.night == 'lights2002':
-            paths.append(Path('assets/maps/lights/Earthlights_2002.png'))
+            paths.append(Path('maps/lights/Earthlights_2002.png'))
         for field,filename in LAYER_ASSETS.items():
             if (self.clouds=='snapshot2011' if field=='clouds' else getattr(self,field)!='off'):paths.append(Path(filename))
         return paths
@@ -539,7 +539,7 @@ class View:
         if (self.map_family, self.night, self.twilight, self.grid) == ('stock', 'stock', 6, 'off'):
             return SAMPLE.read_bytes()
         day = 'earth.jpg' if self.map_family == 'stock' else self.resource_paths()[0].as_posix()
-        night = 'night.jpg' if self.night == 'stock' else 'assets/maps/lights/Earthlights_2002.png'
+        night = 'night.jpg' if self.night == 'stock' else 'maps/lights/Earthlights_2002.png'
         grid = 'grid=false' if self.grid == 'off' else f'grid=true\ngrid1={90 // int(self.grid)}\ngrid2={self.grid}'
         return (f'# Xplanet configurator Earth appearance v3; no live layers.\n[default]\nshade=30\n\n[earth]\n'
                 f'map={day}\nnight_map={night}\ntwilight={int(self.twilight)}\n{grid}\n').encode()
@@ -759,6 +759,51 @@ class ViewDocument:
     astronomy: tuple = field(default=(),repr=False)
 
 
+
+_PREVIOUS_MAP_FOLDERS = {
+    '0sun': '00-00-sun',
+    '1mercury': '01-00-mercury',
+    '2venus': '02-00-venus',
+    '3moon': '03-01-moon',
+    '40mars': '04-00-mars',
+    '41phobos': '04-01-phobos',
+    '42deimos': '04-02-deimos',
+    '50jupiter': '05-00-jupiter',
+    '51io': '05-01-io',
+    '52europa': '05-02-europa',
+    '53ganymede': '05-03-ganymede',
+    '54callisto': '05-04-callisto',
+    '60saturn': '06-00-saturn',
+    '61mimas': '06-01-mimas',
+    '62enceladus': '06-02-enceladus',
+    '63tethys': '06-03-tethys',
+    '64dione': '06-04-dione',
+    '65rhea': '06-05-rhea',
+    '66titan': '06-06-titan',
+    '67hyperion': '06-07-hyperion',
+    '68iapetus': '06-08-iapetus',
+    '69phoebe': '06-09-phoebe',
+    '70uranus': '07-00-uranus',
+    '71miranda': '07-01-miranda',
+    '72ariel': '07-02-ariel',
+    '73umbriel': '07-03-umbriel',
+    '74titania': '07-04-titania',
+    '75oberon': '07-05-oberon',
+    '80neptune': '08-00-neptune',
+    '81triton': '08-01-triton',
+    '82nereid': '08-02-nereid',
+    '90pluto': '09-00-pluto',
+    '91charon': '09-01-charon',
+}
+
+def current_map_body(config):
+    """Normalize only known map path spellings for exact-body recognition."""
+    result=config.replace(b'=assets/maps/', b'=maps/')
+    for previous,current in _PREVIOUS_MAP_FOLDERS.items():
+        result=result.replace(('/solarsystem/'+previous+'/').encode(),('/solarsystem/'+current+'/').encode())
+    return result
+
+
 def parse_saved_view(definition: bytes, config: bytes, *, places=None, routes=None, capture=None, observations=None, origin=None, asset_prefix='', astronomy=()):
     """Recognize versioned exact native output formats, not arbitrary shell syntax."""
     try:
@@ -830,7 +875,8 @@ def parse_saved_view(definition: bytes, config: bytes, *, places=None, routes=No
         if len({item.product for item in astronomy})!=len(astronomy) or view.astronomy_problem({item.product:item for item in astronomy}):raise ValueError
         if view.capture_problem(capture) or view.observation_problem(observations):raise ValueError
         if origin!=view.origin_data():raise ValueError
-        if text != expected or config != (view.body(asset_prefix) if version>=3 else SAMPLE.read_bytes()):
+        expected_config = view.body(asset_prefix) if version>=3 else SAMPLE.read_bytes()
+        if text != expected or current_map_body(config) != expected_config:
             raise ValueError
         return ViewDocument(view, renderer, config, capture=capture,observations=observations,astronomy=tuple(astronomy))
     except (ValueError, KeyError, IndexError, UnicodeError) as exc:
@@ -840,6 +886,9 @@ def parse_saved_view(definition: bytes, config: bytes, *, places=None, routes=No
 
 def recognized_body(config):
     """Accept only exact sample/generated scene bodies; never general config."""
+    normalized=current_map_body(config)
+    if normalized!=config:
+        return recognized_body(normalized)
     if config.endswith(LUNAR_BODY):
         base=config[:-len(LUNAR_BODY)]
         return LUNAR_BODY not in base and b'[moon]' not in base and recognized_body(base)
@@ -909,11 +958,11 @@ def recognized_body(config):
                 return config==View(target=target,grid=grid,planet_shade=float(values.get('shade',30))).body()
         family, month = 'stock', '01'
         if values['map'] != 'earth.jpg':
-            match = re.fullmatch(r'assets/maps/(world(?:\.topo(?:\.bathy)?)?)/\1\.2004(0[1-9]|1[0-2])\.3x5400x2700\.png', values['map'])
+            match = re.fullmatch(r'maps/(world(?:\.topo(?:\.bathy)?)?)/\1\.2004(0[1-9]|1[0-2])\.3x5400x2700\.png', values['map'])
             if not match:
                 return False
             family, month = match.groups()
-        night = {'night.jpg':'stock', 'assets/maps/lights/Earthlights_2002.png':'lights2002'}[values['night_map']]
+        night = {'night.jpg':'stock', 'maps/lights/Earthlights_2002.png':'lights2002'}[values['night_map']]
         grid = 'off' if values.get('grid','false') == 'false' else values['grid2']
         view = View(map_family=family, month=month, night=night, twilight=float(values.get('twilight',6)), grid=grid)
         if 'marker_file' in values:

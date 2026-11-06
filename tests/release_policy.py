@@ -28,7 +28,7 @@ def check_source_paths(entries):
     for name, metadata in entries.items():
         if (private_source_path(name) or metadata.startswith("120000 ") or
                 name.startswith(runtime) or
-                (name.startswith("assets/") and
+                (name.startswith(("maps/", "assets/")) and
                  (not metadata.startswith(("100644 ", "100755 ")) or
                   any(excluded_name(part) for part in PurePosixPath(name).parts[1:]))) or
                 (name.startswith("examples/") and name != "examples/README.md" and not name.endswith(".example.toml")) or

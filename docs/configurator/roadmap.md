@@ -127,7 +127,7 @@ Textual alone does not turn Xplanet into an interactive graphics engine.
 
 Saving, selection and restart remain separate. Current Apply reviews a known
 named scene, stages an immutable revision and changes only a guarded reference;
-legacy files and schedules stay intact. Broader setup/application workflows remain
+custom configuration files and schedules stay intact. Broader setup/application workflows remain
 future work, not permission to replace arbitrary custom content.
 
 Recovery should stay bounded: draft undo and configuration recovery do not mean

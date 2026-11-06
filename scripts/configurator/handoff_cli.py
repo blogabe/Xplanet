@@ -13,7 +13,7 @@ def main():
     mode.add_argument('--check-handoff',type=Path,metavar='DIRECTORY')
     mode.add_argument('--apply-handoff',type=Path,metavar='DIRECTORY')
     mode.add_argument('--select-revision',metavar='REVISION_ID')
-    mode.add_argument('--use-legacy',action='store_true')
+    mode.add_argument('--use-legacy',action='store_true',help='Return next start to custom xp.def/xp.conf (compatibility option name).')
     mode.add_argument('--show-selection',action='store_true')
     parser.add_argument('--expect-selected',metavar='legacy_OR_REVISION_ID')
     parser.add_argument('--view',type=Path)

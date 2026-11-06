@@ -134,7 +134,7 @@ class HealthTests(Sandbox):
         report = self.live(lambda: Fetcher(ScriptedTransport(Response(200, {'content-type': 'application/json'}, body))))
         self.assertEqual(report['quake']['status'], 'no_events')
         self.assertEqual(report['quake']['count'], 0)
-        self.assertEqual(report['quake']['freshness'], 'unknown')
+        self.assertEqual(report['quake']['freshness'], 'current')
 
     def test_live_probe_cleans_up_temporary_outputs_and_handles_internal_failure(self):
         roots = []
@@ -326,3 +326,84 @@ class HealthTests(Sandbox):
         self.assertEqual(rows(report)['clouds']['status'], 'access_failed')
         self.assertEqual(len(report['products']), 7)
         self.assertEqual(snapshot(self.root), before)
+
+
+class FreshnessPolicyTests(Sandbox):
+    def setUp(self):
+        super().setUp();self.settings=self.config();self.now=1700000000
+
+    def test_quake_uses_generation_and_original_refresh_policy_not_event_or_success_time(self):
+        settings=replace(self.settings,quake=replace(self.settings.quake,interval=3600))
+        record={'feed_generated_at':self.now-1800,'latest_origin_at':1,'successful_at':self.now}
+        self.assertEqual(health._freshness('quake',record,settings,self.now),'current')
+        for age,expected in ((7200,'current'),(7201,'stale'),(-60,'current'),(-61,'unknown')):
+            record['feed_generated_at']=self.now-age
+            self.assertEqual(health._freshness('quake',record,settings,self.now),expected)
+        for generated in (None,float('nan'),True):
+            record['feed_generated_at']=generated
+            self.assertEqual(health._freshness('quake',record,settings,self.now),'unknown')
+        self.assertEqual(health.observational_freshness('quake',{'feed_generated_at':self.now},self.now),'unknown')
+
+    def test_quake_zero_interval_keeps_five_minute_floor(self):
+        settings=replace(self.settings,quake=replace(self.settings.quake,interval=0))
+        for age,expected in ((300,'current'),(301,'stale')):
+            self.assertEqual(health._freshness('quake',{'feed_generated_at':self.now-age},settings,self.now),expected)
+
+    def test_empty_live_quake_feed_does_not_mask_stale_generation(self):
+        body=json.dumps({'type':'FeatureCollection','metadata':{'generated':(self.now-5000)*1000},'features':[]}).encode()
+        before=snapshot(self.root)
+        report=health.check(self.fs,self.settings,live=True,now=self.now,
+            fetcher_factory=lambda:Fetcher(ScriptedTransport(Response(200,{'content-type':'application/json'},body))))
+        quake_row=rows(report)['quake']
+        self.assertEqual(quake_row['count'],0);self.assertEqual(quake_row['freshness'],'stale')
+        self.assertEqual(quake_row['status'],'stale');self.assertEqual(snapshot(self.root),before)
+
+    def test_eclipse_event_phase_is_distinct_from_display_and_failure(self):
+        record={'start_at':self.now,'end_at':self.now+120,'active':False}
+        for when,phase in ((self.now-1,'upcoming'),(self.now,'active'),(self.now+120,'active'),(self.now+121,'ended')):
+            event=health.eclipse_relevance(record,when)
+            self.assertEqual(event['phase'],phase);self.assertEqual(event['overlay'],'hidden')
+        self.assertEqual(health.eclipse_relevance({},self.now)['phase'],'unknown')
+
+    def test_saved_norad_revalidates_real_cached_tles_without_network_or_writes(self):
+        from tests.test_norad import SAMPLE, EPOCH
+        from totalmarker.features.norad import run as update
+        settings=replace(self.settings,norad=replace(self.settings.norad,enabled=True,catalog_ids=(25544,)))
+        # The standard fixture epoch and deterministic time are shared with its producer tests.
+        when = EPOCH + 100
+        update(self.fs,settings,now=when,fetcher=Fetcher(ScriptedTransport(Response(200,{},SAMPLE))))
+        before=snapshot(self.root)
+        with patch('totalmarker.http.HTTPTransport.request',side_effect=AssertionError('network')):
+            report=health.check(self.fs,settings,now=when)
+            row=rows(report)['norad'];self.assertEqual(row['freshness'],'current')
+            later=health.check(self.fs,settings,now=when+settings.norad.max_age+2*86400)
+            self.assertEqual(rows(later)['norad']['freshness'],'stale')
+        self.assertEqual(snapshot(self.root),before)
+
+    def test_live_quake_uses_original_interval_and_saved_failure_remains_red(self):
+        from totalmarker.features.quake import run as update
+        settings=replace(self.settings,quake=replace(self.settings.quake,interval=3600))
+        body=json.dumps({'type':'FeatureCollection','metadata':{'generated':(self.now-1800)*1000},'features':[]}).encode()
+        def client():return Fetcher(ScriptedTransport(Response(200,{'content-type':'application/json'},body)))
+        live=rows(health.check(self.fs,settings,live=True,now=self.now,fetcher_factory=client))['quake']
+        self.assertEqual(live['freshness'],'current')
+        update(self.fs,settings,now=self.now,fetcher=client())
+        before=snapshot(self.root)
+        saved=rows(health.check(self.fs,settings,now=self.now))['quake']
+        self.assertEqual(saved['freshness'],'current');self.assertEqual(saved['freshness_tolerance_seconds'],7200)
+        changed=replace(settings,quake=replace(settings.quake,minimum=7))
+        self.assertEqual(rows(health.check(self.fs,changed,now=self.now))['quake']['freshness'],'unknown')
+        self.assertEqual(snapshot(self.root),before)
+        state=json.loads(self.fs.read(settings.state));state['products']['quake']['last_outcome']='failed'
+        self.fs.write(settings.state,json_bytes(state))
+        failed=rows(health.check(self.fs,settings,now=self.now))['quake']
+        self.assertEqual(failed['freshness'],'current');self.assertEqual(failed['status'],'refresh_failed')
+        self.assertEqual(health._report_tone(failed,False),'error')
+
+    def test_saved_norad_epoch_metadata_alone_cannot_establish_current(self):
+        settings=replace(self.settings,norad=replace(self.settings.norad,enabled=True))
+        record={'oldest_epoch_at':self.now,'source_key':'not-matching'}
+        self.assertEqual(health.saved_norad_freshness(self.fs,settings,record,{'verified':True},self.now),'unknown')
+        self.assertEqual(health.saved_norad_freshness(self.fs,settings,record,{'verified':False},self.now),'unknown')
+        record['oldest_epoch_at']=self.now+86401
+        self.assertEqual(health.saved_norad_freshness(self.fs,settings,record,{'verified':True},self.now),'unknown')

@@ -125,8 +125,8 @@ legacy config, schedules or the running desktop. The implemented
 [reviewed Apply workflow](apply-design.md) can separately select an
 immutable revision for the next explicit start/restart. Selected desktop execution
 consumes the studio camera/time/appearance arguments through the zsh scene path;
-no selector keeps the legacy path. Do not copy studio definitions over active
-legacy configuration expecting that path to interpret every studio field.
+no selector keeps the custom configuration path. Do not copy studio definitions over active
+custom configuration expecting that path to interpret every studio field.
 
 A session may select a scene and then save another draft. The completion message
 reports both outcomes; uncertainty about selection still exits with status 5 and
@@ -138,14 +138,14 @@ The bundled choices below display existing files; they do not fetch observations
 run TotalMarker or alter a schedule. Each switch preserves hidden parameters
 for undo, review and save/reopen. Invalid inactive parameters still need correction.
 
-- **Relief:** `assets/maps/bump/gebco_08_rev_elev_21600x10800.png`. The engine
+- **Relief:** `maps/bump/gebco_08_rev_elev_21600x10800.png`. The engine
   derives shading from this height map. Relief exaggeration has a studio range
   of 0.1–5; it is not certified terrain geometry or an observer-height control.
   By default shadows use night imagery. Choosing shaded-day shadows exposes
   `bump_shade` (0–100 whole percent), independent of the true night texture.
-- **Specular:** `assets/maps/specular/specular.png`, the bundled ocean-reflection
+- **Specular:** `maps/specular/specular.png`, the bundled ocean-reflection
   mask. Reflected sunlight may be subtle or absent for the chosen geometry.
-- **Clouds:** `assets/maps/clouds/clouds_26Aug2011_2048.jpeg`. This is an archived
+- **Clouds:** `maps/clouds/clouds_26Aug2011_2048.jpeg`. This is an archived
   2011 snapshot, deliberately labelled as such even with Now selected. Gamma
   changes its brightness and threshold hides dimmer pixels; a high threshold
   can hide nearly all clouds. Changing scene UTC does not retrieve weather for
@@ -251,13 +251,13 @@ against the restored draft; a matching Now image is still only a snapshot.
 ## Bundled assets and native references
 
 The day-map selector covers the 36 finished monthly PNGs in
-`assets/maps/world`, `world.topo` and `world.topo.bathy`. These are 2004 composites,
+`maps/world`, `world.topo` and `world.topo.bathy`. These are 2004 composites,
 not a historical reconstruction of a chosen scene date. The optional bundled
-night map is `assets/maps/lights/Earthlights_2002.png`. Assets and credits remain
+night map is `maps/lights/Earthlights_2002.png`. Assets and credits remain
 in place; no copies, downloads or live cloud layers are added by selecting them.
 
 Generated xp.conf uses explicit relative asset names such as
-`map=assets/maps/world/world.200401.3x5400x2700.png`. The preview passes the current
+`map=maps/world/world.200401.3x5400x2700.png`. The preview passes the current
 checkout as one `-searchdir` argument, including when its path contains spaces.
 The native xp.def records `XPLANET_ASSET_ROOT` as a reference to that checkout;
 it is metadata, not a new engine option or an automatic desktop setting. If
@@ -381,8 +381,8 @@ ephemerides are imported by these controls.
 
 Choose the target first, then revisit any camera/time or appearance section.
 Earth, Moon, Mercury, Venus, Mars, Jupiter, Saturn, Uranus and Neptune support
-the existing projected maps and non-projected space views. Moon uses `assets/maps/solarsystem/3moon/moon-4k.png`; Mars uses
-`assets/maps/solarsystem/40mars/Mars_2k-050104.png`. These are existing bundled
+the existing projected maps and non-projected space views. Moon uses `maps/solarsystem/03-01-moon/moon-4k.png`; Mars uses
+`maps/solarsystem/04-00-mars/Mars_2k-050104.png`. These are existing bundled
 textures, not observations at the chosen scene time. No Mars cloud layer is
 implied by another asset being present in the repository.
 
@@ -439,10 +439,10 @@ shadow brightness 15%; they are illustrative, not certified observations.
 
 ### Planetary imagery, shadows and time limits
 
-The additional bundled day maps are Mercury's `1mercury/mercury.jpg`, Venus's
-`2venus/venussurface__praesepe.jpg`, Jupiter's `50jupiter/Jupiter.png`, Saturn's
-`60saturn/th_saturn.png`, Uranus's `70uranus/UranusJVV.png` and Neptune's
-`80neptune/neptune2k.jpg`, all under `assets/maps/solarsystem`. Asset presence is
+The additional bundled day maps are Mercury's `01-00-mercury/mercury.jpg`, Venus's
+`02-00-venus/venussurface__praesepe.jpg`, Jupiter's `05-00-jupiter/Jupiter.png`, Saturn's
+`06-00-saturn/th_saturn.png`, Uranus's `07-00-uranus/UranusJVV.png` and Neptune's
+`08-00-neptune/neptune2k.jpg`, all under `maps/solarsystem`. Asset presence is
 checked; orientation, epoch and scientific precision are not certified. Venus
 shows a surface texture, not the optically visible cloud deck. Giant-planet
 atmospheric features are static texture details, not historical reconstructions.
@@ -493,7 +493,7 @@ general editable import or arbitrary config round-trip support.
 
 
 Explicit named-scene selection is separate from saving and restart. See
-[Apply and recovery](apply-design.md); legacy files stay intact.
+[Apply and recovery](apply-design.md); custom configuration files stay intact.
 
 
 ## Make a bounded native literal copy
@@ -553,7 +553,7 @@ It checks saved files, not unsaved editor changes; the draft stays intact.
 **Review Apply** and **Confirm selection** separately select an immutable revision
 for the next explicit start/restart. Reviewed restoration changes only the
 reference. Export/check/selection are also available from the CLI. `setup --check-handoff` verifies the
-bundle without sourcing legacy definitions or changing jobs. This is review and
+bundle without sourcing custom definitions or changing jobs. This is review and
 staging only until explicit selection; no operation here starts/restarts the desktop.
 See [Apply, recovery and limits](apply-design.md).
 

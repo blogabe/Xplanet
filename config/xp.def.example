@@ -9,6 +9,6 @@ XPLANET_GEOMETRY=1920x1080
 XPLANET_LONGITUDE=0
 
 # stock uses earth.jpg and night.jpg from the installed Xplanet package.
-# Included monthly sets are under assets/maps/. For example, select
+# Included monthly sets are under maps/. For example, select
 # world.topo/world.topo; the earth command and monthly job rotate the link.
 EARTH_MAP_PRE=stock

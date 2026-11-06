@@ -145,7 +145,7 @@ class ImageAndPathTests(Sandbox):
         self.assertFalse((self.root / "reference").exists())
 
     def test_runtime_inputs_and_internal_aliases_are_read_only(self):
-        for directory in ("config", "scripts", "assets/maps"):
+        for directory in ("config", "scripts", "maps"):
             source = self.root / directory / "source"
             source.parent.mkdir(parents=True, exist_ok=True)
             source.write_bytes(b"preserve input")
@@ -165,14 +165,14 @@ class ImageAndPathTests(Sandbox):
         (self.root / "markers").mkdir()
         map_link = self.root / "images" / "earth.jpg"
         city_link = self.root / "markers" / "earth"
-        map_link.symlink_to("../assets/maps/source")
+        map_link.symlink_to("../maps/source")
         city_link.symlink_to("../config/source")
         for alias in ("images/earth.jpg", "markers/earth"):
             with self.subTest(alias=alias), self.assertRaises(StorageError):
                 self.fs.write(alias, b"forbidden")
-        self.assertEqual((self.root / "assets/maps/source").read_bytes(), b"preserve input")
+        self.assertEqual((self.root / "maps/source").read_bytes(), b"preserve input")
         self.assertEqual((self.root / "config/source").read_bytes(), b"preserve input")
-        self.assertEqual(map_link.readlink(), Path("../assets/maps/source"))
+        self.assertEqual(map_link.readlink(), Path("../maps/source"))
         self.assertEqual(city_link.readlink(), Path("../config/source"))
 
     def test_case_aliases_and_unapproved_output_areas_are_rejected(self):

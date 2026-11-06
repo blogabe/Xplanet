@@ -86,7 +86,7 @@ class BinaryDiagnosticTests(unittest.IsolatedAsyncioTestCase):
         (self.root/'config').mkdir();(self.root/'config/desktop.scene').write_text('invalid selector\n')
         # A valid fallback executable must never be tried for an invalid selection.
         result=subprocess.run([str(entry),'diagnostics'],capture_output=True,text=True,timeout=5)
-        self.assertEqual(result.returncode,2);self.assertIn('no legacy fallback',result.stderr)
+        self.assertEqual(result.returncode,2);self.assertIn('no custom configuration fallback',result.stderr)
         self.assertFalse((self.root/diagnostic.CACHE).exists())
 
     @unittest.skipUnless(shutil.which('zsh'),'dependency-free zsh help')

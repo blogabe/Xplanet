@@ -32,8 +32,8 @@
 !/examples/
 !/examples/README.md
 !/examples/*.example.toml
-# Existing assets stay tracked; adding assets requires deliberate git add -f.
-# Unknown imagery/configuration under assets remains excluded by default.
+# Existing maps stay tracked; adding maps requires deliberate git add -f.
+# Unknown imagery/configuration under maps remains excluded by default.
 !/config/
 !/config/totalmarker.example.toml
 !/config/earth.example

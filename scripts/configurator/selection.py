@@ -52,7 +52,7 @@ def inspect_selection(root):
     path=real_path(Path(root)/SELECTOR)
     try:raw,identity=read_file(path,68)
     except FileNotFoundError:return Selection()
-    if not re.fullmatch(rb'v1 [0-9a-f]{64}\n',raw):raise ValueError('Invalid config/desktop.scene; inspect it. Legacy fallback was not selected.')
+    if not re.fullmatch(rb'v1 [0-9a-f]{64}\n',raw):raise ValueError('Invalid config/desktop.scene; inspect it. Custom configuration fallback was not selected.')
     return Selection(raw,identity)
 
 
@@ -95,7 +95,7 @@ def same_bytes(path,info,limit):
 
 def read_revision(root,identity):
     root=real_path(root);folder=real_path(root/REVISIONS/revision_id(identity))
-    if folder!=folder.resolve() or not folder.is_dir():raise ValueError('Selected scene revision is absent or linked; no legacy fallback.')
+    if folder!=folder.resolve() or not folder.is_dir():raise ValueError('Selected scene revision is absent or linked; no custom configuration fallback.')
     raw,_=read_file(folder/MANIFEST,256*1024)
     if digest(raw)!=identity:raise ValueError('Selected scene manifest hash changed.')
     try:
@@ -128,7 +128,7 @@ def read_revision(root,identity):
                 names.add(entry.name)
         if names!=set(native)|{ARGS,CHECKS,MANIFEST}:raise ValueError
         return record
-    except (KeyError,TypeError,ValueError) as exc:raise ValueError('Invalid or altered scene revision; no legacy fallback.') from exc
+    except (KeyError,TypeError,ValueError) as exc:raise ValueError('Invalid or altered scene revision; no custom configuration fallback.') from exc
 
 
 def stage_revision(root,bundle):
