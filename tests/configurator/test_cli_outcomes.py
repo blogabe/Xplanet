@@ -23,3 +23,14 @@ class CliOutcomeTests(unittest.TestCase):
                 code=handoff_cli.main()
         self.assertEqual(code,5);self.assertEqual(output.getvalue(),'')
         self.assertIn('Selection outcome uncertain',errors.getvalue());self.assertIn('Inspect before retrying',errors.getvalue())
+
+    def test_filesystem_refusal_is_actionable_without_raw_errno_or_path(self):
+        output=io.StringIO();errors=io.StringIO()
+        with tempfile.TemporaryDirectory() as root:
+            error=FileExistsError(17,'File exists','/private/secret-source')
+            with patch.object(sys,'argv',['handoff','--root',root,'--use-legacy','--expect-selected','legacy']),patch.object(handoff_cli,'inspect_selection',return_value=Selection(None,None)),patch.object(handoff_cli,'select_revision',side_effect=error),redirect_stdout(output),redirect_stderr(errors):
+                code=handoff_cli.main()
+        self.assertEqual(code,2);self.assertEqual(output.getvalue(),'')
+        self.assertIn('destination already exists',errors.getvalue())
+        self.assertIn('Choose a new name',errors.getvalue())
+        self.assertNotIn('[Errno',errors.getvalue());self.assertNotIn('secret-source',errors.getvalue())

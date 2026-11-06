@@ -70,6 +70,7 @@ class HandoffUITests(HandoffUIFixture, unittest.IsolatedAsyncioTestCase):
             self.legacy.write_bytes(self.source[self.legacy]);await click(pilot,'#handoff-review-button')
             self.target.mkdir();sentinel=self.target/'keep';sentinel.write_bytes(b'keep')
             await click(pilot,'#handoff-confirm');self.assertIn('refused',self.status());self.assertEqual(sentinel.read_bytes(),b'keep')
+            self.assertIn('destination already exists',self.status());self.assertIn('Choose a new name',self.status());self.assertNotIn('[Errno',self.status())
         self.unchanged()
 
     async def test_failed_publication_cleans_owned_output_and_shows_error(self):

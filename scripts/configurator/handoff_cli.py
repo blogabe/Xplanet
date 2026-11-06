@@ -2,6 +2,7 @@
 import argparse,json,sys
 from pathlib import Path
 from .handoff import create_plan,stage_plan,check_bundle
+from .fileio import native_error
 from .selection import inspect_selection,apply_bundle,select_revision,read_revision,UncertainSelection
 
 
@@ -55,7 +56,7 @@ def main():
         for note in getattr(exc,'__notes__',()):print(note,file=sys.stderr)
         return 5
     except (ValueError,OSError) as exc:
-        print('Handoff refused: '+str(exc),file=sys.stderr)
+        print('Handoff refused: '+native_error(exc),file=sys.stderr)
         for note in getattr(exc,'__notes__',()):print(note,file=sys.stderr)
         return 2
     except KeyboardInterrupt as exc:

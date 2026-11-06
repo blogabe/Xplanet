@@ -5,6 +5,7 @@ from textual.containers import Horizontal,VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Button,Input,Label,Static
 from .handoff import create_plan,stage_plan,check_bundle
+from .fileio import native_error
 from .native_inspection import display
 from .selection import inspect_selection,apply_bundle,restore_selection,read_revision,UncertainSelection
 
@@ -156,7 +157,7 @@ class HandoffScreen(ModalScreen[tuple]):
             self.status(self.result)
         except (OSError,ValueError) as exc:
             self.invalidate()
-            message='Handoff refused: '+str(exc)+'\nNo activation occurred.'
+            message='Handoff refused: '+native_error(exc)+'\nNo activation occurred.'
             for note in getattr(exc,'__notes__',()):message+='\n'+note
             self.result=message;self.status(message)
         finally:
