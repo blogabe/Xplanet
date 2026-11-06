@@ -12,11 +12,16 @@ class ShellSignalCleanupTests(unittest.TestCase):
             ready=root/'rename-ready'
             mover=tools/'mv';mover.write_text('#!'+sys.executable+'\nimport pathlib,time\npathlib.Path('+repr(str(ready))+').write_text("ready")\ntime.sleep(20)\n');mover.chmod(0o700)
             code='project_root=$1;script_dir="$1/scripts";source "$2";python_save_selection /usr/bin/true'
-            process=subprocess.Popen(['/bin/zsh','-f','-c',code,'fixture',str(root),str(PROJECT/'scripts/lib/xplanet/python-runtime.zsh')],env={**os.environ,'PATH':str(tools)+':/usr/bin:/bin'},stdout=subprocess.PIPE,stderr=subprocess.PIPE,start_new_session=True)
+            environment={**os.environ,'PATH':str(tools)+':/usr/bin:/bin'}
+            # The suite launcher supplies an override; this test exercises writes
+            # after the production override guard, not refusal before preparation.
+            environment.pop('TOTALMARKER_PYTHON',None)
+            process=subprocess.Popen(['/bin/zsh','-f','-c',code,'fixture',str(root),str(PROJECT/'scripts/lib/xplanet/python-runtime.zsh')],env=environment,stdout=subprocess.PIPE,stderr=subprocess.PIPE,start_new_session=True)
             try:
                 deadline=time.monotonic()+5
                 while not ready.exists() and process.poll() is None and time.monotonic()<deadline:time.sleep(.005)
-                self.assertTrue(ready.exists(),'owned rename barrier was not reached')
+                detail=process.communicate(timeout=2) if process.poll() is not None else ('still running','')
+                self.assertTrue(ready.exists(),'owned rename barrier was not reached: '+repr(detail))
                 self.assertTrue(list((root/'config').glob('.totalmarker.python.*')))
                 os.killpg(process.pid,signal.SIGTERM)
                 process.communicate(timeout=5)
