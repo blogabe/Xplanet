@@ -1,7 +1,7 @@
 """Explicit stdlib test containers; never import optional UI or local scratch."""
 from pathlib import Path
 from contextlib import contextmanager
-import os,tempfile,unittest
+import os,shutil,tempfile,unittest
 
 TEST_ROOT=Path(__file__).resolve().parent
 
@@ -40,13 +40,25 @@ OPTIONAL_EVIDENCE_SKIPS = {
     'tests.test_norad.NoradTests.test_saved_live_group_response_preserves_explicit_iss_with_warning',
 }
 
-def unexpected_skips(result):
-    return [(test.id(),reason) for test,reason in result.skipped if test.id() not in OPTIONAL_EVIDENCE_SKIPS]
+ZSH_BOUNDARY_SKIPS = {
+    'tests.configurator.test_configurator.LauncherTests.test_help_and_noninteractive_config_need_no_dependencies_or_setup': 'absolute',
+    'tests.configurator.test_configurator.LauncherTests.test_configurator_helper_propagates_result_without_parsing_output': 'absolute',
+    'tests.configurator.test_binary_diagnostics.BinaryDiagnosticTests.test_shell_explicit_renderer_and_missing_configuration_are_isolated': 'path',
+    'tests.configurator.test_binary_diagnostics.BinaryDiagnosticTests.test_selected_resolution_is_authoritative_and_invalid_selector_has_no_path_fallback': 'path',
+    'tests.configurator.test_binary_diagnostics.BinaryDiagnosticTests.test_shell_help_needs_no_interpreter_config_or_evidence': 'path',
+}
 
-def run(factory):
+def unexpected_skips(result, *, portable=False):
+    allowed=set(OPTIONAL_EVIDENCE_SKIPS)
+    if portable:
+        missing={'absolute':not Path('/bin/zsh').exists(),'path':shutil.which('zsh') is None}
+        allowed.update(name for name,kind in ZSH_BOUNDARY_SKIPS.items() if missing[kind])
+    return [(test.id(),reason) for test,reason in result.skipped if test.id() not in allowed]
+
+def run(factory, *, portable=False):
     with isolated_environment():
         result=unittest.TextTestRunner(verbosity=2).run(factory())
-        unexpected=unexpected_skips(result)
+        unexpected=unexpected_skips(result,portable=portable)
         for name,reason in unexpected:print('Unexpected skipped required check: '+name+' — '+reason,file=__import__('sys').stderr)
         return result.wasSuccessful() and not unexpected
 

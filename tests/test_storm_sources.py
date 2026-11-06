@@ -196,6 +196,31 @@ class StormSourcesTests(Sandbox):
                     with self.assertRaisesRegex(FeedError, "KMZ is invalid"):
                         parse_jtwc_kmz(packed.getvalue(), None, "WP292026", "Champi")
 
+    def test_real_kmz_with_false_small_size_cannot_allocate_full_deflate_payload(self):
+        import tracemalloc
+        expanded=16*1024*1024
+        packed=BytesIO()
+        with ZipFile(packed,'w',compression=ZIP_DEFLATED) as archive:
+            archive.writestr('doc.kml',b'0'*expanded)
+        damaged=bytearray(packed.getvalue())
+        # Lie consistently in local and central uncompressed-size fields while
+        # retaining the real 16MiB deflate stream and its CRC. No fake ZIP reader.
+        central=damaged.index(b'PK\x01\x02')
+        damaged[22:26]=(1024).to_bytes(4,'little')
+        damaged[central+24:central+28]=(1024).to_bytes(4,'little')
+        body=bytes(damaged)
+        with ZipFile(BytesIO(body)) as archive:self.assertEqual(archive.getinfo('doc.kml').file_size,1024)
+        tracing=tracemalloc.is_tracing()
+        if not tracing:tracemalloc.start()
+        baseline=tracemalloc.get_traced_memory()[0];tracemalloc.reset_peak()
+        try:
+            with self.assertRaisesRegex(FeedError,'KMZ is invalid'):
+                parse_jtwc_kmz(body,None,'WP292026','Champi')
+            peak=tracemalloc.get_traced_memory()[1]-baseline
+        finally:
+            if not tracing:tracemalloc.stop()
+        self.assertLess(peak,expanded,'Bounded parsing must not inflate the full lying member')
+
     def test_corrupt_forecast_records_failure_and_retains_last_good_pair(self):
         settings = self.config("StormCheckIntervalSeconds=0\n")
         first = run(self.fs, settings, fetcher=MappedFetcher(), now=NOW)

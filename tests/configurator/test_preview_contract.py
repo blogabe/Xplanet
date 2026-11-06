@@ -21,7 +21,7 @@ class PreviewContractTests(unittest.IsolatedAsyncioTestCase):
             binary=Path(directory)/'finite renderer';binary.write_text('#!'+sys.executable+'\n'+SCRIPT);binary.chmod(0o700)
             workspace=Workspace()
             try:
-                with patch.dict(os.environ,{'LC_ALL':'en_US.UTF-8','LC_NUMERIC':'de_DE.UTF-8'}):
+                with patch.dict(os.environ,{'LC_ALL':'en_US.UTF-8','LC_NUMERIC':'de_DE.UTF-8','PYTHONCOERCECLOCALE':'0'}):
                     image=await workspace.preview(View(geometry='640x360',time_mode='fixed',utc='2000-01-01T12:00:00Z'),str(binary))
                     self.assertEqual(os.environ['LC_NUMERIC'],'de_DE.UTF-8')
                 record=json.loads((image.parent/'invocation.json').read_bytes())

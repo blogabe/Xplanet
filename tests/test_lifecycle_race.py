@@ -76,11 +76,14 @@ log('end')
 
     def test_restart_invalid_command_preserves_existing_job_without_service_calls(self):
         definition=self.root/'config/xp.def'
-        definition.write_text('XPLANET_BIN=/missing/renderer\n')
+        original_definition=definition.read_text()
+        self.assertEqual(original_definition.count('XPLANET_BIN=/usr/bin/true'),1)
+        definition.write_text(original_definition.replace('XPLANET_BIN=/usr/bin/true','XPLANET_BIN=/missing/renderer'))
         original=self.jobs.read_bytes()
         child=self.invoke(self.entry,'restart','A');out,err=child.communicate(timeout=10)
         self.assertEqual(child.returncode,2,(out,err))
         self.assertEqual(self.jobs.read_bytes(),original)
+        self.assertIn('xp.def XPLANET_BIN must be executable',err)
         self.assertFalse(self.trace.exists(),'invalid preflight must not call launchctl')
 
     def test_restart_invalid_monthly_map_preserves_job_and_files(self):
@@ -113,6 +116,12 @@ log('end')
                 else:
                     child=self.invoke(self.entry,'restart','A');out,err=child.communicate(timeout=5)
                     self.assertEqual(child.returncode,2,(out,err))
+                    reason={'missing source':'Monthly map is absent or not a regular file',
+                            'missing images':'images must be a real directory',
+                            'regular link':'images/earth.png is not a symlink',
+                            'external link':'images/earth.png is not an internal map link',
+                            'locked':'Earth map selection is locked'}[problem]
+                    self.assertIn(reason,err)
                     self.assertEqual(self.jobs.read_bytes(),before_job)
                     self.assertFalse(self.trace.exists(),'map preflight must precede any launchctl call')
                 after={str(path.relative_to(self.root)):(('link',str(path.readlink())) if path.is_symlink() else ('file',path.read_bytes()) if path.is_file() else ('directory',path.stat().st_mode)) for path in self.root.rglob('*')}
