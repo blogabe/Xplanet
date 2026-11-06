@@ -52,11 +52,7 @@ select_earth_map() (
     done
     lockdir="$project_root/.state/totalmarker/map.lock.d"
     if [[ "$checking" == true ]]; then
-        [[ ! -e "$lockdir" && ! -L "$lockdir" ]] || fail "Earth map selection is locked at $lockdir; retry after the current selection finishes"
-        [[ -w "$project_root/images" ]] || fail "images must be writable for Earth map selection"
-        local state_parent="$project_root/.state/totalmarker"
-        while [[ ! -d "$state_parent" ]]; do state_parent="${state_parent:h}"; done
-        [[ -w "$state_parent" ]] || fail "Earth map state directory must be writable: $state_parent"
+        [[ ! -e "$lockdir" && ! -L "$lockdir" ]] || fail "Earth map selection is locked at $lockdir; another earth command may be running. If none is running after an interruption, remove that empty lock directory with rmdir and retry."
     else
         mkdir -- "$lockdir" 2>/dev/null ||
             fail "Earth map selection is locked at $lockdir; another earth command may be running. If none is running after an interruption, remove that empty lock directory with rmdir and retry."
@@ -85,6 +81,10 @@ select_earth_map() (
         fi
     fi
     if [[ "$checking" == true ]]; then
+        [[ -w "$project_root/images" ]] || fail "images must be writable for Earth map selection"
+        local state_parent="$project_root/.state/totalmarker"
+        while [[ ! -d "$state_parent" ]]; do state_parent="${state_parent:h}"; done
+        [[ -w "$state_parent" ]] || fail "Earth map state directory must be writable: $state_parent"
         print -- "Earth map prerequisites verified: $source"
         exit 0
     fi
