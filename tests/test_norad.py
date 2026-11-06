@@ -24,7 +24,7 @@ SAMPLE = (
 EPOCH = (datetime(2001, 1, 1, tzinfo=timezone.utc)
          + timedelta(days=286.44085648 - 1)).timestamp()
 STATIONS = (Path(__file__).parent / "fixtures/norad/stations-selected.synthetic.json").read_bytes()
-SAVED_STATIONS = (Path(__file__).parents[1] / "validation/norad-group-20261019/group-response.bin")
+SAVED_STATIONS = (Path(__file__).parents[1] / "dev/validation/norad-group-20261019/group-response.bin")
 
 
 def sample_for(catalog_id, name):

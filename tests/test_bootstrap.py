@@ -9,7 +9,7 @@ import sys
 import tempfile
 import unittest
 
-PROJECT = Path(__file__).resolve().parents[2]
+PROJECT = Path(__file__).resolve().parents[1]
 
 
 class BootstrapTests(unittest.TestCase):

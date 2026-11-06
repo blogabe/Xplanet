@@ -228,9 +228,10 @@ class ConfiguratorApp(App):
     #status { padding: 1; border: round $accent; margin-top: 1; }
     '''
 
-    def __init__(self, root: Path, renderer: str, workspace=None, *, document=None,recovery=True,display=None):
+    def __init__(self, root: Path, renderer: str, workspace=None, *, document=None,recovery=True,display=None,renderer_note=""):
         super().__init__()
         self.root, self.renderer = root, renderer
+        self.renderer_note = renderer_note
         self.display_geometry = display or fallback('not queried in this session')
         self.workspace = workspace or Workspace()
         if self.workspace.capabilities is None:self.workspace.capabilities=cached_binary_evidence(root)
@@ -285,6 +286,7 @@ class ConfiguratorApp(App):
             yield Static('Edit, preview, then save or cancel. Saving does not apply desktop settings.')
             yield Label('Xplanet executable (absolute path)')
             yield Input(self.renderer, id='renderer')
+            if self.renderer_note:yield Static(self.renderer_note,id='renderer-discovery',markup=False)
             with Vertical(id='control-target',classes='control'):
                 yield Label('Start with a target — sections remain freely revisitable')
                 yield Select([(target.title(),target) for target in TARGETS],value=self.document.view.target,allow_blank=False,id='target')

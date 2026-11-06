@@ -1,7 +1,6 @@
 """Independent terminal entrypoint; renderer discovery never executes xp.def."""
 import argparse
 from pathlib import Path
-import shutil
 import sys
 
 
@@ -28,7 +27,7 @@ def main():
     parser = argparse.ArgumentParser(description='Explore Earth, planets and supported moons; save native files without automatic activation.',epilog='In-app Help: F1. Full manual: --guide or scripts/xplanet.sh config --guide. See docs/configurator/user-guide.md.')
     parser.add_argument('--guide',action='store_true',help='Print the bundled user guide without opening the UI')
     parser.add_argument('--root', type=Path, default=Path(__file__).resolve().parents[2])
-    parser.add_argument('--renderer', default=shutil.which('xplanet') or '')
+    parser.add_argument('--renderer', help='Explicit local Xplanet executable; otherwise use literal project setting, PATH or standard Homebrew locations')
     parser.add_argument('--view', type=Path, help='Reopen a generated named .conf/.def or legacy scene directory as a snapshot.')
     args = parser.parse_args()
     if args.guide:
@@ -45,10 +44,12 @@ def main():
     except (ValueError, OSError) as exc:
         print(f'Cannot open view: {exc}', file=sys.stderr)
         return 2
+    from .renderer_discovery import discover
+    renderer, renderer_note = discover(args.root.resolve(), args.renderer)
     workspace = Workspace()
     app=None
     try:
-        app=ConfiguratorApp(args.root.resolve(),args.renderer,workspace,document=document,display=detect())
+        app=ConfiguratorApp(args.root.resolve(),renderer,workspace,document=document,display=detect(),renderer_note=renderer_note)
         result=app.run()
         code=report_result(result)
         if app.recovery_notice:print(app.recovery_notice)

@@ -157,7 +157,7 @@ hours = 72
                 self.toml(text)
 
     def test_safe_toml_examples_load_without_network_or_rewrite(self):
-        examples = sorted((PROJECT / "dev" / "examples").glob("*.example.toml"))
+        examples = sorted((PROJECT / "examples").glob("*.example.toml"))
         self.assertTrue({"custom.example.toml", "xeric.example.toml"} <=
                         {path.name for path in examples})
         for path in examples:

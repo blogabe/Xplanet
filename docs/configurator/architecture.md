@@ -265,8 +265,8 @@ documented below. The studio never executes imported shell definitions.
 
 ## Verification
 
-`xplanet.sh test` explicitly loads stdlib modules from `dev/tests/` and
-`dev/tests/configurator/`, excluding `ui/` and local scratch directories. The
+`xplanet.sh test` explicitly loads stdlib modules from `tests/` and
+`tests/configurator/`, excluding `ui/` and local scratch directories. The
 portable runner shares that module list with explicit macOS exclusions. This
 keeps Textual optional. Both runners use private per-run temporary workspaces outside
 the checkout so filesystem synchronization cannot alter fixture identities. The stdlib suite covers model, save preservation, subprocess failure,
@@ -274,7 +274,7 @@ timeout/cancellation, strict reopening/source preservation and launcher contract
 separately with the pinned UI dependencies:
 
 ```sh
-PYTHONPATH=scripts:dev .state/configurator/venv/bin/python -B -m unittest discover -s dev/tests/configurator/ui -v
+PYTHONPATH=scripts:. .state/configurator/venv/bin/python -B -m unittest discover -s tests/configurator/ui -v
 ```
 
 CI prepares a disposable venv rather than installing into the TotalMarker Python.

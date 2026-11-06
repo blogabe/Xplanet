@@ -109,7 +109,7 @@ automatically. See [support evidence and limits](configurator/diagnostics.md#ren
 The CI workflow runs the full suite on macOS with Python 3.11 and 3.13, plus the
 isolated configurator interactions on macOS Python 3.11. Ubuntu jobs are currently
 disabled. Historical Linux checks and the available
-`PYTHONPATH=scripts:dev python -m tests.run_portable` data/publication subset are
+`PYTHONPATH=scripts:. python -m tests.run_portable` data/publication subset are
 portability evidence, not current continuous Linux CI or macOS workflow coverage.
 Standalone TotalMarker usage and the portable runner remain available.
 

@@ -25,15 +25,15 @@ def check_source_paths(entries):
     allowed_config = {"config/earth.example", "config/xp.conf.example",
                       "config/xp.def.example", "config/totalmarker.example.toml"}
     runtime = ("images/", "markers/", "arcs/", "satellites/", "logs/", ".state/")
-    allowed_dev = ("dev/tests/", "dev/examples/")
     for name, metadata in entries.items():
         if (private_source_path(name) or metadata.startswith("120000 ") or
                 name.startswith(runtime) or
                 (name.startswith("assets/") and
                  (not metadata.startswith(("100644 ", "100755 ")) or
                   any(excluded_name(part) for part in PurePosixPath(name).parts[1:]))) or
+                (name.startswith("examples/") and name != "examples/README.md" and not name.endswith(".example.toml")) or
                 (name.startswith("config/") and name not in allowed_config) or
-                (name.startswith("dev/") and not name.startswith(allowed_dev)) or
+                name.startswith("dev/") or
                 (name.startswith("scripts/launchd/") and
                  not name.endswith(".plist.example"))):
             raise RuntimeError(f"unsafe source entry: {name}")

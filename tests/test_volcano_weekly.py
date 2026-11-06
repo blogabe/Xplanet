@@ -63,7 +63,7 @@ class WeeklyVolcanoTests(Sandbox):
         self.assertEqual(len(catalogue), 1440)
         self.assertEqual(catalogue[282080], (31.5772, 130.6589))
         self.assertEqual(catalogue[262000], (-6.1009, 105.4233))
-        source = json.loads((Path(__file__).parents[2] /
+        source = json.loads((Path(__file__).parents[1] /
                              'scripts/totalmarker/data/gdacs_volcano_coordinates_20261019.json').read_bytes())
         self.assertIn('coordinate-only', source['source'])
         self.assertEqual(source['source_date'], '2026-10-19')

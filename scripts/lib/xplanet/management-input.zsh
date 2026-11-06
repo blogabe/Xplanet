@@ -58,6 +58,8 @@ management_choose() {
         case "$prefix" in
             $'\003') exit 130 ;;
             $'\004') return 1 ;;
+            q|Q) management_reply=$prefix; return 0 ;;
+            up|down|escape) prefix='' ;;
         esac
         management_read "Choose: " || return 1
         management_reply="$prefix$management_reply"

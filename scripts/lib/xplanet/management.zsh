@@ -145,7 +145,7 @@ manage_xplanet() {
     local management_heading management_good management_attention management_problem management_screen_active
     local management_last_kind=info management_last_result=''
     local management_process management_job management_selection
-    local management_health="[?] Not checked in this session; choose Saved health (7)" management_health_time=""
+    local management_health="[?] Health needs configuration; choose Guided setup (1)" management_health_time=""
     local management_key management_pending_key='' management_selected=1
     local management_save management_restore management_erase_line management_partial=false management_size=''
     local -a management_row_up management_labels management_styles
@@ -158,6 +158,7 @@ manage_xplanet() {
     trap 'exit 143' TERM
     trap 'exit 129' HUP
     {
+    management_initial_health
     while true; do
         state=$(management_state)
         management_screen_open

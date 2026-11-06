@@ -102,7 +102,7 @@ case "${1:-}" in
         cd "$project_root"
         export PYTHONNOUSERSITE=1
         export TZ=UTC
-        export PYTHONPATH="$project_root/dev:$PYTHONPATH"
+        export PYTHONPATH="$project_root:$PYTHONPATH"
         exec "$python_bin" -B -m tests.run_core
         ;;
 esac

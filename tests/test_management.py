@@ -1,5 +1,6 @@
 """Management uses disposable command stubs; never host installers or jobs."""
 import os
+import re
 import fcntl
 import pty
 import select
@@ -8,6 +9,8 @@ import subprocess
 import time
 import termios
 import struct
+
+from pathlib import Path
 
 from .support import PROJECT, Sandbox, copy_launcher
 
@@ -63,7 +66,7 @@ class ManagementTests(Sandbox):
         return {str(p.relative_to(self.root)): p.read_bytes()
                 for p in self.root.rglob('*') if p.is_file()}
 
-    def terminal(self, answers=None, interrupt=False, eof=False, termination=None, pause_signal=None, pause_key=None, after_pause=None, menu_steps=(), resize=None, key_marker=None):
+    def terminal(self, answers=None, interrupt=False, eof=False, termination=None, pause_signal=None, pause_key=None, after_pause=None, menu_steps=(), resize=None, key_marker=None, startup_interrupt=False):
         master, slave = pty.openpty()
         fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH',
                     int(self.env.get('TEST_ROWS', 30)), int(self.env.get('TEST_COLS', 100)), 0, 0))
@@ -74,18 +77,24 @@ class ManagementTests(Sandbox):
         output = b''
         try:
             deadline = time.monotonic() + 5
-            while b'Choose: ' not in output and time.monotonic() < deadline:
+            marker = b'Reading saved health' if startup_interrupt else b'Choose: '
+            while marker not in output and time.monotonic() < deadline:
                 if select.select([master], [], [], .1)[0]:
                     output += os.read(master, 65536)
-            self.assertIn(b'Choose: ', output)
-            if self.env.get('TERM') == 'xterm-256color':
+            self.assertIn(marker, output)
+            if self.env.get('TERM') == 'xterm-256color' and b'\x1b[?1049h' in output and not startup_interrupt:
                 while termios.tcgetattr(slave)[3] & (termios.ICANON | termios.ECHO) and time.monotonic() < deadline:
                     select.select([], [], [], .001)
                 self.assertFalse(termios.tcgetattr(slave)[3] & (termios.ICANON | termios.ECHO), output.decode())
             if resize:
                 fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH', *resize, 0, 0))
                 os.kill(proc.pid, signal.SIGWINCH)
-            if interrupt or termination:
+            if startup_interrupt:
+                while not Path(str(self.trace)+'.child').exists() and time.monotonic() < deadline:
+                    select.select([],[],[],0.01)
+                self.assertTrue(Path(str(self.trace)+'.child').exists())
+                os.write(master,b'\x03')
+            elif interrupt or termination:
                 os.kill(proc.pid, termination or signal.SIGINT)
             else:
                 os.write(master, b'\x04' if eof else answers.encode())
@@ -175,9 +184,9 @@ class ManagementTests(Sandbox):
             before = self.snapshot()
             code, output = self.terminal('q\n')
             self.assertEqual(code, 0)
-            self.assertIn(f'Legacy setup  {expected};', output)
+            self.assertRegex(output, f'Legacy setup +{expected};')
             self.assertEqual(before, self.snapshot())
-        self.assertEqual(self.calls(), [])
+        self.assertEqual(self.calls(), ['health --dashboard'])
 
     def test_lifecycle_requires_confirmation_and_retains_direct_commands(self):
         self.terminal('3\nn\n4\nn\n5\nn\nq\n')
@@ -337,7 +346,7 @@ class ManagementTests(Sandbox):
         config.mkdir()
         (config / 'totalmarker.toml').write_text('')
         self.terminal('7\n q\n')
-        self.assertEqual(self.calls(), ['health --dashboard'])
+        self.assertEqual(self.calls(), ['health --dashboard', 'health --dashboard'])
 
     def test_cancelled_setup_returns_to_menu_without_start_offer(self):
         self.write_script(self.scripts / 'xp-setup.sh', 'exit 3\n')
@@ -394,7 +403,7 @@ class ManagementTests(Sandbox):
             _, output = self.terminal('q\n')
             self.assertIn('xplanet: ' + expected_process, output)
             self.assertIn('Job: ' + expected_job, output)
-            self.assertIn('Not checked in this session; choose Saved health (7)', output)
+            self.assertIn('Health needs configuration; choose Guided setup (1)', output)
         self.assertEqual(self.calls(), [])
 
     def test_opening_never_executes_configuration_or_python(self):
@@ -481,7 +490,7 @@ class ManagementTests(Sandbox):
         _, output = self.terminal('q\n')
         self.assertNotIn('\x1b', output)
         self.assertTrue(output.isascii())
-        self.assertIn('[?] Not checked in this session', output)
+        self.assertIn('[?] Health needs configuration', output)
 
     def test_eof_after_auto_return_restores_normal_screen(self):
         self.enhanced_terminal()
@@ -548,7 +557,7 @@ class ManagementTests(Sandbox):
             self.assertIn('\r\n\r\n' + heading + '\r\n\r\n', output)
         self.assertIn('Start the desktop now? [y/N]', output)
         self.assertIn('Last action: [+] Done - Setup completed; desktop start skipped.', output)
-        self.assertEqual(self.calls(), ['setup'])
+        self.assertEqual(self.calls(), ['health --dashboard', 'setup'])
 
     def test_single_key_returns_without_enter_and_preserves_next_choice(self):
         self.enhanced_terminal()
@@ -665,26 +674,29 @@ class ManagementTests(Sandbox):
             item = next(i for i, row in enumerate(rows) if f'{"h" if number==10 else number}) ' in row)
             self.assertEqual(len(rows) - 1 - item, offset)
 
-    def test_narrow_navigation_redraws_using_cached_status(self):
+    def test_narrow_terminal_uses_numbered_scrollback_without_hiding_status(self):
         self.enhanced_terminal()
         self.env.update(TEST_ROWS='20', TEST_COLS='40')
         probes = self.base / 'probes'
         self.env['PROBES'] = str(probes)
         self.write_script(self.bin / 'pgrep', 'echo process >> "$PROBES"; exit 1\n')
         self.write_script(self.bin / 'launchctl', 'echo jobs >> "$PROBES"; exit 0\n')
-        code, output = self.terminal('8\x1b[Aq')
+        code, output = self.terminal('q\n')
         self.assertEqual(code, 0)
         self.assertEqual(probes.read_text().splitlines(), ['process', 'jobs'])
-        self.assertEqual(output.count('Xplanet management'), 3)
+        self.assertEqual(output.count('Xplanet management'), 1)
+        self.assertIn('Compact terminal: numbered input',output)
+        self.assertIn('process/job presence does not verify a scene',output)
+        self.assertNotIn('\x1b[?1049h',output)
         self.assertNotIn('\x1b7', output)
 
-    def test_resize_refreshes_screen_and_preserves_navigation_input(self):
+    def test_resize_to_small_terminal_restores_screen_and_retains_safe_input(self):
         self.enhanced_terminal()
-        for keys, selected in [('\x1b[B', 2), ('\x1b4', 4)]:
-            code, output = self.terminal(keys, resize=(20, 40), menu_steps=[(2, b'q')])
+        for keys, following in [('\x1b[B', b'2\nq\n'), ('\x1b2', b'\nq\n')]:
+            code, output = self.terminal(keys, resize=(20,40), menu_steps=[(2, following)])
             self.assertEqual(code, 0, output)
-            self.assertGreaterEqual(output.count('Xplanet management'), 2)
-            self.assertIn(f'> \x1b[34m{"h" if selected==10 else selected})', output)
+            self.assertIn('Compact terminal: numbered input',output)
+            self.assertIn('Configurator cancelled',output)
             self.assertEqual(self.calls(), [])
             self.assertEqual(output.count('\x1b[?1049h'), 1)
             self.assertEqual(output.count('\x1b[?1049l'), 1)
@@ -723,16 +735,16 @@ class ManagementTests(Sandbox):
     def test_health_snapshot_is_explicit_cached_and_never_claims_live_or_running_scene(self):
         (self.root/'config').mkdir();(self.root/'config/totalmarker.toml').write_text('')
         code,output=self.terminal('7\n',pause_key=b'x',after_pause='q\n')
-        self.assertEqual(code,0,output);self.assertEqual(self.calls(),['health --dashboard'])
-        self.assertIn('Snapshot  2026-11-04 12:00Z (saved evidence, not a live access check',output)
-        self.assertIn('[?] Clouds',output);self.assertIn('Running scene  [?] Not identified',output)
+        self.assertEqual(code,0,output);self.assertEqual(self.calls(),['health --dashboard','health --dashboard'])
+        self.assertRegex(output,r'Snapshot +2026-11-04 12:00Z \(saved evidence, not a live access check')
+        self.assertIn('[?] Clouds',output);self.assertRegex(output,r'Running scene +\[\?\] Not identified')
         self.assertNotIn('Dashboard pending',output)
 
     def test_invalid_selection_is_not_silently_presented_as_legacy(self):
         (self.root/'config').mkdir();(self.root/'config/desktop.scene').write_text('invalid')
         before=self.snapshot();code,output=self.terminal('q\n')
         self.assertEqual(code,0,output);self.assertIn('invalid or unavailable selector',output)
-        self.assertNotIn('Next start  legacy',output);self.assertEqual(before,self.snapshot());self.assertEqual(self.calls(),[])
+        self.assertNotRegex(output,r'Next start +legacy');self.assertEqual(before,self.snapshot());self.assertEqual(self.calls(),[])
 
     def test_selection_dashboard_binds_metadata_without_certifying_resources(self):
         import hashlib,plistlib
@@ -742,8 +754,8 @@ class ManagementTests(Sandbox):
         (revision/'deployment.plist').write_bytes(raw);(self.root/'config').mkdir()
         (self.root/'config/desktop.scene').write_text('v1 '+identity+'\n')
         before=self.snapshot();code,output=self.terminal('q\n')
-        self.assertEqual(code,0,output);self.assertIn('Next start  my-scene (1920x1080); metadata verified, resources unchecked',output)
-        self.assertIn('Running scene  [?] Not identified',output);self.assertEqual(before,self.snapshot());self.assertEqual(self.calls(),[])
+        self.assertEqual(code,0,output);self.assertRegex(output,r'Next start +my-scene \(1920x1080\); metadata verified, resources unchecked')
+        self.assertRegex(output,r'Running scene +\[\?\] Not identified');self.assertEqual(before,self.snapshot());self.assertEqual(self.calls(),[])
         (revision/'deployment.plist').write_bytes(raw+b' ')
         code,output=self.terminal('q\n');self.assertIn('invalid or unavailable selector',output)
 
@@ -765,7 +777,7 @@ class ManagementTests(Sandbox):
 
 
     def test_long_completed_result_uses_safe_redraw_instead_of_wrong_cursor_rows(self):
-        self.env['TERM']='xterm-256color';self.write_script(self.scripts/'run-configurator','exit 0\n')
+        self.enhanced_terminal();self.write_script(self.scripts/'run-configurator','exit 0\n')
         code,output=self.terminal('2\r',menu_steps=[(2,b'\x1b[Bq')])
         self.assertEqual(code,0,output)
         self.assertGreaterEqual(output.count('Xplanet management'),3)
@@ -846,15 +858,15 @@ class ManagementTests(Sandbox):
                 self.assertEqual(code, 0, output)
                 import re
                 plain = re.sub(r'\x1b\[[0-9;?]*[A-Za-z]|\x1b[78]', '', output).replace('\r', '')
-                self.assertIn('\n\nSaved data  ', plain)
-                for label in ('Desktop  ', 'Next start  ', 'Running scene  ',
-                              'Binary evidence  ', 'Legacy setup  ', 'q) Exit'):
+                self.assertRegex(plain,r'\n\n +Saved data +')
+                for label in ('Desktop', 'Next start', 'Running scene',
+                              'Binary evidence', 'Legacy setup', 'q) Exit'):
                     self.assertIn(label, plain)
                 if rows >= 35:
-                    self.assertIn('\n\nNext start  ', plain)
-                    self.assertIn('\n\nLegacy setup  ', plain)
+                    self.assertRegex(plain,r'\n\n +Next start +')
+                    self.assertRegex(plain,r'\n\n +Legacy setup +')
                 else:
-                    self.assertNotIn('\n\nNext start  ', plain)
+                    self.assertNotRegex(plain,r'\n\n +Next start +')
 
     def test_missing_configurator_can_decline_preparation_without_writes(self):
         self.write_script(self.scripts/'run-configurator', 'exit 4\n')
@@ -896,3 +908,99 @@ class ManagementTests(Sandbox):
         self.assertNotIn('Prepare the configurator now?', output)
         self.assertIn('preserve recovery drafts', output)
         self.assertEqual(before, self.snapshot())
+
+    def test_initial_saved_health_runs_once_before_first_dashboard_and_not_navigation(self):
+        self.enhanced_terminal()
+        (self.root/'config').mkdir();(self.root/'config/totalmarker.toml').write_text('')
+        before=self.snapshot()
+        code,output=self.terminal('\x1b[B\x1b[Bq')
+        self.assertEqual(code,0,output)
+        self.assertEqual(self.calls(),['health --dashboard'])
+        self.assertEqual(output.count('Xplanet management'),1)
+        self.assertLess(output.index('Reading saved health'),output.index('Xplanet management'))
+        self.assertIn('[?] Clouds',output)
+        self.assertIn('saved evidence, not a live access check; 7 products',output)
+        self.assertNotIn('7 refreshes',output)
+        self.assertEqual(before,self.snapshot())
+
+    def test_initial_failed_health_keeps_menu_usable_and_unknown(self):
+        (self.root/'config').mkdir();(self.root/'config/totalmarker.toml').write_text('')
+        self.write_script(self.scripts/'run-totalmarker','echo fixture-error; exit 2\n')
+        code,output=self.terminal('q\n')
+        self.assertEqual(code,0,output)
+        self.assertIn('Inspection failed; no verified snapshot',output)
+        self.assertIn('Saved health inspection unavailable',output)
+        self.assertNotIn('fixture-error',output)
+
+    def test_initial_health_timeout_cleans_only_owned_worker_group(self):
+        (self.root/'config').mkdir();(self.root/'config/totalmarker.toml').write_text('')
+        helper=self.scripts/'lib/xplanet/management-dashboard.zsh'
+        helper.write_text(helper.read_text().replace('{1..50}','{1..3}'))
+        self.write_script(self.scripts/'run-totalmarker',
+            'echo $$ > "$TRACE.worker"; sleep 20 & echo $! > "$TRACE.child"; wait\n')
+        unrelated=subprocess.Popen(['/bin/sleep','20'])
+        try:
+            code,output=self.terminal('q\n')
+            self.assertEqual(code,0,output)
+            self.assertIn('Saved health timed out',output)
+            self.assertIsNone(unrelated.poll())
+            for suffix in ('.worker','.child'):
+                pid=int(Path(str(self.trace)+suffix).read_text())
+                deadline=time.monotonic()+2
+                while time.monotonic()<deadline:
+                    try:os.kill(pid,0)
+                    except ProcessLookupError:break
+                    select.select([],[],[],0.02)
+                else:self.fail(f'Owned health process {pid} survived timeout')
+        finally:
+            unrelated.terminate();unrelated.wait(timeout=3)
+
+    def test_horizontal_alignment_on_wide_dashboard_preserves_full_narrow_values(self):
+        self.enhanced_terminal()
+        self.env.update(TEST_ROWS='40',TEST_COLS='120')
+        code,output=self.terminal('q')
+        self.assertEqual(code,0,output)
+        plain=re.sub(r'\x1b\[[0-9;?]*[A-Za-z]|\x1b[78]','',output).replace('\r','')
+        for label in ('Desktop','Next start','Running scene','Binary evidence','Saved data','Legacy setup'):
+            line=next(line for line in plain.splitlines() if line.startswith('  '+label))
+            self.assertEqual(line[2:17].rstrip(),label)
+            self.assertEqual(line[17:19],'  ')
+        self.env.update(TEST_ROWS='24',TEST_COLS='60')
+        code,output=self.terminal('q\n')
+        self.assertEqual(code,0,output)
+        self.assertIn('process/job presence does not verify a scene',output)
+        self.assertIn('not checked; run diagnostics explicitly',output)
+
+    def test_startup_ctrl_c_restores_screen_and_cleans_owned_health_group(self):
+        self.enhanced_terminal()
+        (self.root/'config').mkdir();(self.root/'config/totalmarker.toml').write_text('')
+        self.write_script(self.scripts/'run-totalmarker',
+            'echo $$ > "$TRACE.worker"; sleep 20 & echo $! > "$TRACE.child"; wait\n')
+        code,output=self.terminal('',startup_interrupt=True)
+        self.assertEqual(code,130,output)
+        self.assertTrue(output.endswith('\x1b[?1049l'),output)
+        for suffix in ('.worker','.child'):
+            pid=int(Path(str(self.trace)+suffix).read_text())
+            with self.assertRaises(ProcessLookupError):os.kill(pid,0)
+
+    def test_non_tty_with_configuration_does_not_run_automatic_health(self):
+        (self.root/'config').mkdir();(self.root/'config/totalmarker.toml').write_text('')
+        result=subprocess.run([str(self.entry)],env=self.env,input='',capture_output=True,text=True,timeout=3)
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertIn('Usage:',result.stdout);self.assertEqual(self.calls(),[])
+
+    def test_health_capture_budget_refuses_excess_output_without_hiding_menu(self):
+        (self.root/'config').mkdir();(self.root/'config/totalmarker.toml').write_text('')
+        self.write_script(self.scripts/'run-totalmarker',
+            '/usr/bin/yes excessive-health-output\n')
+        code,output=self.terminal('q\n')
+        self.assertEqual(code,0,output)
+        self.assertIn('Inspection failed; no verified snapshot',output)
+        self.assertLess(len(output),10000)
+
+    def test_action_return_reuses_snapshot_and_new_entry_reassesses_once(self):
+        (self.root/'config').mkdir();(self.root/'config/totalmarker.toml').write_text('')
+        code,output=self.terminal('2\nq\n')
+        self.assertEqual(code,0,output);self.assertEqual(self.calls(),['health --dashboard'])
+        code,output=self.terminal('q\n')
+        self.assertEqual(code,0,output);self.assertEqual(self.calls(),['health --dashboard','health --dashboard'])

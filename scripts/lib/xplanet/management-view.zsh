@@ -41,14 +41,21 @@ management_view_init() {
 
 management_screen_open() {
     if [[ -n "$management_alt_on" ]]; then
+        local rows cols
+        management_size=$(stty size < /dev/tty 2>/dev/null)
+        read -r rows cols <<< "$management_size"
+        if [[ "$rows" != <-> || "$cols" != <-> ]] || (( rows < 34 || cols < 100 )); then
+            management_screen_close
+            management_alt_on=''
+            management_partial=false
+            print -- "Compact terminal: numbered input; full status remains in scrollback. Reopen at 100x34 or larger for arrows."
+            return 0
+        fi
         if [[ "$management_screen_active" != true ]]; then
             management_screen_active=true
             print -rn -- "$management_alt_on"
         fi
         management_screen_reset
-        local rows cols
-        management_size=$(stty size < /dev/tty 2>/dev/null)
-        read -r rows cols <<< "$management_size"
         management_partial=false
         if [[ "$rows" == <-> && "$cols" == <-> ]] && (( rows >= 34 && cols >= 100 )) &&
             [[ -n "$management_save" && -n "$management_restore" && -n "$management_erase_line" && ${#management_row_up} == 10 ]]; then
@@ -157,6 +164,22 @@ management_rehighlight() {
     fi
 }
 
+# Align values on roomy screens; keep all text and compact spacing when narrow.
+management_fact() {
+    local rows cols line label="$1"
+    read -r rows cols <<< "$management_size"
+    for line in "${(@f)2}"; do
+        if [[ "$cols" == <-> ]] && (( cols >= 100 )); then
+            printf '  %-15s  %s\n' "$label" "$line"
+        elif [[ -n "$label" ]]; then
+            print -r -- "  $label  $line"
+        else
+            print -r -- "    $line"
+        fi
+        label=''
+    done
+}
+
 management_draw() {
     local state="$1" process_icon='[-]' process_style='' setup_style='' recommendation=''
     if [[ "${2:-}" != cached ]]; then
@@ -174,24 +197,33 @@ management_draw() {
     fi
     local rows cols
     read -r rows cols <<< "$management_size"
-    # Width includes plain text only conservatively: ANSI length overestimates.
-    if (( ${#management_binary} + 17 > ${cols:-0} || ${#management_selection} + 12 > ${cols:-0} || ${#management_health} + 12 > ${cols:-0} || ${#management_last_result} + 40 > ${cols:-0} )); then management_partial=false; fi
+    # Health contains only our own color escapes; measure its visible rows so a
+    # populated snapshot does not unnecessarily disable smooth navigation.
+    local health_width=0 plain line style
+    for line in "${(@f)management_health}"; do
+        plain=$line
+        for style in "$management_good" "$management_attention" "$management_problem" "$management_reset"; do
+            [[ -z "$style" ]] || plain=${plain//"$style"/}
+        done
+        (( ${#plain} > health_width )) && health_width=${#plain}
+    done
+    if (( ${#management_binary} + 19 > ${cols:-0} || ${#management_selection} + 19 > ${cols:-0} || health_width + 19 > ${cols:-0} || ${#management_last_result} + 40 > ${cols:-0} )); then management_partial=false; fi
     print -r -- "${management_heading}Xplanet management${management_reset}"
-    print -r -- "Desktop  $process_style$process_icon xplanet: $management_process$management_reset | Job: $management_job"
+    management_fact Desktop "$process_style$process_icon xplanet: $management_process$management_reset | Job: $management_job"
     # Keep the menu reachable in short terminals; roomy screens separate facts
     # by ownership: desktop, saved evidence, then setup and last action.
     (( ${rows:-0} >= 35 )) && print
-    print -r -- "Next start  $management_selection"
-    print -r -- "Running scene  [?] Not identified; process/job presence does not verify a scene"
-    print -r -- "Binary evidence  $management_binary"
+    management_fact "Next start" "$management_selection"
+    management_fact "Running scene" "[?] Not identified; process/job presence does not verify a scene"
+    management_fact "Binary evidence" "$management_binary"
     print
-    print -r -- "Saved data  $management_health"
+    management_fact "Saved data" "$management_health"
     if [[ -n "$management_health_time" ]]; then
-        print -r -- "Snapshot  $management_health_time (saved evidence, not a live access check; 7 refreshes)"
-        print -r -- "Key  [+] current  [!] stale/unverified  [x] failed  [?] unassessed  [-] disabled"
+        management_fact Snapshot "$management_health_time (saved evidence, not a live access check; 7 products)"
+        management_fact Key "[+] current  [!] stale/unverified  [x] failed  [?] unassessed  [-] disabled"
     fi
     (( ${rows:-0} >= 35 )) && print
-    print -r -- "Legacy setup  $state; scene studio (2)"
+    management_fact "Legacy setup" "$state; scene studio (2)"
     if [[ -n "$management_last_result" ]]; then
         management_result_line
     fi

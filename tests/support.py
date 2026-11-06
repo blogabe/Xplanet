@@ -12,7 +12,7 @@ from totalmarker.config import load
 from totalmarker.http import Fetcher, Response
 from totalmarker.paths import RootFS
 
-PROJECT = Path(__file__).resolve().parents[2]
+PROJECT = Path(__file__).resolve().parents[1]
 
 
 def copy_launcher(destination):

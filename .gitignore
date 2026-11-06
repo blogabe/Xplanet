@@ -4,6 +4,7 @@
 !/README.md
 !/LICENSE
 !/docs/
+!/docs/README.md
 !/docs/technical-notes.md
 !/docs/architecture.md
 !/docs/management.md
@@ -26,11 +27,11 @@
 !/scripts/launchd/
 !/scripts/launchd/*.plist.example
 /scripts/launchd/*.plist
-!/dev/
-!/dev/tests/
-!/dev/tests/**
-!/dev/examples/
-!/dev/examples/*.example.toml
+!/tests/
+!/tests/**
+!/examples/
+!/examples/README.md
+!/examples/*.example.toml
 # Existing assets stay tracked; adding assets requires deliberate git add -f.
 # Unknown imagery/configuration under assets remains excluded by default.
 !/config/
@@ -50,13 +51,13 @@
 **/*.pem
 **/*.key
 **/*.log
-/dev/tests/.tmp/
-/dev/tests/.tmp/**
+/tests/.tmp/
+/tests/.tmp/**
 
 !/docs/configurator/
 !/docs/configurator/*.md
 !/docs/configurator.md
 !/docs/configurator-user-guide.md
 
-/dev/tests/**/.tmp/
-/dev/tests/**/.tmp/**
+/tests/**/.tmp/
+/tests/**/.tmp/**

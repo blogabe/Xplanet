@@ -21,6 +21,8 @@ TotalMarker uses only the Python standard library.
 and maintained the original Perl TotalMarker, which inspired this Python version;
 see [credits and third-party terms](docs/asset-credits.md).
 
+See the [documentation index](docs/README.md) and [configuration examples](examples/README.md).
+
 ## Install on macOS
 
 Requires [Homebrew](https://brew.sh/), Git, curl and zsh.
@@ -33,13 +35,17 @@ The one-liner executes the current GitHub `main` scripts; review them before
 running if you need to verify that version. Follow the setup prompts. Set your cloud URL in
 `~/.xplanet/config/totalmarker.toml` before enabling cloud refreshes.
 
-Or clone and install manually:
+Or clone into a new directory and open guided management:
 
 ```sh
 git clone https://github.com/blogabe/Xplanet.git ~/.xplanet
 cd ~/.xplanet
-./scripts/xplanet.sh install
+./scripts/xplanet.sh
 ```
+
+Use a destination that does not already exist; open an existing checkout in place.
+Direct `install` provisions dependencies and continues into setup; `setup` reuses
+installed prerequisites. See [management](docs/management.md).
 
 For TotalMarker-only use, including Linux, see
 [Running TotalMarker independently](docs/totalmarker-standalone.md).
