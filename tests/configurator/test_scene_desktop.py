@@ -1,10 +1,12 @@
 """Native literal scene launch construction only; no host jobs/process control."""
+from pathlib import Path
 import os,shutil,subprocess,sys,unittest
 from tests.configurator import test_scene_selection as fixtures
 from configurator.model import ROOT
 from configurator.selection import REVISIONS,ARGS,SELECTOR,apply_bundle,inspect_selection
 
 
+@unittest.skipUnless(sys.platform == 'darwin', 'Scene runtime contracts require macOS stat and plutil')
 class SceneDesktopTests(unittest.TestCase):
     setUp_fixture=fixtures.SceneSelectionTests.setUp_fixture
     plan=fixtures.SceneSelectionTests.plan
@@ -22,7 +24,14 @@ class SceneDesktopTests(unittest.TestCase):
         receipt=self.apply()
         result=self.shell('desktop_command; print -r -N -- "$XPLANET_BIN" "${desktop_args[@]}" "$EARTH_MAP_PRE"')
         self.assertEqual(result.returncode,0,result.stderr)
-        args=result.stdout.split(b'\0');self.assertEqual(args[0].decode(),str(__import__('pathlib').Path(sys.executable).resolve()))
+        from configurator.handoff import command
+        from configurator.workspace import open_view
+        from pathlib import Path
+        folder=self.root/REVISIONS/receipt.after.revision
+        expected=command(open_view(self.scene).view, Path(sys.executable).resolve(), self.root, folder/'lunar.conf', folder, '1280x720')
+        args=result.stdout.split(b'\0')
+        self.assertEqual([value.decode() for value in args[:-2]], expected)
+        self.assertEqual(args[-2:], [b'', b''])
         self.assertEqual(args[args.index(b'-body')+1],b'moon');self.assertNotIn(b'-projection',args)
         self.assertEqual(args[args.index(b'-config')+1].decode(),str(self.root/REVISIONS/receipt.after.revision/'lunar.conf'))
         self.assertEqual(args[args.index(b'-geometry')+1],b'1280x720');self.assertEqual(args[args.index(b'-timewarp')+1],b'0')
@@ -39,9 +48,13 @@ class SceneDesktopTests(unittest.TestCase):
 
     def test_invalid_or_missing_selected_revision_fails_instead_of_using_legacy(self):
         path=self.root/SELECTOR
-        for raw in (b'corrupt\n',b'v1 '+b'a'*64+b'\n'):
-            path.write_bytes(raw);result=self.shell('desktop_command')
-            self.assertEqual(result.returncode,2);self.assertIn(b'no custom configuration fallback',result.stderr)
+        cases=((b'corrupt\n', b'invalid desktop scene selector size'),
+               (b'v1 '+b'a'*64+b'\n', b'selected scene revision missing or linked'))
+        for raw, reason in cases:
+            with self.subTest(reason=reason):
+                path.write_bytes(raw);result=self.shell('desktop_command')
+                self.assertEqual(result.returncode,2)
+                self.assertIn(reason,result.stderr)
         self.assertFalse((self.root/'forbidden').exists())
 
     def test_changed_snapshot_arguments_asset_or_manifest_fails_before_execution(self):
@@ -52,10 +65,16 @@ class SceneDesktopTests(unittest.TestCase):
             self.assertTrue(b'changed' in result.stderr or b'exceeds its bound' in result.stderr,result.stderr);path.write_bytes(raw)
         self.assertFalse((self.root/'forbidden').exists())
 
-    def test_custom_renderer_names_remain_known_for_previous_revisions(self):
-        self.apply();apply_bundle(self.root,self.next_bundle(),inspect_selection(self.root))
-        result=self.shell('scene_renderer_names')
-        self.assertEqual(result.returncode,0,result.stderr);self.assertIn(os.path.basename(os.path.realpath(sys.executable)).encode(),result.stdout)
+    def test_historical_scene_metadata_never_authorizes_process_name_discovery(self):
+        receipt=self.apply();folder=self.root/REVISIONS/receipt.after.revision
+        (folder/ARGS).write_bytes(b'/usr/bin/python3\n-config\n/private/unrelated\n')
+        (self.root/'config/xp.def').write_text('XPLANET_BIN=\n')
+        tools=self.root/'mock-tools';tools.mkdir();trace=self.root/'pgrep-trace'
+        probe=tools/'pgrep';probe.write_text('#!/bin/sh\nfor argument do last=$argument; done\nprintf "%s\\n" "$last" >> "$TRACE"\nexit 1\n');probe.chmod(0o700)
+        result=self.shell('PATH="$project_root/mock-tools:/usr/bin:/bin";export PATH;TRACE="$project_root/pgrep-trace";export TRACE;xplanet_pids')
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertEqual(result.stdout,b'')
+        self.assertEqual(trace.read_text().splitlines(),['xplanet'])
 
     def test_selector_and_revision_symlinks_are_refused(self):
         receipt=self.apply();path=self.root/SELECTOR;raw=path.read_bytes();path.unlink();path.symlink_to(self.scene)
@@ -82,18 +101,6 @@ class SceneDesktopTests(unittest.TestCase):
         self.assertEqual(args[args.index(b'-geometry')+1],b'1280x720');self.assertNotIn(b'-projection',args)
         self.assertFalse((self.root/'forbidden').exists());self.assertFalse((self.root/'images/earth.png').exists())
 
-    def test_stop_discovery_keeps_previous_custom_renderer_names_without_real_process_inspection(self):
-        from configurator.handoff import create_plan,stage_plan
-        for name in ('old-renderer','new-renderer'):
-            binary=self.root/name;binary.write_text('#!/bin/sh\nexit 0\n');binary.chmod(0o700)
-            bundle=self.root/(name+' review');stage_plan(create_plan(self.root,self.scene,binary,'1280x720'),bundle)
-            apply_bundle(self.root,bundle,inspect_selection(self.root))
-        (self.root/'config/xp.def').write_text('XPLANET_BIN=\n')
-        tools=self.root/'mock-tools';tools.mkdir();trace=self.root/'pgrep-trace'
-        pgrep=tools/'pgrep';pgrep.write_text('#!/bin/sh\nfor argument do last=$argument; done\nprintf "%s\\n" "$last" >> "$TRACE"\n[ "$last" = old-renderer ] || exit 1\nprintf "4242\\n"\n');pgrep.chmod(0o700)
-        result=self.shell('PATH="$project_root/mock-tools:/usr/bin:/bin";export PATH;TRACE="$project_root/pgrep-trace";export TRACE;xplanet_pids')
-        self.assertEqual(result.returncode,0,result.stderr);self.assertEqual(result.stdout,b'4242\n')
-        names=trace.read_text().splitlines();self.assertIn('xplanet',names);self.assertIn('old-renderer',names);self.assertIn('new-renderer',names)
 
     def test_selected_scratch_symlink_fails_without_writing_its_target(self):
         self.apply();outside=self.root/'untouched scratch';outside.mkdir()
@@ -118,3 +125,10 @@ class SceneDesktopTests(unittest.TestCase):
         self.assertFalse((self.root/'forbidden').exists());origin.write_bytes(b'changed coordinates')
         result=self.shell('desktop_command');self.assertNotEqual(result.returncode,0)
         self.assertIn(b'scene file changed',result.stderr)
+
+    @unittest.skipUnless(Path('/bin/zsh').exists(),'zsh required')
+    def test_shell_renderer_uses_the_same_locale_contract(self):
+        root=Path(__file__).resolve().parents[2]
+        code='source "$1"; renderer_numeric_locale; print -r -- "${LC_ALL-unset}|$LC_NUMERIC|$LC_MESSAGES|$LC_CTYPE"'
+        result=subprocess.run(['/bin/zsh','-f','-c',code,'audit',str(root/'scripts/lib/xplanet/display.zsh')],env={**os.environ,'LC_ALL':'C','LC_NUMERIC':'de_DE.UTF-8'},capture_output=True,text=True,check=True)
+        self.assertEqual(result.stdout.strip(),'unset|C|C|C')

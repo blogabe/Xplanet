@@ -47,7 +47,9 @@ class ManagementTests(Sandbox):
         self.env.update(PROCESS_RESULT='1', JOB_RESULT='0', JOB_TABLE='PID Status Label')
         self.write_script(self.bin / 'pgrep', 'exit "$PROCESS_RESULT"\n')
         self.write_script(self.bin / 'launchctl',
-                          'printf "%s\\n" "$JOB_TABLE"\nexit "$JOB_RESULT"\n')
+                          '[ "$1" = print ] || exit 9\n'
+                          '[ "$JOB_RESULT" = 0 ] || exit "$JOB_RESULT"\n'
+                          'case "$JOB_TABLE" in *local.xplanet.desktop*) exit 0;; *) exit 113;; esac\n')
         self.write_script(self.bin / 'brew',
                           'case "$1" in --prefix) exit 1;; esac\n'
                           'echo "brew $*" >> "$TRACE"\n')
@@ -94,8 +96,10 @@ class ManagementTests(Sandbox):
                     select.select([],[],[],0.01)
                 self.assertTrue(Path(str(self.trace)+'.child').exists())
                 os.write(master,b'\x03')
-            elif interrupt or termination:
-                os.kill(proc.pid, termination or signal.SIGINT)
+            elif interrupt:
+                os.write(master,b'\x03')
+            elif termination:
+                os.kill(proc.pid,termination)
             else:
                 os.write(master, b'\x04' if eof else answers.encode())
             pause_signalled = False

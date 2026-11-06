@@ -192,7 +192,7 @@ class StormSourcesTests(Sandbox):
         for error in (zlib.error("invalid block"), NotImplementedError("compression"),
                       RuntimeError("encrypted member")):
             with self.subTest(error=type(error).__name__):
-                with patch("totalmarker.storm_sources.ZipFile.read", side_effect=error):
+                with patch("totalmarker.storm_sources.ZipFile.open", side_effect=error):
                     with self.assertRaisesRegex(FeedError, "KMZ is invalid"):
                         parse_jtwc_kmz(packed.getvalue(), None, "WP292026", "Champi")
 

@@ -3,11 +3,11 @@ import unittest
 from unittest.mock import patch
 from textual.widgets import Button,Input,Markdown,Static
 from configurator.help_ui import StudioHelp
-import test_app as fixtures
+from tests.configurator.ui import fixtures
 click=fixtures.click
 
 class HelpUITests(unittest.IsolatedAsyncioTestCase):
-    asyncSetUp=fixtures.AppTests.asyncSetUp
+    asyncSetUp=fixtures.setup_editor
 
     async def test_f1_and_help_button_show_same_manual_without_writes_or_viewer(self):
         async with self.app.run_test(size=(110,50)) as pilot:

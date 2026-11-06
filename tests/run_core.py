@@ -35,9 +35,20 @@ def isolated_environment():
                 if value is None:os.environ.pop(name,None)
                 else:os.environ[name]=value
 
+OPTIONAL_EVIDENCE_SKIPS = {
+    'tests.test_norad.NoradTests.test_saved_live_group_response_skips_soyuz_without_publishing_empty_pair',
+    'tests.test_norad.NoradTests.test_saved_live_group_response_preserves_explicit_iss_with_warning',
+}
+
+def unexpected_skips(result):
+    return [(test.id(),reason) for test,reason in result.skipped if test.id() not in OPTIONAL_EVIDENCE_SKIPS]
+
 def run(factory):
     with isolated_environment():
-        return unittest.TextTestRunner(verbosity=2).run(factory()).wasSuccessful()
+        result=unittest.TextTestRunner(verbosity=2).run(factory())
+        unexpected=unexpected_skips(result)
+        for name,reason in unexpected:print('Unexpected skipped required check: '+name+' — '+reason,file=__import__('sys').stderr)
+        return result.wasSuccessful() and not unexpected
 
 if __name__=='__main__':
     raise SystemExit(not run(suite))

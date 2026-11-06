@@ -34,3 +34,20 @@ class SuiteBoundaryTests(unittest.TestCase):
         self.assertFalse(first.exists())
         self.assertEqual({name:os.environ.get(name) for name in original},original)
         self.assertEqual(tempfile.tempdir,previous)
+
+    def test_skip_policy_allows_only_named_optional_evidence(self):
+        class Case:
+            def __init__(self,name):self.name=name
+            def id(self):return self.name
+        result=unittest.TestResult()
+        for name in run_core.OPTIONAL_EVIDENCE_SKIPS:result.addSkip(Case(name),'private evidence unavailable')
+        self.assertEqual(run_core.unexpected_skips(result),[])
+        result.addSkip(Case('setUpClass (tests.test_release_content.ReleaseContentTests)'),'not Git')
+        self.assertEqual(run_core.unexpected_skips(result)[0][0],'setUpClass (tests.test_release_content.ReleaseContentTests)')
+
+    def test_all_public_core_test_modules_are_accounted_for(self):
+        actual=set(run_core.module_names())
+        for path in run_core.TEST_ROOT.rglob('test_*.py'):
+            relative=path.relative_to(run_core.TEST_ROOT)
+            if relative.parts[:2]==('configurator','ui') or any(part.startswith('.') or part=='__pycache__' for part in relative.parts):continue
+            self.assertIn('tests.'+'.'.join(relative.with_suffix('').parts),actual,str(relative))

@@ -5,12 +5,12 @@ from unittest.mock import patch
 from textual.widgets import Input,Static
 from configurator.__main__ import report_result
 from configurator.selection import inspect_selection,UncertainSelection
-import test_app as fixtures
-import test_handoff_ui as handoff_fixtures
+from tests.configurator.ui import fixtures
+from tests.configurator.ui import test_handoff_ui as handoff_fixtures
 click=fixtures.click
 
 class AuditDiagnosticUITests(unittest.IsolatedAsyncioTestCase):
-    asyncSetUp=fixtures.AppTests.asyncSetUp
+    asyncSetUp=fixtures.setup_editor
 
     async def test_missing_renderer_diagnostic_modal_contains_actionable_failure(self):
         async with self.app.run_test(size=(110,50)) as pilot:

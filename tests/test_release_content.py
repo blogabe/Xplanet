@@ -46,7 +46,6 @@ class ReleaseContentTests(unittest.TestCase):
                 self.assertTrue(name.endswith(".plist.example"), name)
             if name.startswith("dev/"):
                 self.fail("dev must remain local-only: " + name)
-                self.assertNotIn(".tmp", parts, name)
             if name.startswith(("maps/", "assets/")):
                 self.assertFalse(any(part in {".DS_Store", "__MACOSX", "Thumbs.db",
                                               "desktop.ini"} or part.startswith("._")
@@ -130,12 +129,9 @@ class ReleaseContentTests(unittest.TestCase):
             rb"/Users/(?!example/)[A-Za-z0-9._-]+/",
             b"Proton" + rb"Drive-[^/\s\"']+",
             rb"libfile_[0-9a-f]{16,}")))
-        for _, name in self.tracked():
-            path = PROJECT / name
-            if path.is_symlink() or not path.is_file() or path.stat().st_size > 5_000_000:
-                continue
-            with self.subTest(path=name):
-                self.assertIsNone(forbidden.search(path.read_bytes()), name)
+        from .release_policy import index_text
+        for name,raw in index_text(PROJECT):
+            with self.subTest(path=name):self.assertIsNone(forbidden.search(raw),name)
 
     def test_readme_monthly_map_example_has_all_shipped_months(self):
         if (not (PROJECT / "maps").exists()
@@ -185,3 +181,19 @@ class ReleaseContentTests(unittest.TestCase):
             for suffix in ('.def','.conf'):
                 name='scripts/configurator/samples/scenes/'+stem+suffix
                 self.assertEqual(names.get(name),'100644',name)
+
+
+class IndexedPrivacyTests(unittest.TestCase):
+    def test_scan_uses_index_bytes_and_checks_all_paths(self):
+        from .release_policy import index_text
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            subprocess.run(['git','init','-q'],cwd=root,check=True)
+            path=root/'README.md';path.write_text('indexed text')
+            subprocess.run(['git','add','README.md'],cwd=root,check=True)
+            path.write_text('different working bytes')
+            self.assertEqual(index_text(root),[('README.md',b'indexed text')])
+            (root/'dev').mkdir();(root/'dev/private.bin').write_bytes(b'local')
+            subprocess.run(['git','add','dev/private.bin'],cwd=root,check=True)
+            with self.assertRaisesRegex(RuntimeError,'unsafe source entry: dev/private.bin'):
+                index_text(root)

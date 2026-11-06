@@ -15,27 +15,13 @@ from textual.widgets import Input, Select, Static, TextArea
 from configurator.app import ConfiguratorApp
 from configurator.model import View
 from configurator.workspace import Workspace, save_view, open_view
+from tests.configurator.ui.fixtures import setup_editor,prepare_editor,click,enter_native
 
 
-async def click(pilot, selector):
-    await pilot.pause()
-    pilot.app.screen.query_one(selector).scroll_visible(animate=False)
-    await pilot.pause()
-    await pilot.click(selector)
 
 
 class AppTests(unittest.IsolatedAsyncioTestCase):
-    async def asyncSetUp(self):
-        self.temp = tempfile.TemporaryDirectory()
-        self.addCleanup(self.temp.cleanup)
-        self.root = Path(self.temp.name).resolve()
-        (self.root / 'dev').mkdir()
-        (self.root / 'config').mkdir()
-        self.workspace = Workspace()
-        self.addCleanup(self.workspace.close)
-        self.app = ConfiguratorApp(self.root, str(Path(sys.executable).resolve()), self.workspace,recovery=False)
-        # Existing interaction regressions deliberately retain the supported legacy destination flow.
-        self.app.copy_destination=lambda:str(self.app.document.source.with_name(self.app.document.source.name+'-copy') if self.app.document.source else self.root/'dev/earth-view')
+    asyncSetUp=setup_editor
 
     async def test_open_cancel_has_no_project_writes(self):
         async with self.app.run_test(size=(100, 45)) as pilot:
@@ -122,43 +108,6 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
             await click(pilot, '#confirm-save')
         self.assertEqual(self.app.return_value[0], 'saved')
 
-    async def test_real_terminal_reopened_cancel_restores_screen_and_tty(self):
-        from configurator import __file__ as module_file
-        source = self.root / 'pty-saved'
-        save_view(source, View(20, -45), sys.executable)
-        original = {p.name:p.read_bytes() for p in source.iterdir()}
-        for key in (b'\x1b', b'\x03', b'\x04'):
-            master, slave = pty.openpty()
-            before = termios.tcgetattr(slave)
-            env = {**os.environ, 'TERM': 'xterm-256color',
-                   'PYTHONPATH': str(Path(module_file).parent.parent),
-                   'PYTHONDONTWRITEBYTECODE': '1'}
-            process = subprocess.Popen([sys.executable, '-B', '-m', 'configurator',
-                                        '--root', str(self.root), '--view', str(source)], stdin=slave,
-                                       stdout=slave, stderr=slave, env=env)
-            output = b''
-            try:
-                deadline = time.monotonic() + 8
-                while b'No unsaved scene changes.' not in output and time.monotonic() < deadline:
-                    if select.select([master], [], [], .2)[0]:
-                        output += os.read(master, 65536)
-                self.assertIn(b'No unsaved scene changes.', output)
-                self.assertIn(b'Opened snapshot', output)
-                os.write(master, key)
-                while process.poll() is None and time.monotonic() < deadline:
-                    if select.select([master], [], [], .2)[0]:
-                        output += os.read(master, 65536)
-                self.assertEqual(process.wait(timeout=2),130 if key==b'\x03' else 3,output[-500:])
-                while select.select([master], [], [], 0)[0]:
-                    output += os.read(master, 65536)
-                self.assertIn(b'\x1b[?1049h', output)
-                self.assertIn(b'\x1b[?1049l', output)
-                self.assertEqual(termios.tcgetattr(slave), before)
-                self.assertEqual({p.name:p.read_bytes() for p in source.iterdir()}, original)
-            finally:
-                if process.poll() is None:
-                    process.kill();process.wait()
-                os.close(master);os.close(slave)
 
 
     async def test_reopen_revise_preview_and_save_copy_never_runs_saved_renderer(self):
@@ -217,29 +166,6 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse((self.root / 'source-copy').exists())
 
 
-    async def test_real_terminal_rejects_unsupported_source_before_ui(self):
-        from configurator import __file__ as module_file
-        source = self.root / 'unsupported';source.mkdir()
-        marker = self.root / 'must-not-execute'
-        (source / 'xp.def').write_text('touch ' + str(marker) + '\n')
-        (source / 'xp.conf').write_text('[earth]\n')
-        master, slave = pty.openpty()
-        before = termios.tcgetattr(slave)
-        env = {**os.environ, 'TERM':'xterm-256color',
-               'PYTHONPATH':str(Path(module_file).parent.parent), 'PYTHONDONTWRITEBYTECODE':'1'}
-        try:
-            done = subprocess.run([sys.executable, '-B', '-m', 'configurator', '--view', str(source)],
-                                  stdin=slave, stdout=slave, stderr=slave, env=env, timeout=5)
-            output = b''
-            while select.select([master], [], [], 0)[0]:
-                output += os.read(master, 65536)
-            self.assertEqual(done.returncode, 2)
-            self.assertIn(b'Cannot open view:', output)
-            self.assertNotIn(b'\x1b[?1049h', output)
-            self.assertEqual(termios.tcgetattr(slave), before)
-            self.assertFalse(marker.exists())
-        finally:
-            os.close(master);os.close(slave)
 
 
     async def test_camera_mode_switch_retains_inactive_preferences_and_time(self):
@@ -372,7 +298,7 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
 
 
 class AppearanceAppTests(unittest.IsolatedAsyncioTestCase):
-    asyncSetUp = AppTests.asyncSetUp
+    asyncSetUp = setup_editor
     async def test_seasonal_controls_preserve_month_and_save_reopen_appearance(self):
         async with self.app.run_test(size=(100,45)) as pilot:
             self.assertFalse(self.app.query_one('#control-month').display)
@@ -417,7 +343,7 @@ class AppearanceAppTests(unittest.IsolatedAsyncioTestCase):
 
 
 class HistoryAppTests(unittest.IsolatedAsyncioTestCase):
-    asyncSetUp = AppTests.asyncSetUp
+    asyncSetUp = setup_editor
 
     async def test_invalid_input_undo_redo_and_branching_through_focused_keys(self):
         async with self.app.run_test(size=(100,45)) as pilot:
@@ -504,60 +430,6 @@ class HistoryAppTests(unittest.IsolatedAsyncioTestCase):
                 await pilot.press('escape')
         finally:app.workspace.close()
 
-    async def test_real_terminal_history_keys_restore_tty_on_cancel(self):
-        from configurator import __file__ as module_file
-        probe=self.root/'history-probe.py'
-        probe.write_text("""from pathlib import Path
-import sys
-from textual.widgets import Input
-from configurator.app import ConfiguratorApp
-root=Path(sys.argv[1])
-class Probe(ConfiguratorApp):
- def on_mount(self):
-  self.call_after_refresh(self.seed)
- def seed(self):
-  self.query_one('#latitude',Input).value='25'
-  self.query_one('#latitude',Input).focus()
-  self.capture_edit('latitude')
-  (root/'ready').write_text('ready')
- def action_undo(self):
-  super().action_undo()
-  assert self.raw_fields()['latitude']=='0' and not self.history.dirty
-  (root/'undone').write_text('ok')
- def action_redo(self):
-  super().action_redo()
-  assert self.raw_fields()['latitude']=='25' and self.history.dirty
-  (root/'redone').write_text('ok')
-app=Probe(root,sys.executable)
-try: result=app.run()
-finally: app.workspace.close()
-raise SystemExit(3 if result==('cancelled',None) else 1)
-""")
-        master,slave=pty.openpty();before=termios.tcgetattr(slave)
-        env={**os.environ,'TERM':'xterm-256color','PYTHONPATH':str(Path(module_file).parent.parent),'PYTHONDONTWRITEBYTECODE':'1'}
-        process=subprocess.Popen([sys.executable,'-B',str(probe),str(self.root)],stdin=slave,stdout=slave,stderr=slave,env=env)
-        output=b''
-        def wait_for(marker):
-            nonlocal output
-            deadline=time.monotonic()+8
-            while not marker.exists() and time.monotonic()<deadline:
-                if select.select([master],[],[],.05)[0]:output+=os.read(master,65536)
-            self.assertTrue(marker.exists(),output[-1000:])
-        try:
-            wait_for(self.root/'ready');os.write(master,b'\x1a')
-            wait_for(self.root/'undone');os.write(master,b'\x19')
-            wait_for(self.root/'redone');os.write(master,b'\x03')
-            deadline=time.monotonic()+8
-            while process.poll() is None and time.monotonic()<deadline:
-                if select.select([master],[],[],.05)[0]:output+=os.read(master,65536)
-            self.assertEqual(process.wait(timeout=2),3,output[-1000:])
-            while select.select([master],[],[],0)[0]:output+=os.read(master,65536)
-            self.assertIn(b'\x1b[?1049h',output);self.assertIn(b'\x1b[?1049l',output)
-            self.assertEqual(termios.tcgetattr(slave),before)
-            self.assertFalse((self.root/'dev/earth-view').exists())
-        finally:
-            if process.poll() is None:process.kill();process.wait()
-            os.close(master);os.close(slave)
 
     async def test_undo_redo_recomputes_preview_staleness_without_rendering(self):
         binary=self.root/'finite-renderer';counter=self.root/'calls'
@@ -581,7 +453,7 @@ raise SystemExit(3 if result==('cancelled',None) else 1)
 
 
 class GeographyAppTests(unittest.IsolatedAsyncioTestCase):
-    asyncSetUp=AppTests.asyncSetUp
+    asyncSetUp=setup_editor
 
     async def test_geographic_editor_history_disable_and_native_reopen(self):
         async with self.app.run_test(size=(100,45)) as pilot:
@@ -638,7 +510,7 @@ class GeographyAppTests(unittest.IsolatedAsyncioTestCase):
 
 
 class EarthLayerAppTests(unittest.IsolatedAsyncioTestCase):
-    asyncSetUp=AppTests.asyncSetUp
+    asyncSetUp=setup_editor
 
     async def test_cloud_controls_hide_preserve_save_and_reopen(self):
         async with self.app.run_test(size=(100,45)) as pilot:
@@ -714,7 +586,7 @@ def capture_fixture(root):
 
 
 class FrozenCloudAppTests(unittest.IsolatedAsyncioTestCase):
-    asyncSetUp=AppTests.asyncSetUp
+    asyncSetUp=setup_editor
 
     async def test_selecting_and_cancelling_capture_does_not_read_source(self):
         from unittest.mock import AsyncMock,patch
@@ -786,32 +658,6 @@ class FrozenCloudAppTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(self.workspace.capture_for(self.app.draft()),frozen)
             await pilot.press('escape')
 
-    async def test_real_terminal_reopens_snapshot_without_producer_and_restores_tty(self):
-        from configurator.cloud_capture import capture_existing
-        from configurator import __file__ as module_file
-        source=capture_fixture(self.root);frozen=capture_existing(source)
-        saved=save_view(self.root/'captured-scene',View(clouds='captured',capture_id=frozen.identity),sys.executable,capture=frozen)
-        source.rename(self.root/'producer-offline')
-        original={p.name:p.read_bytes() for p in saved.iterdir()}
-        master,slave=pty.openpty();before=termios.tcgetattr(slave)
-        env={**os.environ,'TERM':'xterm-256color','PYTHONPATH':str(Path(module_file).parent.parent),'PYTHONDONTWRITEBYTECODE':'1'}
-        process=subprocess.Popen([sys.executable,'-B','-m','configurator','--root',str(self.root),'--view',str(saved)],stdin=slave,stdout=slave,stderr=slave,env=env)
-        output=b''
-        try:
-            deadline=time.monotonic()+10
-            while b'No unsaved scene changes.' not in output and time.monotonic()<deadline:
-                if select.select([master],[],[],.1)[0]:output+=os.read(master,65536)
-            self.assertIn(b'No unsaved scene changes.',output)
-            os.write(master,b'\x03')
-            while process.poll() is None and time.monotonic()<deadline:
-                if select.select([master],[],[],.1)[0]:output+=os.read(master,65536)
-            self.assertEqual(process.wait(timeout=2),130,output[-1000:])
-            while select.select([master],[],[],0)[0]:output+=os.read(master,65536)
-            self.assertIn(b'\x1b[?1049l',output);self.assertEqual(termios.tcgetattr(slave),before)
-            self.assertEqual(original,{p.name:p.read_bytes() for p in saved.iterdir()})
-        finally:
-            if process.poll() is None:process.kill();process.wait()
-            os.close(master);os.close(slave)
 
 
 class NamedLibraryAppTests(unittest.IsolatedAsyncioTestCase):
@@ -850,7 +696,7 @@ class NamedLibraryAppTests(unittest.IsolatedAsyncioTestCase):
 
 
 class CompositionAppTests(unittest.IsolatedAsyncioTestCase):
-    asyncSetUp=AppTests.asyncSetUp
+    asyncSetUp=setup_editor
     async def test_solar_and_distance_visibility_history_and_mode_retention(self):
         async with self.app.run_test(size=(110,45)) as pilot:
             self.app.query_one('#longitude-mode',Select).value='solar'
@@ -878,7 +724,7 @@ class CompositionAppTests(unittest.IsolatedAsyncioTestCase):
 
 
 class PlanetaryAppTests(unittest.IsolatedAsyncioTestCase):
-    asyncSetUp=AppTests.asyncSetUp
+    asyncSetUp=setup_editor
 
     async def test_target_switch_retains_earth_draft_and_rejects_same_origin(self):
         async with self.app.run_test(size=(110,45)) as pilot:
@@ -916,7 +762,7 @@ class PlanetaryAppTests(unittest.IsolatedAsyncioTestCase):
 
 
 class StockSceneAppTests(unittest.IsolatedAsyncioTestCase):
-    asyncSetUp=AppTests.asyncSetUp
+    asyncSetUp=setup_editor
 
     async def test_stock_picker_opens_snapshot_and_saves_user_copy(self):
         from configurator.app import STOCK_LIBRARY
@@ -935,7 +781,7 @@ class StockSceneAppTests(unittest.IsolatedAsyncioTestCase):
 
 
 class MajorPlanetAppTests(unittest.IsolatedAsyncioTestCase):
-    asyncSetUp=AppTests.asyncSetUp
+    asyncSetUp=setup_editor
 
     async def test_planetary_shadow_context_history_and_save(self):
         async with self.app.run_test(size=(110,45)) as pilot:
@@ -974,7 +820,7 @@ def observation_fixture(root):
 
 
 class ObservationAppTests(unittest.IsolatedAsyncioTestCase):
-    asyncSetUp=AppTests.asyncSetUp
+    asyncSetUp=setup_editor
 
     async def test_open_selection_and_capture_cancel_do_not_inspect_source(self):
         from unittest.mock import AsyncMock,patch
@@ -1012,7 +858,7 @@ class ObservationAppTests(unittest.IsolatedAsyncioTestCase):
 
 
 class NativeInspectionAppTests(unittest.IsolatedAsyncioTestCase):
-    asyncSetUp=AppTests.asyncSetUp
+    asyncSetUp=setup_editor
 
     async def test_custom_inspection_back_is_read_only_and_preserves_dirty_draft(self):
         source=self.root/'custom';source.mkdir();raw=b'# Keep exactly\r\n[earth]\r\nmap=earth.jpg\r\nmap=unknown.jpg\r\nunknown=preserve\r\n'
@@ -1043,16 +889,13 @@ class NativeInspectionAppTests(unittest.IsolatedAsyncioTestCase):
 
 
 class NativeValueAppTests(unittest.IsolatedAsyncioTestCase):
-    asyncSetUp=AppTests.asyncSetUp
+    asyncSetUp=setup_editor
 
     def source(self):
         path=self.root/'native.conf';path.write_bytes(b'# preserve\r\n[earth]\r\nmap=custom.png\r\nmarker_file=one\r\nmarker_file=two\r\n  twilight=6 # comment\r\n[jupiter]\r\nshade=20\r\n')
         (self.root/'native.def').write_text('touch must-not-run\n');return path
 
-    async def enter(self,pilot,path):
-        await click(pilot,'#edit-native')
-        self.app.screen.query_one('#native-patch-source',Input).value=str(path)
-        await click(pilot,'#native-patch-open');await pilot.pause()
+    enter=enter_native
 
     async def test_unchanged_confirmed_copy_preserves_source_bytes_and_main_draft(self):
         source=self.source();before=source.read_bytes()
@@ -1121,7 +964,7 @@ class NativeValueAppTests(unittest.IsolatedAsyncioTestCase):
 
 
 class MoonAppTests(unittest.IsolatedAsyncioTestCase):
-    asyncSetUp=AppTests.asyncSetUp
+    asyncSetUp=setup_editor
 
     async def test_moon_selection_context_and_retained_earth_settings(self):
         async with self.app.run_test(size=(110,50)) as pilot:
@@ -1163,7 +1006,7 @@ class MoonAppTests(unittest.IsolatedAsyncioTestCase):
 
 
 class SystemAppTests(unittest.IsolatedAsyncioTestCase):
-    asyncSetUp=AppTests.asyncSetUp
+    asyncSetUp=setup_editor
 
     async def test_system_controls_keep_inactive_choices_and_existing_camera(self):
         async with self.app.run_test(size=(110,50)) as pilot:
@@ -1212,7 +1055,7 @@ class SystemAppTests(unittest.IsolatedAsyncioTestCase):
 
 
 class OrbitAppTests(unittest.IsolatedAsyncioTestCase):
-    asyncSetUp=AppTests.asyncSetUp
+    asyncSetUp=setup_editor
 
     async def test_orbit_context_modes_and_invalid_intermediate_width(self):
         async with self.app.run_test(size=(110,50)) as pilot:
@@ -1258,7 +1101,7 @@ class OrbitAppTests(unittest.IsolatedAsyncioTestCase):
 
 
 class MoonOverrideAppTests(unittest.IsolatedAsyncioTestCase):
-    asyncSetUp=AppTests.asyncSetUp
+    asyncSetUp=setup_editor
 
     async def prepare(self,pilot):
         self.app.query_one('#target',Select).value='jupiter'
@@ -1319,7 +1162,7 @@ class MoonOverrideAppTests(unittest.IsolatedAsyncioTestCase):
 
 
 class NativeGridAppTests(unittest.IsolatedAsyncioTestCase):
-    asyncSetUp=AppTests.asyncSetUp
+    asyncSetUp=setup_editor
     source=NativeValueAppTests.source
     enter=NativeValueAppTests.enter
 
@@ -1334,3 +1177,151 @@ class NativeGridAppTests(unittest.IsolatedAsyncioTestCase):
             await click(pilot,'#native-patch-confirm');await pilot.pause()
         self.assertEqual(source.read_bytes(),raw)
         self.assertEqual((self.root/'native-edited.conf').read_bytes(),raw.replace(b'grid1=3',b'grid1=6').replace(b'grid2=30',b'grid2=15'))
+
+
+class TerminalTests(unittest.TestCase):
+    setUp=prepare_editor
+
+    def test_real_terminal_reopened_cancel_restores_screen_and_tty(self):
+        from configurator import __file__ as module_file
+        source = self.root / 'pty-saved'
+        save_view(source, View(20, -45), sys.executable)
+        original = {p.name:p.read_bytes() for p in source.iterdir()}
+        for key in (b'\x1b', b'\x03', b'\x04'):
+            master, slave = pty.openpty()
+            before = termios.tcgetattr(slave)
+            env = {**os.environ, 'TERM': 'xterm-256color',
+                   'PYTHONPATH': str(Path(module_file).parent.parent),
+                   'PYTHONDONTWRITEBYTECODE': '1'}
+            process = subprocess.Popen([sys.executable, '-B', '-m', 'configurator',
+                                        '--root', str(self.root), '--view', str(source)], stdin=slave,
+                                       stdout=slave, stderr=slave, env=env)
+            output = b''
+            try:
+                deadline = time.monotonic() + 8
+                while b'No unsaved scene changes.' not in output and time.monotonic() < deadline:
+                    if select.select([master], [], [], .2)[0]:
+                        output += os.read(master, 65536)
+                self.assertIn(b'No unsaved scene changes.', output)
+                self.assertIn(b'Opened snapshot', output)
+                os.write(master, key)
+                while process.poll() is None and time.monotonic() < deadline:
+                    if select.select([master], [], [], .2)[0]:
+                        output += os.read(master, 65536)
+                self.assertEqual(process.wait(timeout=2),130 if key==b'\x03' else 3,output[-500:])
+                while select.select([master], [], [], 0)[0]:
+                    output += os.read(master, 65536)
+                self.assertIn(b'\x1b[?1049h', output)
+                self.assertIn(b'\x1b[?1049l', output)
+                self.assertEqual(termios.tcgetattr(slave), before)
+                self.assertEqual({p.name:p.read_bytes() for p in source.iterdir()}, original)
+            finally:
+                if process.poll() is None:
+                    process.kill();process.wait()
+                os.close(master);os.close(slave)
+
+    def test_real_terminal_rejects_unsupported_source_before_ui(self):
+        from configurator import __file__ as module_file
+        source = self.root / 'unsupported';source.mkdir()
+        marker = self.root / 'must-not-execute'
+        (source / 'xp.def').write_text('touch ' + str(marker) + '\n')
+        (source / 'xp.conf').write_text('[earth]\n')
+        master, slave = pty.openpty()
+        before = termios.tcgetattr(slave)
+        env = {**os.environ, 'TERM':'xterm-256color',
+               'PYTHONPATH':str(Path(module_file).parent.parent), 'PYTHONDONTWRITEBYTECODE':'1'}
+        try:
+            done = subprocess.run([sys.executable, '-B', '-m', 'configurator', '--view', str(source)],
+                                  stdin=slave, stdout=slave, stderr=slave, env=env, timeout=5)
+            output = b''
+            while select.select([master], [], [], 0)[0]:
+                output += os.read(master, 65536)
+            self.assertEqual(done.returncode, 2)
+            self.assertIn(b'Cannot open view:', output)
+            self.assertNotIn(b'\x1b[?1049h', output)
+            self.assertEqual(termios.tcgetattr(slave), before)
+            self.assertFalse(marker.exists())
+        finally:
+            os.close(master);os.close(slave)
+
+    def test_real_terminal_history_keys_restore_tty_on_cancel(self):
+        from configurator import __file__ as module_file
+        probe=self.root/'history-probe.py'
+        probe.write_text("""from pathlib import Path
+import sys
+from textual.widgets import Input
+from configurator.app import ConfiguratorApp
+root=Path(sys.argv[1])
+class Probe(ConfiguratorApp):
+ def on_mount(self):
+  self.call_after_refresh(self.seed)
+ def seed(self):
+  self.query_one('#latitude',Input).value='25'
+  self.query_one('#latitude',Input).focus()
+  self.capture_edit('latitude')
+  (root/'ready').write_text('ready')
+ def action_undo(self):
+  super().action_undo()
+  assert self.raw_fields()['latitude']=='0' and not self.history.dirty
+  (root/'undone').write_text('ok')
+ def action_redo(self):
+  super().action_redo()
+  assert self.raw_fields()['latitude']=='25' and self.history.dirty
+  (root/'redone').write_text('ok')
+app=Probe(root,sys.executable)
+try: result=app.run()
+finally: app.workspace.close()
+raise SystemExit(3 if result==('cancelled',None) else 1)
+""")
+        master,slave=pty.openpty();before=termios.tcgetattr(slave)
+        env={**os.environ,'TERM':'xterm-256color','PYTHONPATH':str(Path(module_file).parent.parent),'PYTHONDONTWRITEBYTECODE':'1'}
+        process=subprocess.Popen([sys.executable,'-B',str(probe),str(self.root)],stdin=slave,stdout=slave,stderr=slave,env=env)
+        output=b''
+        def wait_for(marker):
+            nonlocal output
+            deadline=time.monotonic()+8
+            while not marker.exists() and time.monotonic()<deadline:
+                if select.select([master],[],[],.05)[0]:output+=os.read(master,65536)
+            self.assertTrue(marker.exists(),output[-1000:])
+        try:
+            wait_for(self.root/'ready');os.write(master,b'\x1a')
+            wait_for(self.root/'undone');os.write(master,b'\x19')
+            wait_for(self.root/'redone');os.write(master,b'\x03')
+            deadline=time.monotonic()+8
+            while process.poll() is None and time.monotonic()<deadline:
+                if select.select([master],[],[],.05)[0]:output+=os.read(master,65536)
+            self.assertEqual(process.wait(timeout=2),3,output[-1000:])
+            while select.select([master],[],[],0)[0]:output+=os.read(master,65536)
+            self.assertIn(b'\x1b[?1049h',output);self.assertIn(b'\x1b[?1049l',output)
+            self.assertEqual(termios.tcgetattr(slave),before)
+            self.assertFalse((self.root/'dev/earth-view').exists())
+        finally:
+            if process.poll() is None:process.kill();process.wait()
+            os.close(master);os.close(slave)
+
+    def test_real_terminal_reopens_snapshot_without_producer_and_restores_tty(self):
+        from configurator.cloud_capture import capture_existing
+        from configurator import __file__ as module_file
+        source=capture_fixture(self.root);frozen=capture_existing(source)
+        saved=save_view(self.root/'captured-scene',View(clouds='captured',capture_id=frozen.identity),sys.executable,capture=frozen)
+        source.rename(self.root/'producer-offline')
+        original={p.name:p.read_bytes() for p in saved.iterdir()}
+        master,slave=pty.openpty();before=termios.tcgetattr(slave)
+        env={**os.environ,'TERM':'xterm-256color','PYTHONPATH':str(Path(module_file).parent.parent),'PYTHONDONTWRITEBYTECODE':'1'}
+        process=subprocess.Popen([sys.executable,'-B','-m','configurator','--root',str(self.root),'--view',str(saved)],stdin=slave,stdout=slave,stderr=slave,env=env)
+        output=b''
+        try:
+            deadline=time.monotonic()+10
+            while b'No unsaved scene changes.' not in output and time.monotonic()<deadline:
+                if select.select([master],[],[],.1)[0]:output+=os.read(master,65536)
+            self.assertIn(b'No unsaved scene changes.',output)
+            os.write(master,b'\x03')
+            while process.poll() is None and time.monotonic()<deadline:
+                if select.select([master],[],[],.1)[0]:output+=os.read(master,65536)
+            self.assertEqual(process.wait(timeout=2),130,output[-1000:])
+            while select.select([master],[],[],0)[0]:output+=os.read(master,65536)
+            self.assertIn(b'\x1b[?1049l',output);self.assertEqual(termios.tcgetattr(slave),before)
+            self.assertEqual(original,{p.name:p.read_bytes() for p in saved.iterdir()})
+        finally:
+            if process.poll() is None:process.kill();process.wait()
+            os.close(master);os.close(slave)

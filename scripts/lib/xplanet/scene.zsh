@@ -78,16 +78,3 @@ selected_scene_command() {
     fi
     EARTH_MAP_PRE=''
 }
-
-# Stop must also recognize custom renderer names from previously selected revisions.
-# Read only bounded literal argument files; do not validate multi-megabyte assets here.
-scene_renderer_names() {
-    local args binary
-    for args in "$project_root"/.state/xplanet/scenes/*/desktop.args(N); do
-        [[ "${args:h:t}" =~ '^[0-9a-f]{64}$' ]] || continue
-        [[ -f "$args" && ! -L "$args" && "${args:A}" == "$args" ]] || continue
-        [[ "$(/usr/bin/stat -f %z "$args")" -le 16384 ]] || continue
-        IFS= read -r binary < "$args"
-        [[ "$binary" == /* && "$binary" != *[[:cntrl:]]* ]] && print -r -- "${binary:t}"
-    done
-}

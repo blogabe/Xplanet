@@ -3,11 +3,11 @@ import sys,unittest
 from pathlib import Path
 from unittest.mock import patch
 from textual.widgets import Button,Input,Select,Static
-import test_app as fixtures
+from tests.configurator.ui import fixtures
 click=fixtures.click
 
 class ComparisonUITests(unittest.IsolatedAsyncioTestCase):
-    asyncSetUp=fixtures.AppTests.asyncSetUp
+    asyncSetUp=fixtures.setup_editor
     def binary(self):
         path=self.root/'renderer';path.write_text('#!'+sys.executable+'''\nimport pathlib,sys,struct
 p=pathlib.Path(sys.argv[sys.argv.index('-output')+1])

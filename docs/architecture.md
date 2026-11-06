@@ -10,7 +10,12 @@ requested workflow:
 - `lib/xplanet/display.zsh`: render, process lifecycle and monthly map selection.
 - `lib/xplanet/desktop.zsh`: private foreground renderer entrypoint for launchd.
 - `xp-setup.sh`: preserve/prepare personal configuration and launchd jobs.
+- `lib/xplanet/management*.zsh`: interactive input, presentation and action orchestration.
+- `lib/xplanet/scene.zsh`: validate and resolve the immutable selected revision.
+- `lib/xplanet/python*.zsh`: explicit interpreter selection and provider preparation.
+- `lib/xplanet/diagnostics.zsh`: explicit renderer-support collection and saved evidence.
 - `run-totalmarker`: select compatible Python and invoke the data CLI.
+- `run-configurator`: prepare/check the private Textual runtime and invoke the studio.
 
 Bootstrap and setup remain separately executable alongside `xplanet.sh`. A
 complete checkout supplies the private helper files; a downloaded bootstrap entry

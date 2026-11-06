@@ -3,12 +3,12 @@ import unittest
 from textual.widgets import Button,Input,Select,Static
 from configurator.model import ROOT
 from configurator.workspace import open_view
-import test_app as fixtures
-import test_resources_ui as resource_fixtures
+from tests.configurator.ui import fixtures
+from tests.configurator.ui import test_resources_ui as resource_fixtures
 click=fixtures.click
 
 class OrbitalUITests(unittest.IsolatedAsyncioTestCase):
-    asyncSetUp=fixtures.AppTests.asyncSetUp
+    asyncSetUp=fixtures.setup_editor
     renderer=resource_fixtures.ResourceUITests.renderer
 
     async def test_stock_camera_conflicts_mode_retention_undo_and_safe_save_reopen(self):
@@ -52,8 +52,8 @@ class OrbitalUITests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(self.app.leaving)
 
 class ExpandedNativeUITests(unittest.IsolatedAsyncioTestCase):
-    asyncSetUp=fixtures.AppTests.asyncSetUp
-    enter=fixtures.NativeValueAppTests.enter
+    asyncSetUp=fixtures.setup_editor
+    enter=fixtures.enter_native
 
     async def test_cloud_and_scale_copy_needs_review_and_preserves_source_and_draft(self):
         source=self.root/'native.conf';raw=b'# preserve\r\n[earth]\r\ncloud_gamma=1.0 # note\r\ncloud_threshold=090\r\nmagnify=1\r\nunknown=opaque\r\n';source.write_bytes(raw)

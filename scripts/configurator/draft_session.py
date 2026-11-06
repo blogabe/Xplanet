@@ -1,9 +1,11 @@
 """Debounced recovery scheduling, contained in the configurator event loop."""
 import asyncio
+from .owned_io import OwnedIO
 from .recovery import RecoveryStore,pack,digest,encoded
 
 class DraftSession:
     def __init__(self,root,snapshot,notify):
+        self.packing=OwnedIO()
         self.store=RecoveryStore(root);self.snapshot=snapshot;self.notify=notify
         self.session=None;self.sessions=[];self.timer=None;self.task=None
         self.first_pending=None;self.signature=None;self.last_complete=None;self.closing=False
@@ -29,7 +31,7 @@ class DraftSession:
             values=self.snapshot()
             if values is None:return True
             current,baseline,config,workspace,source=values
-            record,blobs=pack(current,baseline,config,workspace,source)
+            record,blobs=await self.packing.run(pack,current,baseline,config,workspace,source)
             signature=digest(encoded({key:value for key,value in record.items() if key!='at'}))
             if signature==self.signature:return True
             if self.session is None:
@@ -77,6 +79,7 @@ class DraftSession:
         await self.cancel_writer()
 
     def close(self):
+        self.packing.close()
         self.closing=True
         if self.timer:self.timer.cancel()
         for session in self.sessions:session.close()

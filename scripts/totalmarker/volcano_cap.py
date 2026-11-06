@@ -6,7 +6,9 @@ import re
 import xml.etree.ElementTree as ET
 
 from .errors import FeedError
+from .xmlsafe import parse as parse_xml
 from .labels import legacy_time
+from .marker_text import quoted_label
 
 CAP_NAMESPACES = {"urn:oasis:names:tc:emergency:cap:1.1",
                   "urn:oasis:names:tc:emergency:cap:1.2", ""}
@@ -97,19 +99,12 @@ def _coordinates(circle):
     return lat, lon
 
 
-class _NoDeclarations(ET.TreeBuilder):
-    def doctype(self, name, pubid, system):
-        # Parser callbacks also cover UTF-16 and other XML encodings; a raw
-        # ASCII byte search alone cannot enforce the no-DTD contract.
-        raise FeedError("Volcano CAP contains unsupported XML declarations")
-
-
 def parse_cap(raw):
     """Require complete named entries; a malformed/zero-match feed is never empty success."""
     if not raw or b"<!DOCTYPE" in raw.upper() or b"<!ENTITY" in raw.upper():
         raise FeedError("Volcano CAP response is empty or contains unsupported XML declarations")
     try:
-        root = ET.fromstring(raw, parser=ET.XMLParser(target=_NoDeclarations()))
+        root = parse_xml(raw)
     except ET.ParseError:
         raise FeedError("Volcano CAP XML is malformed") from None
     alerts = [node for node in root.iter()
@@ -166,10 +161,7 @@ def parse_cap(raw):
     return events
 
 
-def _quoted(text):
-    text = "".join(" " if ord(char) < 32 or ord(char) == 127 else char for char in text)
-    return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
-
+_quoted = quoted_label
 
 def render_body(events, options):
     """Three legacy concentric marker lines per entry, plus optional detail."""

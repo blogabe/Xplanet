@@ -19,6 +19,7 @@ MACOS_MODULES = {
     'tests.test_python_runtime',
     'tests.test_setup',
     'tests.test_shell_boundaries',
+    'tests.test_shell_signal_cleanup',
 }
 
 def suite():

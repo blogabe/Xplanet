@@ -5,6 +5,7 @@ nonblocking store lock serializes publication/quota accounting, not UI editing.
 Only explicit discard or replacing this session's older checkpoints removes data.
 """
 import asyncio
+from .owned_io import checkpoint as io_checkpoint
 from contextlib import contextmanager
 from dataclasses import dataclass,field
 import fcntl,hashlib,json,math,os,re,stat,time,uuid
@@ -57,6 +58,7 @@ class Recovered:
 
 
 def pack(current,baseline,config,workspace,source=''):
+    io_checkpoint()
     """Snapshot memory only; raw invalid inputs need not make a valid scene."""
     current=dict(validate_fields(current));baseline=dict(validate_fields(baseline))
     if not isinstance(config,bytes) or len(config)>256*1024 or not recognized_body(config):raise ValueError('Recovery requires a recognized studio body snapshot.')
@@ -77,9 +79,10 @@ def pack(current,baseline,config,workspace,source=''):
         item=workspace.astronomy.get(identity)
         if item is None:raise ValueError('Referenced astronomy capture is unavailable; previous checkpoint retained.')
         astronomy[identity]=refs(item.files())
-    record={'schema':2,'at':time.time(),'current':current,'baseline':baseline,'source':str(source or ''),'config':digest(config),'clouds':clouds,'observations':observations,'astronomy':astronomy,'objects':{sha:len(raw) for sha,raw in blobs.items()}}
+    record={'schema':2,'at':time.time(),'current':current,'baseline':baseline,'source':''.join(c if c.isprintable() else ' ' for c in str(source or ''))[:4096],'config':digest(config),'clouds':clouds,'observations':observations,'astronomy':astronomy,'objects':{sha:len(raw) for sha,raw in blobs.items()}}
     raw=encoded(record)
     if len(raw)>META_LIMIT or len(blobs)>64 or any(len(raw)>BLOB_LIMIT for raw in blobs.values()) or sum(map(len,blobs.values()))>128*1024*1024+256*1024:raise ValueError('Recovery snapshot exceeds its metadata/capture bounds.')
+    io_checkpoint()
     return record,blobs
 
 
@@ -200,7 +203,10 @@ class RecoveryStore:
             count+=1
             if count>ENTRY_LIMIT:raise ValueError('Recovery directory entry limit reached.')
             info=item.stat(follow_symlinks=False)
-            if stat.S_ISREG(info.st_mode):private(info);total+=info.st_size
+            if stat.S_ISREG(info.st_mode):
+                if item.name != '.DS_Store':private(info)
+                elif info.st_uid != os.geteuid():raise ValueError('Foreign Finder metadata retained; inspect recovery storage.')
+                total+=info.st_size
             elif stat.S_ISDIR(info.st_mode) and SESSION.fullmatch(item.name):
                 child=os.open(item.name,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=fd)
                 try:
@@ -282,7 +288,11 @@ class RecoveryStore:
                     for sha in records:
                         item=recover(fd,identity,sha);known.add(sha+'.json');known.update(item.record['objects'])
                     files={entry.name for entry in os.scandir(fd)}
-                    if files!=known:raise ValueError('Unrecognized recovery material retained; discard was refused.')
+                    for name in files-known:
+                        if not SHA.fullmatch(name):raise ValueError('Unrecognized recovery material retained; discard was refused: '+name)
+                        raw,_=read(fd,name,BLOB_LIMIT)
+                        if digest(raw)!=name:raise ValueError('Changed orphan recovery object retained; discard was refused.')
+                    if not known<=files:raise ValueError('Incomplete recovery material retained; discard was refused.')
                     owned=OwnedFiles(fd)
                     for name in files:
                         raw,stamp=read(fd,name,BLOB_LIMIT if SHA.fullmatch(name) else META_LIMIT);owned.created[name]=stamp;owned.expected[name]=(len(raw),hashlib.sha256(raw).digest())
@@ -332,6 +342,7 @@ class RecoverySession:
                         try:os.stat(key,dir_fd=fd,follow_symlinks=False);continue
                         except FileNotFoundError:pass
                         child=os.open(key,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600,dir_fd=fd)
+                        created=None
                         try:
                             # Record expected full bytes first; partial writes are
                             # cleaned only while still exactly our owned bytes.
@@ -345,10 +356,11 @@ class RecoverySession:
                                 await asyncio.sleep(0)
                             os.fsync(child)
                         finally:
-                            final=os.fstat(child)
-                            if (final.st_dev,final.st_ino,final.st_mode,final.st_uid,final.st_gid)==(created.st_dev,created.st_ino,created.st_mode,created.st_uid,created.st_gid):
-                                owned.created[key]=fingerprint(final);owned.expected[key]=(written,written_hash.digest())
-                            os.close(child)
+                            try:
+                                final=os.fstat(child)
+                                if created is not None and (final.st_dev,final.st_ino,final.st_mode,final.st_uid,final.st_gid)==(created.st_dev,created.st_ino,created.st_mode,created.st_uid,created.st_gid):
+                                    owned.created[key]=fingerprint(final);owned.expected[key]=(written,written_hash.digest())
+                            finally:os.close(child)
                     if sha not in previous:owned.write(sha+'.json',raw)
                     elif read(fd,sha+'.json',META_LIMIT)[0]!=raw:raise ValueError('Existing checkpoint changed.')
                     # Validate before the only commit point. No selection/state

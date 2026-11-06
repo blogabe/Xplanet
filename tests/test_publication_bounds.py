@@ -42,3 +42,12 @@ class PublicationBoundsTests(Sandbox):
             StormPublisher(self.fs, settings).publish(state, "short\n")
         self.assertIsNone(self.fs.read(settings.storm.journal))
         self.assertIsNone(self.fs.read(settings.state))
+
+    def test_missing_label_in_recovery_journal_is_preserved_without_publication(self):
+        from totalmarker.state import json_bytes
+        settings=self.config();publisher=Publisher(self.fs,settings)
+        raw=json_bytes({'schema':1,'paths':publisher.paths(),'state':load_state(self.fs,settings.state)})
+        self.fs.write(settings.journal,raw)
+        with self.assertRaisesRegex(StorageError,'required state or label'):recover_pending(self.fs,settings)
+        self.assertEqual(self.fs.read(settings.journal),raw)
+        self.assertIsNone(self.fs.read(settings.state));self.assertIsNone(self.fs.read(settings.labels))

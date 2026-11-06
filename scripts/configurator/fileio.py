@@ -1,5 +1,6 @@
 """Exclusive scene writes and conservative cleanup of unchanged owned files."""
 import hashlib,os,stat
+from .owned_io import checkpoint
 
 
 def fingerprint(info):
@@ -27,13 +28,23 @@ class OwnedFiles:
     def write(self,name,data):
         expected=(len(data),hashlib.sha256(data).digest())
         fd=os.open(name,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600,dir_fd=self.directory_fd)
-        self.created[name]=fingerprint(os.fstat(fd))
-        self.expected[name]=expected
-        with os.fdopen(fd,'wb') as stream:
+        with os.fdopen(fd,'wb',buffering=0) as stream:
+            self.created[name]=fingerprint(os.fstat(fd))
+            self.expected[name]=expected
             try:
-                stream.write(data);stream.flush();os.fsync(stream.fileno())
+                written=0;sha=hashlib.sha256()
+                for offset in range(0,len(data),65536):
+                    checkpoint()
+                    chunk=data[offset:offset+65536]
+                    remaining=memoryview(chunk)
+                    while remaining:
+                        checkpoint();count=stream.write(remaining)
+                        if not count:raise OSError('Scene write made incomplete progress.')
+                        written+=count;sha.update(remaining[:count]);remaining=remaining[count:]
+                stream.flush();os.fsync(stream.fileno())
             finally:
                 self.created[name]=fingerprint(os.fstat(stream.fileno()))
+                self.expected[name]=(written,sha.digest())
 
     def cleanup(self):
         retained=[]

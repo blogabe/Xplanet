@@ -47,6 +47,16 @@ class HealthTests(Sandbox):
         self.assertEqual(snapshot(self.root), before)
         return rows(report)
 
+    def test_live_local_precondition_failure_is_nonzero_without_claiming_access_failure(self):
+        settings=replace(self.settings,auth=replace(self.settings.auth,mode='basic',username='',password=''))
+        with patch('totalmarker.health._sources',return_value={'clouds':[settings.url]}), patch('totalmarker.http.HTTPTransport.request',side_effect=AssertionError('network forbidden')):
+            report=health.check(self.fs,settings,live=True,now=NOW)
+        cloud=rows(report)['clouds']
+        self.assertEqual(cloud['status'],'error')
+        self.assertEqual(cloud['access'],'not_checked')
+        self.assertEqual(cloud['requests'],[])
+        self.assertEqual(health.exit_status(report),2)
+
     def test_saved_health_never_fetches_writes_or_resolves_credentials(self):
         with patch('totalmarker.http.HTTPTransport.request', side_effect=AssertionError('network')):
             before = snapshot(self.root)

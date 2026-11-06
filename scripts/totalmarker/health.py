@@ -237,7 +237,7 @@ def _live(fs, settings, product, row, record, now, fetcher_factory):
                 failed_access = any(r['access'] == 'failed' for r in client.requests)
                 row['status'] = ('access_failed' if failed_access else
                                  'stale' if 'stale' in result.message.lower() else
-                                 'invalid_content' if client.requests else 'unknown')
+                                 'invalid_content' if client.requests else 'error')
                 row['content'] = 'unknown' if failed_access or not client.requests else row['content']
                 row['freshness'] = 'stale' if row['status'] == 'stale' else 'unknown'
                 row['output']['retained'] = row['output']['present']

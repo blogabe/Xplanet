@@ -6,7 +6,7 @@ recorded snapshot even after the draft changes: read the scene/time shown in the
 confirmation rather than assuming the image matches today's editor fields.
 
 Choose an absolute **new directory in an existing parent**, then confirm **Export
-copy**. The default suggestion is under the checkout's dev directory; you can choose
+copy**. The default suggestion is under the checkout's config directory; you can choose
 another persistent location. Existing files/directories, linked path components,
 control characters and destinations inside the temporary preview workspace are
 refused. No overwrite option or automatic parent-directory creation is provided.

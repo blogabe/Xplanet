@@ -16,6 +16,8 @@ can create a private session. Native `.def`/`.conf` files are never autosaved.
   studio draft, choose **Keep editing**, **Keep recovery draft and exit**, or
   **Discard draft and exit**. Keep editing has initial focus. Keeping recovery
   checkpoints the latest fields first; a failed checkpoint leaves the editor open.
+  An exit request cancels active work before presenting this choice. Keep editing
+  retains the draft and last successful output, but does not resume that operation.
 - Escape inside a dialog normally returns from that dialog. Open editable dialog
   fields are not included in studio recovery. An exit request from such a form
   requires explicit discard or continued editing; keeping a recovery draft is
@@ -88,3 +90,20 @@ stays in place for inspection. Unknown material left by an uncatchable crash is
 not silently deleted. These checks handle cooperative concurrent changes and
 accidental corruption; they are not a security sandbox against the same user
 continuously rewriting storage.
+
+## Filesystem operations and interruption
+
+Opening, saving, handoff verification/selection and recovery inspection use one
+owned filesystem worker per operation. The editor stays responsive and prevents
+conflicting edits while a captured save or open is reconciled. Cancellation is
+cooperative at bounded read/write boundaries; the editor waits for its worker,
+including cleanup, rather than leaving a writer running after exit. Slow storage
+can still delay completion. A selector already published is verified and reported
+as completed or uncertain; an interrupt never silently rolls it back.
+
+Finder metadata in the private recovery root counts against the quota but does
+not block checkpoints. Explicit discard may remove hash-verified orphan blobs
+inside that session. Unknown files, changed blobs and corrupt checkpoints remain
+for inspection; permissions are never normalized automatically. Source hints are
+non-executable display text and are bounded and sanitized independently of draft
+fields.

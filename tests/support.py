@@ -108,7 +108,14 @@ state=Path(__file__).with_suffix('.json')
 doc=json.loads(state.read_text()) if state.exists() else None
 if os.environ.get('MOCK_LAUNCHCTL_TRACE'):
     with open(os.environ['MOCK_LAUNCHCTL_TRACE'],'a') as stream: stream.write(' '.join(args)+'\n')
-if args[0] in ('list','print'): raise SystemExit(0 if doc else 3)
+if args[0] in ('list','print'):
+    if doc and args[0]=='print':
+        print('program = '+doc['ProgramArguments'][0])
+        print('working directory = '+doc['WorkingDirectory'])
+        print('arguments = {')
+        print('\n'.join(doc['ProgramArguments']))
+        print('}')
+    raise SystemExit(0 if doc else 113)
 if args[0]=='bootstrap':
     if doc: raise SystemExit(5)
     doc=plistlib.loads(Path(args[2]).read_bytes())
@@ -144,8 +151,8 @@ if args[:2] == ['load', '-w']:
     state[doc['Label']] = doc
     state_file.write_text(json.dumps(state))
     raise SystemExit(0)
-if args[0] == 'list':
-    label = args[1]
+if args[0] in ('list', 'print'):
+    label = args[1].rsplit('/', 1)[-1]
     if label == os.environ.get('TM_LIST_FAIL_LABEL') or label not in state: raise SystemExit(3)
     doc = state[label]
     # launchctl list LABEL emits an OpenStep-style dictionary, not XML/JSON.

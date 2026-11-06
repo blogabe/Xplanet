@@ -1,5 +1,6 @@
 """Finite preview and explicit new-directory save, without desktop operations."""
 import asyncio
+from .owned_io import OwnedIO,checkpoint as io_checkpoint
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 import os
@@ -20,7 +21,7 @@ from .fileio import new_directory,same_directory
 
 CAPTURE_BUDGET = 128 * 1024 * 1024
 
-from .resources import BoundedLog,capabilities,capability_issues,resource_evidence,identity,binary_signature,verified_identity
+from .resources import BoundedLog,capabilities,capability_issues,resource_evidence,identity,binary_signature,verified_identity,renderer_environment
 from .model import SAMPLE, View, Issue, parse_saved_view, require_valid, recognized_body, ROOT, SCENE_HEADERS, scene_prefix, ORIGIN_FILE
 
 
@@ -135,6 +136,7 @@ class PreviewSnapshot:
 
 class Workspace:
     def __init__(self):
+        self.owned_io=OwnedIO()
         self.temporary = tempfile.TemporaryDirectory(prefix='xplanet-configurator-')
         self.root = Path(self.temporary.name).resolve()
         self.process = None
@@ -225,7 +227,7 @@ class Workspace:
             with tempfile.TemporaryFile() as log:
                 spawn=asyncio.create_task(asyncio.create_subprocess_exec(
                     sys.executable,'-B','-m',module,*source_args,
-                    '--output',str(work),*extra,cwd=work,env=env,stdout=log,stderr=log,start_new_session=True))
+                    '--output',str(work),*extra,cwd=work,env=env,stdin=asyncio.subprocess.DEVNULL,stdout=log,stderr=log,start_new_session=True))
                 try:
                     self.process=await asyncio.shield(spawn)
                     code=await asyncio.wait_for(self.process.wait(),timeout)
@@ -325,7 +327,7 @@ class Workspace:
         deadline=asyncio.get_running_loop().time()+timeout
         try:
             require_valid(configuration_issues(view,renderer,config_bytes,self.capture_for(view),self.observations_for(view),None if diagnostic else self.capabilities,astronomy=self.astronomy_for(view)))
-            args=view.arguments();binary=renderer_path(renderer);binary_stamp,binary_hash=binary_signature(binary);body=view.body()
+            args=view.arguments();binary=renderer_path(renderer);binary_stamp,binary_hash=await self.owned_io.run(binary_signature,binary);body=view.body()
             try:
                 work=Path(tempfile.mkdtemp(prefix='preview-',dir=self.root));config=work/'xp.conf';output=work/'earth.png';config.write_bytes(body)
                 files=view.auxiliary_files(active_only=True)
@@ -334,9 +336,9 @@ class Workspace:
                 for product in view.uses_astronomy():files.update(self.astronomy_for(view)[product].files())
                 for name,data in files.items():(work/name).write_bytes(data)
             except OSError as exc:raise ValueError('Cannot prepare preview output. Check temporary-directory permissions and free space: '+str(exc)) from exc
-            env={**os.environ,'HOME':str(work),'TMPDIR':str(work),'XDG_CACHE_HOME':str(work),'PYTHONDONTWRITEBYTECODE':'1'}
+            env=renderer_environment({**os.environ,'HOME':str(work),'TMPDIR':str(work),'XDG_CACHE_HOME':str(work),'PYTHONDONTWRITEBYTECODE':'1'})
             if diagnostic:
-                version_log=BoundedLog();stamp,probe_hash=binary_signature(binary);probe_code=None
+                version_log=BoundedLog();stamp,probe_hash=await self.owned_io.run(binary_signature,binary);probe_code=None
                 try:
                     probe_code=await self._run_child([str(binary),'-version','-output',str(work/'version-probe.png'),'-num_times','1','-tmpdir',str(work),'-config',str(config),'-searchdir',str(ROOT)],work,env,version_log,min(5,max(.001,deadline-asyncio.get_running_loop().time())))
                 except (OSError,asyncio.TimeoutError) as exc:version_log.feed(('\nProbe runtime error: '+(str(exc) or type(exc).__name__)).encode())
@@ -356,7 +358,7 @@ class Workspace:
             if len(header)>=24 and header[12:16]==b'IHDR':
                 import struct
                 if struct.unpack('>II',header[16:24])!=tuple(map(int,view.geometry.split('x'))):raise ValueError('PNG header dimensions differ from the requested preview geometry; output was not retained.')
-            try:binary_stamp=verified_identity(binary,binary_stamp,binary_hash)
+            try:binary_stamp=await self.owned_io.run(verified_identity,binary,binary_stamp,binary_hash)
             except ValueError as exc:raise ValueError('Renderer changed during preview; rerun with the current executable. Output was not retained.') from exc
             if diagnostic and self.capabilities.status=='reported' and self.capabilities.binary_identity[:4]==binary_stamp[:4]:
                 self.capabilities=replace(self.capabilities,binary_identity=binary_stamp)
@@ -386,7 +388,14 @@ class Workspace:
             for directory in (work,obsolete):
                 if directory is not None and directory not in kept and directory.parent==self.root:shutil.rmtree(directory,ignore_errors=True)
 
+    async def file_operation(self,function,*args,**kwargs):
+        if self.busy:raise ValueError('Wait for the current operation or cancel it first.')
+        self.busy=True;self.operation='files'
+        try:return await self.owned_io.run(function,*args,**kwargs)
+        finally:self.busy=False;self.operation=None
+
     async def stop(self):
+        await self.owned_io.stop()
         if self.comparison_workspace is not None:await self.comparison_workspace.stop()
         while self.stopping is not None:
             task=self.stopping
@@ -421,7 +430,12 @@ class Workspace:
             await process.wait()
             if self.process is process:self.process=None
 
+    async def aclose(self):
+        await self.stop()
+        self.close()
+
     def close(self):
+        self.owned_io.close()
         if self.comparison_workspace is not None:self.comparison_workspace.close()
         self.kill_owned()
         self.temporary.cleanup()
@@ -439,6 +453,7 @@ def save_view(destination, view, renderer, *, config_bytes=None, capture=None, o
 def read_bounded(fd,bound):
     chunks=[];remaining=bound+1
     while remaining:
+        io_checkpoint()
         chunk=os.read(fd,min(65536,remaining))
         if not chunk:break
         chunks.append(chunk);remaining-=len(chunk)

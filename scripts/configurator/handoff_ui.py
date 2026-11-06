@@ -1,4 +1,5 @@
 """Review/export and explicit scene-reference changes; no lifecycle operations."""
+import asyncio
 from pathlib import Path
 from textual.containers import Horizontal,VerticalScroll
 from textual.screen import ModalScreen
@@ -21,10 +22,10 @@ class HandoffScreen(ModalScreen[tuple]):
         super().__init__();self.root=Path(root);self.source=source;self.renderer=renderer
         self.dirty=dirty;self.plan=None;self.reviewed_inputs=None;self.ready=False;self.result=None
         self.selection_expected=None;self.selection_record=None;self.restore_pending=False
-        self.receipt=None;self.selection_label=None;self.on_selection=on_selection
+        self.receipt=None;self.selection_label=None;self.on_selection=on_selection;self.busy=False
 
     def compose(self):
-        with VerticalScroll():
+        with VerticalScroll(id="handoff-content"):
             yield Static('Scene handoff — review and explicit selection')
             yield Static('Export a SAVED named scene from this checkout. This does not export the current editor draft, select a desktop scene, run setup, start Xplanet or change schedules.')
             if self.dirty:yield Static('The editor has unsaved changes. Save a new named scene first if you want those changes included; this dialog leaves the draft intact.')
@@ -88,10 +89,17 @@ class HandoffScreen(ModalScreen[tuple]):
     def on_button_pressed(self,event):
         event.stop();action=event.button.id
         if action=='handoff-back':self.action_cancel();return
+        if self.busy:return
+        self.busy=True
+        self.query_one('#handoff-content').disabled=True
+        self.run_worker(self.perform_action(action))
+
+    async def perform_action(self,action):
+        io=self.app.workspace.file_operation
         try:
             if action=='handoff-review-button':
                 self.invalidate()
-                plan=create_plan(self.root,Path(self.value('source')),self.value('renderer'),self.value('geometry'))
+                plan=await io(create_plan,self.root,Path(self.value('source')),self.value('renderer'),self.value('geometry'))
                 destination=self.value('destination')
                 self.query_one('#handoff-review',Static).update(self.summary(plan.metadata)+'\nNew directory: '+display(destination))
                 self.plan=plan;self.reviewed_inputs=self.inputs()
@@ -99,18 +107,18 @@ class HandoffScreen(ModalScreen[tuple]):
                 self.status('Review above, then explicitly confirm a new private bundle. Nothing has been written.')
             elif action=='handoff-confirm':
                 if self.plan is None or self.inputs()!=self.reviewed_inputs:raise ValueError('Inputs changed; review again.')
-                target=stage_plan(self.plan,self.value('destination'))
+                target=await io(stage_plan,self.plan,self.value('destination'))
                 self.invalidate()
                 self.result='Review-only bundle exported to '+str(target)+'. No scene selected or activated; source and draft unchanged.'
                 self.status(self.result)
             elif action=='handoff-check':
-                self.invalidate();record=check_bundle(self.root,Path(self.value('destination')))
+                self.invalidate();record=await io(check_bundle,self.root,Path(self.value('destination')))
                 self.query_one('#handoff-review',Static).update(self.summary(record))
                 self.result='Review-only bundle verified. No scene selected, setup or job changes.'
                 self.status(self.result)
             elif action=='handoff-apply-review':
                 self.invalidate()
-                record=check_bundle(self.root,Path(self.value('destination')))
+                record=await io(check_bundle,self.root,Path(self.value('destination')))
                 expected=inspect_selection(self.root)
                 self.selection_expected=expected;self.selection_record=record;self.reviewed_inputs=self.inputs()
                 self.query_one('#handoff-review',Static).update(self.summary(record)+'\nDesktop execution uses the frozen revision as cwd and private .state/xplanet/desktop-tmp scratch; no renderer scratch is written into the revision.\nCurrent selection: '+expected.label+'\nConfirm changes ONLY the selected reference to an immutable copy of this saved scene. No renderer or service action. The running desktop remains unchanged; restart is separate.')
@@ -118,23 +126,27 @@ class HandoffScreen(ModalScreen[tuple]):
                 self.status('Review saved bundle and current selection above. No files or selection changed by this review.')
             elif action=='handoff-apply-confirm':
                 if self.selection_expected is None or self.inputs()!=self.reviewed_inputs:raise ValueError('Selection review changed; review Apply again.')
-                if check_bundle(self.root,Path(self.value('destination')))!=self.selection_record:raise ValueError('Reviewed bundle changed; review Apply again.')
-                receipt=apply_bundle(self.root,Path(self.value('destination')),self.selection_expected)
+                if await io(check_bundle,self.root,Path(self.value('destination')))!=self.selection_record:raise ValueError('Reviewed bundle changed; review Apply again.')
+                receipt=await io(apply_bundle,self.root,Path(self.value('destination')),self.selection_expected)
                 self.selected(receipt,'Scene revision selected')
             elif action=='handoff-restore':
                 self.invalidate()
                 if self.receipt is None:raise ValueError('No completed selection change to restore in this dialog.')
                 if inspect_selection(self.root)!=self.receipt.after:raise ValueError('Selection changed; previous-selection restore would overwrite a newer choice.')
-                if self.receipt.before.revision:read_revision(self.root,self.receipt.before.revision)
+                if self.receipt.before.revision:await io(read_revision,self.root,self.receipt.before.revision)
                 self.selection_expected=self.receipt.after;self.restore_pending=True
                 self.query_one('#handoff-review',Static).update('Current selection: '+self.receipt.after.label+'\nRestore previous selection: '+self.receipt.before.label+'\nOnly the reference changes. Custom configuration files, producers and the running desktop remain untouched.')
                 self.query_one('#handoff-restore-confirm',Button).display=True
                 self.status('Confirm restoration explicitly; no change has occurred.')
             elif action=='handoff-restore-confirm':
                 if not self.restore_pending or self.receipt is None:raise ValueError('Review previous selection again.')
-                receipt=restore_selection(self.root,self.receipt)
+                receipt=await io(restore_selection,self.root,self.receipt)
                 self.selected(receipt,'Previous selection restored');self.receipt=None
                 self.query_one('#handoff-restore',Button).disabled=True
+        except asyncio.CancelledError:
+            self.invalidate()
+            self.result='Filesystem operation cancelled; inspect the chosen destination for retained partial files before retrying. Source and draft retained; no renderer or job action.'
+            self.status(self.result)
         except UncertainSelection as exc:
             self.invalidate();self.receipt=None;self.query_one('#handoff-restore',Button).disabled=True
             self.selection_label='uncertain'
@@ -147,6 +159,9 @@ class HandoffScreen(ModalScreen[tuple]):
             message='Handoff refused: '+str(exc)+'\nNo activation occurred.'
             for note in getattr(exc,'__notes__',()):message+='\n'+note
             self.result=message;self.status(message)
+        finally:
+            self.busy=False
+            self.query_one('#handoff-content').disabled=False
 
     def selected(self,receipt,message):
         self.invalidate();self.receipt=receipt;self.selection_label=receipt.after.label
@@ -156,4 +171,8 @@ class HandoffScreen(ModalScreen[tuple]):
         self.result=message+': '+display_label+'. No restart, renderer, provider or job action. Custom configuration and source files unchanged.'
         self.status(self.result)
 
-    def action_cancel(self):self.dismiss((self.result,self.selection_label))
+    def action_cancel(self):
+        if self.busy:
+            self.app.run_worker(self.app.workspace.stop())
+            self.status('Cancelling filesystem work; wait for its outcome before leaving.')
+        else:self.dismiss((self.result,self.selection_label))

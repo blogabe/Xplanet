@@ -4,7 +4,7 @@
 provider = "custom"
 resolution = 4096
 local_image_name_template = "clouds-{resolution}.jpg"
-check_interval_seconds = 3600
+check_interval_seconds = 3300
 timeout_seconds = 30
 max_bytes = 33554432
 

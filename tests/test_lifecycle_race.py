@@ -62,6 +62,67 @@ log('end')
         self.overlap(self.checkout(self.base/'second checkout'))
     def test_overlapping_stop_waits_for_start_then_leaves_stopped(self):self.overlap(self.entry,'stop')
 
+    def test_restart_invalid_command_preserves_existing_job_without_service_calls(self):
+        definition=self.root/'config/xp.def'
+        definition.write_text('XPLANET_BIN=/missing/renderer\n')
+        original=self.jobs.read_bytes()
+        child=self.invoke(self.entry,'restart','A');out,err=child.communicate(timeout=10)
+        self.assertEqual(child.returncode,2,(out,err))
+        self.assertEqual(self.jobs.read_bytes(),original)
+        self.assertFalse(self.trace.exists(),'invalid preflight must not call launchctl')
+
+    def test_restart_invalid_monthly_map_preserves_job_and_files(self):
+        definition=self.root/'config/xp.def'
+        with definition.open('a') as stream:stream.write('EARTH_MAP_PRE=world/world\n')
+        maps=self.root/'maps/world';maps.mkdir(parents=True)
+        images=self.root/'images';images.mkdir()
+        before_job=self.jobs.read_bytes()
+        for problem in ('missing source','missing images','regular link','external link','locked','valid'):
+            with self.subTest(problem=problem):
+                for month in range(1,13):
+                    image=maps/f'world.2004{month:02d}.3x5400x2700.png'
+                    if problem!='missing source':image.write_bytes(b'map')
+                if not images.exists():images.mkdir()
+                link=images/'earth.png'
+                if link.is_symlink() or link.exists():link.unlink()
+                lock=self.root/'.state/totalmarker/map.lock.d'
+                if lock.exists():lock.rmdir()
+                for directory in (lock.parent,lock.parent.parent):
+                    if directory.exists():directory.rmdir()
+                if problem=='missing images':images.rmdir()
+                if problem=='regular link':link.write_bytes(b'user image')
+                elif problem=='external link':link.symlink_to('/private/custom-map.png')
+                elif problem=='locked':lock.mkdir(parents=True)
+                before={str(path.relative_to(self.root)):(('link',str(path.readlink())) if path.is_symlink() else ('file',path.read_bytes()) if path.is_file() else ('directory',path.stat().st_mode)) for path in self.root.rglob('*')}
+                if problem=='valid':
+                    # Directly exercise the private read-only path: no .state creation.
+                    result=subprocess.run(['/bin/zsh','-f','-c','project_root=$1;script_dir="$1/scripts";fail() { print -u2 -r -- "$1";exit 2; };source "$script_dir/lib/xplanet/display.zsh";select_earth_map --check','audit',str(self.root)],env=self.env,capture_output=True,text=True)
+                    self.assertEqual(result.returncode,0,result.stderr)
+                else:
+                    child=self.invoke(self.entry,'restart','A');out,err=child.communicate(timeout=5)
+                    self.assertEqual(child.returncode,2,(out,err))
+                    self.assertEqual(self.jobs.read_bytes(),before_job)
+                    self.assertFalse(self.trace.exists(),'map preflight must precede any launchctl call')
+                after={str(path.relative_to(self.root)):(('link',str(path.readlink())) if path.is_symlink() else ('file',path.read_bytes()) if path.is_file() else ('directory',path.stat().st_mode)) for path in self.root.rglob('*')}
+                self.assertEqual(after,before)
+
+    def test_start_does_not_kickstart_a_job_from_another_checkout(self):
+        with (self.root/'config/xp.def').open('a') as definition:definition.write('EARTH_MAP_PRE=absent/map\n')
+        self.script(self.bin/'launchctl','[ "$1" = print ] && { printf "%s\\n" "program = /bin/zsh" "working directory = /another checkout" "arguments = {" "/bin/zsh" "/another checkout/scripts/lib/xplanet/desktop.zsh" "}"; exit 0; }; printf unexpected > "$TRACE"; exit 9\n')
+        child=self.invoke(self.entry,'start','A');out,err=child.communicate(timeout=5)
+        self.assertEqual(child.returncode,2,(out,err))
+        self.assertIn('another or unverified checkout',err)
+        self.assertFalse(self.trace.exists())
+
+    def test_job_identity_parser_accepts_spaces_and_rejects_ambiguous_fields(self):
+        spaced=self.base/'checkout with spaces';self.checkout(spaced)
+        helper=spaced/'scripts/lib/xplanet/display.zsh'
+        root=str(spaced)
+        good='program = /bin/zsh\nworking directory = '+root+'\narguments = {\n/bin/zsh\n'+root+'/scripts/lib/xplanet/desktop.zsh\n}\n'
+        for text,expected in ((good,0),(good+'working directory = /other\n',1),(good.replace('program = /bin/zsh','program = /bin/sh'),1),(good.replace('arguments = {','arguments = {\nextra'),1)):
+            result=subprocess.run(['/bin/zsh','-f','-c','project_root=$1;script_dir="$1/scripts";source "$2";desktop_job_owned "$3"','audit',root,str(helper),text],capture_output=True,text=True)
+            self.assertEqual(result.returncode,expected,(text,result.stderr))
+
     def test_failed_command_releases_lock_and_lock_inode_is_retained(self):
         config=self.root/'config/xp.def';original=config.read_bytes();config.write_text('invalid assignment\n')
         failed=self.invoke(self.entry,'start','A');out,err=failed.communicate(timeout=10)

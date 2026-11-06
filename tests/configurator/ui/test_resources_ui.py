@@ -8,12 +8,12 @@ from pathlib import Path
 from textual.widgets import Input,Static
 from configurator.model import View
 from configurator.workspace import open_view
-import test_app as fixtures
+from tests.configurator.ui import fixtures
 click=fixtures.click
 
 
 class ResourceUITests(unittest.IsolatedAsyncioTestCase):
-    asyncSetUp=fixtures.AppTests.asyncSetUp
+    asyncSetUp=fixtures.setup_editor
 
     def renderer(self,png=True):
         path=self.root/'fixture renderer'

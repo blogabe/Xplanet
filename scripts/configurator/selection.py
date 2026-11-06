@@ -1,4 +1,5 @@
 """Named-scene selection only. No renderer, provider, setup or service execution."""
+from .owned_io import begin_publication,cleanup_io
 from dataclasses import dataclass,field
 from pathlib import Path
 import os,plistlib,re,stat,uuid
@@ -176,6 +177,7 @@ def select_revision(root,identity,expected,*,_fault=lambda point:None):
         if pending is not None:
             raw,info=read_file(root/'config'/pending,68)
             if raw!=data or info!=fingerprint(os.fstat(held)):raise ValueError('Pending selector changed; preserve it for inspection.')
+        begin_publication()
         if data is None:os.unlink('desktop.scene',dir_fd=config)
         elif expected.data is None:os.link(pending,'desktop.scene',src_dir_fd=config,dst_dir_fd=config,follow_symlinks=False)
         else:os.replace(pending,'desktop.scene',src_dir_fd=config,dst_dir_fd=config);pending=None
@@ -195,10 +197,11 @@ def select_revision(root,identity,expected,*,_fault=lambda point:None):
         raise
     finally:
         if pending is not None and held is not None:
-            try:
-                raw,info=read_file(root/'config'/pending,68)
-                if info==fingerprint(os.fstat(held)) and raw==data:os.unlink(pending,dir_fd=config)
-            except (OSError,ValueError):pass  # Changed material is retained.
+            with cleanup_io():
+                try:
+                    raw,info=read_file(root/'config'/pending,68)
+                    if info==fingerprint(os.fstat(held)) and raw==data:os.unlink(pending,dir_fd=config)
+                except (OSError,ValueError):pass  # Changed material is retained.
         if held is not None:os.close(held)
         if config is not None:os.close(config)
         try:

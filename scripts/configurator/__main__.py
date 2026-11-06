@@ -1,5 +1,6 @@
 """Independent terminal entrypoint; renderer discovery never executes xp.def."""
 import argparse
+import asyncio
 from pathlib import Path
 import sys
 
@@ -50,7 +51,13 @@ def main():
     app=None
     try:
         app=ConfiguratorApp(args.root.resolve(),renderer,workspace,document=document,display=detect(),renderer_note=renderer_note)
-        result=app.run()
+        async def run_editor():
+            try:return await app.run_async()
+            finally:
+                if app.recovery:await app.recovery.stop()
+                await workspace.stop()
+        try:result=asyncio.run(run_editor())
+        except KeyboardInterrupt:return 130
         code=report_result(result)
         if app.recovery_notice:print(app.recovery_notice)
         return code if code==5 or app.termination_signal is None else 128+app.termination_signal

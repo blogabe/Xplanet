@@ -170,5 +170,11 @@
       "country": "Philippines",
       "category": "Continuing Eruptive Activity"
     }
-  ]
+  ],
+  "structural_fixture": {
+    "path": "gvp_weekly_20261019_structural.html",
+    "sha256": "3a051be664d8e6b95c76c644acfd838a842579104f784291918cc4893bbe4260",
+    "size_bytes": 19622,
+    "line_endings": "LF; derived structural subset, not raw source bytes"
+  }
 }

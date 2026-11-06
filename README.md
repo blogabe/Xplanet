@@ -25,7 +25,9 @@ See the [documentation index](docs/README.md) and [configuration examples](examp
 
 ## Install on macOS
 
-Requires [Homebrew](https://brew.sh/), Git, curl and zsh.
+Requires [Homebrew](https://brew.sh/) with `trust` support, Git, curl and zsh.
+The bundled maps are large; allow several gigabytes for the checkout, history and
+private runtimes. See [installation details](docs/management.md#checkout-size).
 
 ```sh
 /bin/zsh -c 's=$(curl -fsSL https://raw.githubusercontent.com/blogabe/Xplanet/main/scripts/xplanet.sh) && eval "$s"' -- bootstrap
@@ -102,7 +104,8 @@ with uv-managed Python available as an explicit choice.
 | `log-trim [--dry-run] [--days N]` | Trim recognized event logs older than 30 days by default |
 | `health [--live] [--json] [--verbose]` | Read saved health, or validate sources without updating outputs |
 | `norad`, `eclipse` | Run an explicitly configured optional product |
-| `test` | Run the offline test suite |
+| `diagnostics [--show]` | Explicitly probe renderer support, or show saved evidence |
+| `test` | Run the supported macOS offline test suite |
 
 `start` catches up the monthly map on the custom configuration path and runs one
 launchd-owned foreground desktop, without automatic respawn after stop. A selected
@@ -121,7 +124,7 @@ To update your checkout:
 allow it. It then updates Homebrew tap metadata and rebuilds the tap's Xplanet
 formula from source only when its recipe differs from the installed build,
 keeping the installed build options. If this user's Xplanet processes were running
-before a successful reinstall, `update` performs the same broad restart; otherwise it stays stopped. If the
+before a successful reinstall, `update` requests a validated restart; otherwise it stays stopped. A changed renderer binding requires a fresh reviewed scene selection; failed preflight preserves the running display. If the
 Homebrew check fails, the Git checkout may already be updated; rerun `update`
 after resolving the reported issue.
 It does not run setup.
@@ -145,16 +148,17 @@ Optional NORAD and eclipse products require deliberate configuration and
 corresponding Xplanet display settings. Santa has no live provider or production
 tracking.
 
-## Known limitation
+## Limitations and troubleshooting
 
-Set a CAP URL or choose `provider = "weekly_html"` in `[volcano]` before
-refreshing; the shipped CAP URL is a placeholder.
+Provider access and source coverage are checked separately. A failed or stale
+refresh retains last-good output; green labels alone do not prove current access.
+The example volcano URL requires an explicit source choice; use the
+[documented official CAP URL or weekly HTML](docs/technical-notes.md#volcano-sources).
 
-Automated CAP access resumed in late October 2026 after HTTP 403 failures.
-Reliability is still being observed; successful access does not prove the report
-is current. Setup warns if a volcano refresh fails and preserves existing
-markers, which may be stale. A fresh install has no volcano markers until
-retrieval succeeds or a marker file is supplied manually.
+Scene previews and reviewed selection do not verify desktop permissions or every
+renderer build/asset. See [configuration health](docs/configurator/diagnostics.md),
+[desktop troubleshooting](docs/management.md#troubleshooting), and the
+[validation boundaries](docs/architecture.md#verification-boundaries).
 
 ## Sources
 

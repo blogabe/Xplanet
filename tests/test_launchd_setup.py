@@ -34,6 +34,15 @@ class LaunchdSetupTests(Sandbox):
         return subprocess.run(command, cwd=PROJECT, capture_output=True,
                               text=True, check=False)
 
+    def test_existing_working_directory_alias_to_same_checkout_is_preserved(self):
+        first=self.prepare();self.assertEqual(first.returncode,0,first.stderr)
+        alias=self.base/'checkout alias';alias.symlink_to(self.root,target_is_directory=True)
+        path=self.source/'local.xplanet.earth-map.plist'
+        doc=plistlib.loads(path.read_bytes());doc['WorkingDirectory']=str(alias/'images')
+        path.write_bytes(plistlib.dumps(doc));before=path.read_bytes()
+        again=self.prepare();self.assertEqual(again.returncode,0,again.stderr)
+        self.assertEqual(path.read_bytes(),before)
+
     def test_rendered_jobs_have_absolute_paths_and_repeat_without_overwrite(self):
         moved = self.base / "checkout & spaces"
         self.root.rename(moved)

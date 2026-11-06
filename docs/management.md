@@ -193,9 +193,9 @@ exploration, installation/maintenance, desktop control, data refresh, diagnostic
 housekeeping/development, and unavailable commands. Detailed switches and the
 studio guide remain in the linked subcommand help. Both long
 reports use the existing any-key continuation; Ctrl-D exits and Ctrl-C interrupts
-with terminal restoration. Arrows reach both entries; 1–9 and h highlight, Enter
+with terminal restoration. Arrows reach both entries; 1–9 and h highlight (h selects Help), Enter
 activates. q remains the immediate exit shortcut. Limited terminals accept a numbered
-line or h followed by Enter. Merely opening/highlighting entries performs no probe.
+line (10 for Help), or h followed by Enter. Merely opening/highlighting entries performs no probe.
 
 ## Concurrent desktop commands
 
@@ -271,3 +271,59 @@ A recorded refresh failure remains a failure even while retained source data is
 recent. Cached success timestamps alone do not prove recent provider access.
 Frozen quake captures remain unassessed because their manifest does not retain
 the producer's refresh-interval policy; their source generation time is still shown.
+
+## Restart preflight and renderer updates
+
+Restart validates the next command and any immutable selected-scene resources
+before stopping the display, including custom monthly-map directories, source and
+link prerequisites without changing them, then checks again at start. A new
+filesystem change after preflight can still cause start to fail. Invalid selections fail
+without falling back to custom settings. If a formula update changes the bound
+renderer bytes or path, reopen the saved scene with the updated local renderer,
+export/review a fresh handoff and explicitly select it before retrying. Existing
+running processes are not stopped merely because that preflight fails; future
+starts still require a valid reviewed revision.
+
+Start verifies that an already registered desktop job belongs to this checkout
+before requesting it. A different or unreadable job identity requires an explicit
+restart/review. Stop removes the managed job, including its selected renderer,
+and finds normal current-user Xplanet processes plus explicitly configured names
+from the trusted personal `xp.def`. Historical scene argument files never grant
+permission to signal unrelated process names. An unmanaged renderer with another
+arbitrary executable name needs explicit identification rather than automatic
+historical-name discovery.
+
+The optional installation approval frame renders once **to the desktop
+background** and may request Finder automation permission. Declining it leaves
+that approval for later. Installation requires Homebrew's `trust` subcommand;
+if unavailable, update Homebrew through its normal supported procedure rather
+than bypassing trust. No particular historical Homebrew version is inferred.
+
+## Checkout size
+
+The bundled map tree is approximately 610 MiB before Git history, caches and the
+private configurator environment. Allow several gigabytes of disk space; network
+transfer depends on compression and history. A manual `git clone --depth 1`
+reduces downloaded history while retaining the complete current map tree and a
+normal remote upstream. Bootstrap keeps its existing clone behavior. Shallow
+history is less useful for development and historical comparisons.
+
+## Troubleshooting
+
+- Configurator unavailable: run `scripts/xplanet.sh config --prepare` explicitly
+  to prepare its pinned private dependencies; updates never install them silently.
+- Missing or changed selected revision: inspect Selected scene / handoff, reopen
+  the saved scene and explicitly review/select it again. There is no silent fallback.
+- Accepted start without visible wallpaper: inspect the desktop log and macOS
+  Finder automation permission. Acceptance is asynchronous, not proof of a frame.
+- Source problems: run saved `health` first, then explicitly choose `health --live`
+  if provider access should be checked. Retained output is not proof of freshness.
+
+## Disable desktop automation
+
+Run `scripts/xplanet.sh stop` to remove the managed desktop job and stop this
+user's Xplanet processes. This does not remove login/data-refresh LaunchAgents.
+Review their named `local.xplanet.*` files in `~/Library/LaunchAgents` and use
+macOS's normal job-management tools if disabling them. Preserve custom settings,
+saved scenes and data before removing an installation. There is no automatic
+uninstall or permission-reset command.
