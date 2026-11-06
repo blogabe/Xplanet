@@ -591,6 +591,7 @@ def collect_snapshot(fetcher, *, now, timeout=30, max_bytes=16 * 1024 * 1024):
                             current, wind, history, current, forecast, "issued"))
         source_times[product.group] = min(source_times[product.group], current.at)
     advisory_codes = set()
+    final_codes = set()
     advisory_invests = []
     advisory_promotions = {}
     advisory_invest_sources = {}
@@ -610,9 +611,12 @@ def collect_snapshot(fetcher, *, now, timeout=30, max_bytes=16 * 1024 * 1024):
                 if code in advisory_codes:
                     raise FeedError("Storm JTWC advisories repeat a warning code")
                 advisory_codes.add(code)
+            final_codes.update(area.final_codes)
         advisory_invests.extend(advisory.invests)
         advisory_invest_sources.update((invest.id, kind.upper()) for invest in advisory.invests)
-    if advisory_codes != warning_codes:
+    # Active advisories still require warning products. Explicit final warnings
+    # may remain in a bulletin after RSS retires them, or briefly remain listed.
+    if (advisory_codes - final_codes) - warning_codes or warning_codes - advisory_codes:
         raise FeedError("Storm JTWC warnings disagree with significant advisories")
     for identity, (alert, code) in formation_alerts.items():
         matching = [invest for invest in advisory_invests if invest.id == identity]

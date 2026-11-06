@@ -66,6 +66,7 @@ class AdvisoryArea:
     warned_codes: tuple[str, ...]
     invests: tuple[Storm, ...]
     promotions: tuple[tuple[str, str], ...] = ()  # Invest code -> numbered warning code.
+    final_codes: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -215,6 +216,32 @@ def _section_parts(body):
             body[matches[2].end():])
 
 
+def _final_warning_codes(cyclone, text):
+    """Only explicitly cross-referenced final warnings may outlive RSS listing."""
+    header = ' '.join(text.split('RMKS/', 1)[0].split())
+    declarations = re.findall(
+        r'\bREFS? ([A-Z](?: AND [A-Z])*) (?:IS A|ARE) TROPICAL CYCLONE (?:FINAL )?WARNINGS?\.',
+        header)
+    declared = [ref for declaration in declarations for ref in declaration.split(' AND ')]
+    reference_pattern = r'\bSEE REF ([A-Z]) \([A-Z0-9 ]+\) FOR THE FINAL WARNING ON THIS SYSTEM\.'
+    all_references = re.findall(reference_pattern, ' '.join(text.split()))
+    blocks = list(BLOCK.finditer(cyclone))
+    final = []
+    for index, block in enumerate(blocks):
+        end = blocks[index + 1].start() if index + 1 < len(blocks) else len(cyclone)
+        paragraph = ' '.join(cyclone[block.end():end].split())
+        refs = re.findall(reference_pattern, paragraph)
+        if not refs:
+            continue
+        codes = WARNED.findall(paragraph)
+        if (len(refs) != 1 or len(codes) != 1 or declared.count(refs[0]) != 1
+                or len(re.findall(r'(?m)^REF/' + refs[0] + r'/MSG/', text)) != 1
+                or all_references.count(refs[0]) != 1):
+            raise FeedError('Storm JTWC final warning reference is ambiguous')
+        final.append(codes[0])
+    return tuple(final)
+
+
 def parse_advisory(raw, kind):
     if kind not in AREAS:
         raise FeedError("Storm JTWC advisory region is unsupported")
@@ -258,6 +285,7 @@ def parse_advisory(raw, kind):
         for code in warned_codes:
             if code[-1] not in letters:
                 raise FeedError("Storm JTWC warning code disagrees with basin")
+        final_codes = _final_warning_codes(cyclone, text)
         disturbance = disturbance.strip()
         invests = []
         promoted_warnings = set()
@@ -299,5 +327,5 @@ def parse_advisory(raw, kind):
         if len({storm.id for storm in invests}) != len(invests):
             raise FeedError("Storm JTWC advisory repeats an invest")
         result.append(AdvisoryArea(area_name, group, cyclone_none, warned_codes,
-                                   tuple(invests), tuple(promotions)))
+                                   tuple(invests), tuple(promotions), final_codes))
     return Advisory(issue_at, valid_until_at, tuple(result), issued_at, reissued)
