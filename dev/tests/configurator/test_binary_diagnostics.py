@@ -108,3 +108,43 @@ class BinaryDiagnosticTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(diagnostic.main(),2)
         self.assertNotIn('\x1b',output.getvalue()+errors.getvalue());self.assertNotIn('\x07',output.getvalue()+errors.getvalue())
         text='\n'.join(poisoned.sections());self.assertNotIn('\x1b',text);self.assertNotIn('\x07',text)
+
+
+class DiagnosticPresentationTests(unittest.TestCase):
+    def test_tabs_are_readable_but_other_terminal_controls_stay_escaped(self):
+        from configurator.resources import safe
+        self.assertEqual(safe('\tPNG\n\tMac OS X'), '    PNG\n    Mac OS X')
+        self.assertEqual(safe('bad\x1b[31m\r\x00'), r'bad\x1b[31m\r\x00')
+
+    def test_file_identity_is_labeled_without_changing_precise_evidence(self):
+        from configurator.resources import Capabilities
+        stamp = (7, 42, 1048576, 1_000_000_001, 2_000_000_002)
+        report = Capabilities(Path('/example/xplanet'), stamp, 'reported', ('PNG',), '\tPNG', 4, 'now')
+        text = '\n'.join(report.sections())
+        for value in ('Device: 7; inode: 42', '1,048,576 bytes (1.00 MiB)',
+                      '1970-01-01 00:00:01.000000001 UTC', '1970-01-01 00:00:02.000000002 UTC'):
+            self.assertIn(value, text)
+        self.assertEqual(report.binary_identity, stamp)
+        self.assertEqual(report.raw, '\tPNG')
+
+    def test_unreasonable_cached_identity_does_not_crash_presentation(self):
+        from configurator.resources import identity_summary
+        for stamp in ((7, 42, 1 << 2000, 0, 0), (7, 42, -1, 0, 0)):
+            self.assertEqual(identity_summary(stamp), 'Recorded file identity: unavailable')
+
+
+class StockRendererMetadataTests(unittest.TestCase):
+    def test_stock_renderer_is_explicit_placeholder_and_old_metadata_still_opens(self):
+        from configurator.model import parse_saved_view
+        scenes = ROOT/'scripts/configurator/samples/scenes'
+        for definition in scenes.glob('*.def'):
+            with self.subTest(scene=definition.stem):
+                self.assertIn(b'XPLANET_BIN=/path/to/xplanet\n', definition.read_bytes())
+                self.assertIn(b'XPLANET_HOME="$project_root"\n', definition.read_bytes())
+        source=scenes/'earth-september.def'
+        body=source.with_suffix('.conf').read_bytes()
+        current=parse_saved_view(source.read_bytes(), body)
+        previous=parse_saved_view(source.read_bytes().replace(b'/path/to/xplanet', b'/usr/bin/xplanet'),body)
+        self.assertEqual(current.view, previous.view)
+        self.assertEqual(current.saved_renderer, '/path/to/xplanet')
+        self.assertEqual(previous.saved_renderer, '/usr/bin/xplanet')

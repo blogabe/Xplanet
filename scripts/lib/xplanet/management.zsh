@@ -110,6 +110,25 @@ management_prerequisites() {
     management_set_result success "Setup completed; desktop start skipped."
 }
 
+# Dependency downloads require a separate decision, even after an update.
+management_configurator() {
+    configure_xplanet
+    local result=$?
+    [[ "$configuration_result" == unavailable ]] || return "$result"
+    if [[ -e "$project_root/.state/configurator/venv" || -L "$project_root/.state/configurator/venv" ]]; then
+        print -- "The existing private environment is not ready. Follow config --guide to rebuild it; preserve recovery drafts."
+        return "$result"
+    fi
+    print -- "The configurator needs a private Textual environment for this checkout."
+    print -- "Preparation downloads pinned packages from PyPI; it does not change desktop setup or the selected Python."
+    if ! management_confirm "Prepare the configurator now?"; then
+        configuration_result=cancelled
+        return 3
+    fi
+    configure_xplanet --prepare || return $?
+    configure_xplanet
+}
+
 management_update_available() {
     local branch upstream
     branch=$(git -C "$project_root" symbolic-ref --quiet HEAD 2>/dev/null) &&
@@ -173,7 +192,7 @@ manage_xplanet() {
                # Textual owns its own alternate screen; do not nest it inside
                # management's screen and accidentally clear normal shell history.
                management_screen_close
-               configure_xplanet
+               management_configurator
                result=$?
                management_screen_open
                case "$configuration_result" in
@@ -183,7 +202,7 @@ manage_xplanet() {
                    interrupted) management_set_result cancelled "Configurator interrupted; completed saves/selections remain. Desktop not restarted." ;;
                    cancelled) management_set_result cancelled "Configurator cancelled; desktop settings unchanged." ;;
                    unavailable) management_details=true
-                       management_set_result unavailable "Configurator unavailable; run scripts/xplanet.sh config --prepare." ;;
+                       management_set_result unavailable "Configurator unavailable; see scripts/xplanet.sh config --guide for preparation or rebuilding." ;;
                    *) management_details=true
                        management_set_result error "Configurator exited $result." ;;
                esac ;;
@@ -211,7 +230,11 @@ manage_xplanet() {
                         "$script_dir/xplanet.sh" "$command"
                         result=$?
                         if (( result == 0 )); then
-                            management_set_result success "${(C)command} completed."
+                            if [[ "$command" == start || "$command" == restart ]]; then
+                                management_set_result success "${(C)command} request accepted; rendering runs asynchronously."
+                            else
+                                management_set_result success "${(C)command} completed."
+                            fi
                         else
                             management_details=true
                             management_set_result error "${(C)command} exited $result."

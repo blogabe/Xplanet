@@ -1,5 +1,5 @@
 # Xplanet configurator scene v15; saving does not apply it.
-XPLANET_BIN=/usr/bin/xplanet
+XPLANET_BIN=/path/to/xplanet
 XPLANET_HOME="$project_root"
 XPLANET_CONFIG="$project_root/config"
 XPLANET_SCENE_MODE=space

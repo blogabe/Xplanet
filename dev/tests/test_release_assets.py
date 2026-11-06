@@ -1,46 +1,29 @@
-"""Offline checks for the candidate asset boundary and byte copying."""
-
-import importlib.util
-from pathlib import Path
-import tempfile
+"""Check bundled assets directly against the Git index without exporting files."""
+import subprocess
 import unittest
-from unittest.mock import patch
-
 from .support import PROJECT
-
-
-SPEC = importlib.util.spec_from_file_location(
-    "build_candidate", PROJECT / "dev/release/build_candidate.py")
-release = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(release)
-
+from . import release_policy
 
 class ReleaseAssetsTests(unittest.TestCase):
-    def test_regular_bytes_export_without_following_links_or_private_clutter(self):
-        with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
-            assets = root / "assets/maps"
-            assets.mkdir(parents=True)
-            original = assets / "earth.png"
-            original.write_bytes(b"\x89PNG\r\nexample asset bytes")
-            (assets / "earth.zip").write_bytes(b"unconverted archive")
-            (assets / ".DS_Store").write_bytes(b"clutter")
-            (assets / "secret.ini").write_bytes(b"private config")
-            outside = root / "external.png"
-            outside.write_bytes(b"external")
-            (assets / "linked.png").symlink_to(outside)
-            (assets / "linked-dir").symlink_to(root, target_is_directory=True)
-            with patch.object(release, "ROOT", root):
-                included, excluded = release.asset_inventory(root / "assets")
-                self.assertEqual([p.name for p in included], ["earth.png", "earth.zip"])
-                self.assertEqual(set(excluded), {
-                    "assets/maps/.DS_Store", "assets/maps/secret.ini",
-                    "assets/maps/linked.png", "assets/maps/linked-dir"})
-                record = release.copy_asset(original, root / "candidate/assets/maps/earth.png")
-                self.assertEqual(record["bytes"], original.stat().st_size)
-                self.assertEqual((root / "candidate/assets/maps/earth.png").read_bytes(),
-                                 original.read_bytes())
-
-
-if __name__ == "__main__":
-    unittest.main()
+    def test_tracked_assets_are_regular_and_match_index_bytes_and_modes(self):
+        if not (PROJECT / "assets").exists():
+            self.skipTest("asset bundle absent from source-only checkout")
+        raw = subprocess.check_output(["git", "ls-files", "--stage", "-z", "--", "assets/"], cwd=PROJECT)
+        count = 0
+        for row in raw.split(b"\0"):
+            if not row:
+                continue
+            metadata, name = row.split(b"\t", 1)
+            mode, identity, stage = metadata.decode().split()
+            name = name.decode()
+            with self.subTest(asset=name):
+                release_policy.check_source_paths({name: metadata.decode()})
+                path = PROJECT / name
+                self.assertFalse(path.is_symlink())
+                self.assertTrue(path.is_file())
+                self.assertEqual(stage, "0")
+                actual = subprocess.check_output(["git", "hash-object", "--no-filters", "--", name], cwd=PROJECT).strip().decode()
+                self.assertEqual(actual, identity, "asset bytes differ from index")
+                self.assertEqual(bool(path.stat().st_mode & 0o111), mode == "100755")
+                count += 1
+        self.assertGreater(count, 0, "complete asset directory has no tracked assets")

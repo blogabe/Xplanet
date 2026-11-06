@@ -30,6 +30,10 @@ TotalMarker configuration and registered jobs are not required for exploration.
 ./scripts/xplanet.sh config --renderer /absolute/path/to/xplanet
 ```
 
+Choosing **Configurator** in management offers preparation if its private environment
+is absent, after an explicit confirmation. Updates and desktop setup do not
+automatically download UI dependencies.
+
 Preparation downloads pinned dependencies into the project's private UI venv.
 It does not install packages globally or change Homebrew/uv selection. If the
 runtime needs rebuilding, preserve `.state/configurator/drafts`; move only the
@@ -40,6 +44,10 @@ old `venv` aside before explicit preparation. See [Python/runtime details](refer
 For a first experiment, choose **Stock scenes…**, filter a name such as
 `moon-from-earth` or `saturn-rings`, inspect its summary and **Open selected**.
 Stock files are starting points; your changes save under a new user-scene name.
+Their `.def` files use illustrative `/path/to/xplanet` executable and `/xplanet`
+asset-root metadata, not installation instructions. Opening a scene retains your
+current renderer choice; saving a new copy records that validated executable.
+`XPLANET_HOME` refers to the project root, not the executable.
 **Scene library…** browses your own matching `.conf`/`.def` pairs in `config/scenes`.
 
 You can also open a shipped scene directly:

@@ -1305,7 +1305,7 @@ class StockSceneTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             for path in paths:
                 doc=open_view(path);self.assertEqual(doc.view.target,{'moon-from-earth':'moon','jupiter-cloudtops':'jupiter','saturn-rings':'saturn','europa-from-jupiter':'europa','mars-from-phobos':'mars','saturn-from-titan':'saturn','pluto-from-charon':'pluto','jupiter-inner-enlarged':'jupiter','saturn-inner-enlarged':'saturn','pluto-charon-system':'pluto','jupiter-orbit-guides':'jupiter','saturn-orbit-guides':'saturn','pluto-charon-guides':'pluto','jupiter-europa-enlarged':'jupiter','saturn-titan-enlarged':'saturn','mars-from-deimos':'mars','jupiter-from-io':'jupiter','jupiter-from-europa':'jupiter','saturn-from-iapetus':'saturn','uranus-from-miranda':'uranus'}.get(path.stem,'earth'));self.assertFalse(doc.view.capture_id)
-                self.assertEqual(doc.saved_renderer,'/usr/bin/xplanet')
+                self.assertEqual(doc.saved_renderer,'/path/to/xplanet')
                 target=save_named(Path(temp).resolve()/(path.stem+'-copy.conf'),doc.view,sys.executable,config_bytes=doc.config)
                 self.assertEqual(open_view(target).view,doc.view)
                 self.assertEqual(open_view(target).saved_renderer,str(Path(sys.executable).resolve()))
