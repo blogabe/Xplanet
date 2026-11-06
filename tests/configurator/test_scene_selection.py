@@ -1,7 +1,7 @@
 """Immutable reviewed scene references; no desktop/service/provider execution."""
 from pathlib import Path
 import sys,unittest
-from tests.configurator import test_scene_handoff as fixtures
+from tests.configurator import support_handoff as fixtures
 from configurator.handoff import stage_plan,create_plan
 from configurator.library import save_named
 from configurator.model import View
@@ -9,26 +9,13 @@ from configurator.selection import (SELECTOR,REVISIONS,ARGS,CHECKS,MANIFEST,Sele
     inspect_selection,apply_bundle,select_revision,restore_selection,read_revision,UncertainSelection)
 
 
-class SceneSelectionTests(unittest.TestCase):
-    setUp_fixture=fixtures.HandoffTests.setUp
-    plan=fixtures.HandoffTests.plan
+from tests.configurator.support_selection import SceneSelectionFixture
 
-    def setUp(self):
-        self.setUp_fixture();stage_plan(self.plan(),self.target)
-        self.baseline={p:p.read_bytes() for p in (self.scene,self.scene.with_suffix('.def'),self.asset,self.root/'config/xp.def',self.root/'config/xp.conf')}
-        self.guard=self.root/'producer-state';self.guard.write_bytes(b'pending producer intent; do not rewind')
+class SceneSelectionTests(SceneSelectionFixture, unittest.TestCase):
 
-    def preserved(self):
-        for path,raw in self.baseline.items():self.assertEqual(path.read_bytes(),raw)
-        self.assertEqual(self.guard.read_bytes(),b'pending producer intent; do not rewind')
-        self.assertFalse((self.root/'forbidden').exists())
 
-    def apply(self):return apply_bundle(self.root,self.target,inspect_selection(self.root))
 
-    def next_bundle(self):
-        source=save_named(self.root/'config/scenes/second.conf',View(),sys.executable)
-        bundle=self.root/'second review';stage_plan(create_plan(self.root,source,sys.executable,'1920x1080'),bundle)
-        return bundle
+
 
     def test_apply_freezes_native_revision_and_changes_only_selector_then_guarded_restore(self):
         self.assertEqual(inspect_selection(self.root),Selection());receipt=self.apply()

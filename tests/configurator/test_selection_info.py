@@ -2,17 +2,17 @@
 from pathlib import Path
 import unittest
 from unittest.mock import patch
-from tests.configurator import test_scene_selection as fixtures
+from tests.configurator import support_selection as fixtures
 from configurator.selection_info import inspect_selected
 from configurator.selection import inspect_selection,SELECTOR,REVISIONS
 
 
 class SelectedInfoTests(unittest.TestCase):
-    setUp=fixtures.SceneSelectionTests.setUp
-    setUp_fixture=fixtures.SceneSelectionTests.setUp_fixture
-    plan=fixtures.SceneSelectionTests.plan
-    apply=fixtures.SceneSelectionTests.apply
-    preserved=fixtures.SceneSelectionTests.preserved
+    setUp=fixtures.SceneSelectionFixture.setUp
+    setUp_fixture=fixtures.SceneSelectionFixture.setUp_fixture
+    plan=fixtures.SceneSelectionFixture.plan
+    apply=fixtures.SceneSelectionFixture.apply
+    preserved=fixtures.SceneSelectionFixture.preserved
 
     def test_legacy_inspection_does_not_read_or_execute_personal_definitions(self):
         from configurator import selection_info

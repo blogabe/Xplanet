@@ -240,11 +240,13 @@ sys.exit(4)
     def test_dirty_tracked_worktree_refuses_before_fetch(self):
         self.publish("new.txt", "upstream\n")
         old_head = self.git(self.root, "rev-parse", "HEAD")
+        old_upstream = self.git(self.root, "rev-parse", "@{upstream}")
         (self.root / "tracked.txt").write_text("my edits\n")
         result = self.update()
         self.assertEqual(result.returncode, 2)
         self.assertIn("local tracked changes", result.stderr)
         self.assertEqual(self.git(self.root, "rev-parse", "HEAD"), old_head)
+        self.assertEqual(self.git(self.root, "rev-parse", "@{upstream}"), old_upstream)
         self.assertEqual((self.root / "tracked.txt").read_text(), "my edits\n")
 
     def test_untracked_and_ignored_collisions_are_preserved(self):
@@ -386,7 +388,7 @@ sys.exit(4)
     def test_formula_change_restart_stops_all_current_user_instances(self):
         self.change_formula()
         self.running.write_text(json.dumps(["101", "202"]))
-        result = self.update(TM_DESKTOP_PIDS='["101"]')
+        result = self.update()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.events.read_text().splitlines(),
                          ["reinstall", "TERM 101", "TERM 202", "start"])
@@ -396,7 +398,7 @@ sys.exit(4)
     def test_formula_rebuild_with_current_user_renderer_restarts(self):
         self.change_formula()
         self.running.write_text(json.dumps(["202"]))
-        result = self.update(TM_DESKTOP_PIDS='[]')
+        result = self.update()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.events.read_text().splitlines(), ["reinstall", "TERM 202", "start"])
         self.assertEqual(json.loads(self.running.read_text()), [])

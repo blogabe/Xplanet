@@ -4,6 +4,7 @@ from pathlib import Path
 import stat
 
 from .fileio import OwnedFiles,same_directory
+from .owned_io import checkpoint
 from .model import scene_prefix
 from .workspace import configuration_issues,renderer_path,require_valid
 
@@ -14,6 +15,7 @@ def entries(fd):
     with os.scandir(fd) as listing:
         rows=[]
         for row in listing:
+            checkpoint()
             rows.append(row.name)
             if len(rows)>MAX_ENTRIES:raise ValueError(f'Scene library exceeds {MAX_ENTRIES} entries; choose a smaller library.')
         return rows
@@ -76,6 +78,7 @@ def list_scenes(library):
     try:
         names=set(entries(fd));result=[]
         for name in sorted(names,key=str.casefold):
+            checkpoint()
             if not name.endswith('.conf'):continue
             try:scene_prefix(Path(name).stem+'.')
             except ValueError:continue

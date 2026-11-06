@@ -1,18 +1,18 @@
 """Native literal scene launch construction only; no host jobs/process control."""
 from pathlib import Path
 import os,shutil,subprocess,sys,unittest
-from tests.configurator import test_scene_selection as fixtures
+from tests.configurator import support_selection as fixtures
 from configurator.model import ROOT
 from configurator.selection import REVISIONS,ARGS,SELECTOR,apply_bundle,inspect_selection
 
 
 @unittest.skipUnless(sys.platform == 'darwin', 'Scene runtime contracts require macOS stat and plutil')
 class SceneDesktopTests(unittest.TestCase):
-    setUp_fixture=fixtures.SceneSelectionTests.setUp_fixture
-    plan=fixtures.SceneSelectionTests.plan
-    setUp=fixtures.SceneSelectionTests.setUp
-    apply=fixtures.SceneSelectionTests.apply
-    next_bundle=fixtures.SceneSelectionTests.next_bundle
+    setUp_fixture=fixtures.SceneSelectionFixture.setUp_fixture
+    plan=fixtures.SceneSelectionFixture.plan
+    setUp=fixtures.SceneSelectionFixture.setUp
+    apply=fixtures.SceneSelectionFixture.apply
+    next_bundle=fixtures.SceneSelectionFixture.next_bundle
 
     def shell(self,code):
         scripts=self.root/'scripts';scripts.mkdir(exist_ok=True)

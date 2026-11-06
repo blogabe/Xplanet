@@ -77,7 +77,7 @@ def image_response(comment=None, **headers):
     return Response(200, {"Content-Type": "image/jpeg", **headers}, jpeg(comment))
 
 
-class Sandbox(unittest.TestCase):
+class SandboxFixture:
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
@@ -95,6 +95,19 @@ class Sandbox(unittest.TestCase):
     def read_state(self, settings):
         import json
         return json.loads(self.fs.read(settings.state))
+
+
+def prepare_fixture(owner, fixture_class):
+    """Build a plain fixture whose resources belong to the calling test."""
+    fixture=fixture_class()
+    fixture.addCleanup=owner.addCleanup
+    fixture.setUp()
+    return fixture
+
+
+class Sandbox(SandboxFixture, unittest.TestCase):
+    pass
+
 
 def stub_desktop_launchctl(scripts, binaries):
     """A fixture launchd owns only fixture processes; never invokes host launchctl."""

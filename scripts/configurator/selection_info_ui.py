@@ -1,9 +1,11 @@
 """On-demand selected-scene clarity; no automatic import or lifecycle operation."""
+import asyncio
 from textual.containers import Horizontal,VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Button,Static
 from .selection_info import inspect_selected
 from .resources import safe
+from .fileio import native_error
 
 
 class SelectedSceneScreen(ModalScreen):
@@ -15,7 +17,7 @@ class SelectedSceneScreen(ModalScreen):
     '''
     BINDINGS=[('escape','back','Back')]
 
-    def __init__(self,root,dirty=False):super().__init__();self.root=root;self.dirty=dirty;self.info=None
+    def __init__(self,root,dirty=False):super().__init__();self.root=root;self.dirty=dirty;self.info=None;self.busy=False;self.closing=False
 
     def compose(self):
         with VerticalScroll():
@@ -31,25 +33,45 @@ class SelectedSceneScreen(ModalScreen):
     def on_mount(self):self.refresh_info()
 
     def refresh_info(self):
-        self.info=None;self.query_one('#selected-scene-open',Button).disabled=True
+        if not self.busy:
+            self.busy=True;self.run_worker(self.inspect_info())
+
+    async def inspect_info(self,opening=False):
+        self.busy=True
+        self.query_one('#selected-scene-open',Button).disabled=True
+        self.query_one('#selected-scene-refresh',Button).disabled=True
         try:
-            info=inspect_selected(self.root);self.info=info
-            self.query_one('#selected-scene-info',Static).update('\n\n'.join(safe(part) for part in info.sections()))
-            self.query_one('#selected-scene-open',Button).disabled=info.native_path is None
+            info=await self.app.workspace.file_operation(inspect_selected,self.root)
+            if self.closing:return
+            if opening:
+                if self.info is None or info.selection!=self.info.selection or info.record!=self.info.record:raise ValueError('Selection changed; refresh before opening.')
+                await self.app.exit_decision.wait()
+                if not self.app.leaving:self.dismiss(str(info.native_path))
+            else:
+                self.info=info
+                self.query_one('#selected-scene-info',Static).update('\n\n'.join(safe(part) for part in info.sections()))
+                self.query_one('#selected-scene-open',Button).disabled=info.native_path is None
+        except asyncio.CancelledError:
+            if not self.closing:self.query_one('#selected-scene-info',Static).update('Inspection cancelled. Refresh to inspect current state; files and draft unchanged.')
         except (OSError,ValueError) as exc:
-            self.query_one('#selected-scene-info',Static).update('Selection unavailable or invalid: '+safe(exc)+'\nNo custom configuration fallback was assumed; files and draft remain unchanged.')
+            self.info=None
+            self.query_one('#selected-scene-info',Static).update(('Cannot open this reviewed snapshot: ' if opening else 'Selection unavailable or invalid: ')+safe(native_error(exc))+'\nNo custom configuration fallback was assumed; files and draft remain unchanged.')
+        finally:
+            self.busy=False
+            if self.is_mounted:self.query_one('#selected-scene-refresh',Button).disabled=False
 
     def on_button_pressed(self,event):
         event.stop()
         if event.button.id=='selected-scene-back':self.action_back()
         elif event.button.id=='selected-scene-refresh':self.refresh_info()
-        elif event.button.id=='selected-scene-open' and self.info and self.info.native_path:
-            try:
-                fresh=inspect_selected(self.root)
-                if fresh.selection!=self.info.selection or fresh.record!=self.info.record:raise ValueError('Selection changed; refresh before opening.')
-                self.dismiss(str(fresh.native_path))
-            except (OSError,ValueError) as exc:
-                self.query_one('#selected-scene-info',Static).update('Cannot open this reviewed snapshot: '+safe(exc)+'\nRefresh to inspect current state. Draft unchanged.')
-                self.query_one('#selected-scene-open',Button).disabled=True
+        elif event.button.id=='selected-scene-open' and self.info and self.info.native_path and not self.busy:
+            self.busy=True;self.run_worker(self.inspect_info(opening=True))
 
-    def action_back(self):self.dismiss(None)
+    def action_back(self):
+        if self.closing:return
+        self.closing=True
+        self.run_worker(self.close_inspection())
+
+    async def close_inspection(self):
+        await self.app.workspace.stop()
+        self.dismiss(None)

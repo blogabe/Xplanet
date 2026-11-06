@@ -1,7 +1,8 @@
 """Headless interaction tests run in the separately prepared Textual environment."""
+from tests.configurator.ui.support_native import NativeValueUIFixture
+from tests.configurator.ui.terminal_support import open_terminal
 import asyncio
 import os
-import pty
 import select
 import subprocess
 import termios
@@ -662,7 +663,7 @@ class FrozenCloudAppTests(unittest.IsolatedAsyncioTestCase):
 
 class NamedLibraryAppTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
-        await AppTests.asyncSetUp(self)
+        await setup_editor(self)
         self.app.copy_destination=ConfiguratorApp.copy_destination.__get__(self.app,ConfiguratorApp)
 
     async def test_browsing_empty_library_is_read_only_and_default_save_is_named(self):
@@ -888,14 +889,9 @@ class NativeInspectionAppTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(before,{p.name:p.read_bytes() for p in (self.root/'original-copy').iterdir()})
 
 
-class NativeValueAppTests(unittest.IsolatedAsyncioTestCase):
-    asyncSetUp=setup_editor
+class NativeValueAppTests(NativeValueUIFixture, unittest.IsolatedAsyncioTestCase):
 
-    def source(self):
-        path=self.root/'native.conf';path.write_bytes(b'# preserve\r\n[earth]\r\nmap=custom.png\r\nmarker_file=one\r\nmarker_file=two\r\n  twilight=6 # comment\r\n[jupiter]\r\nshade=20\r\n')
-        (self.root/'native.def').write_text('touch must-not-run\n');return path
 
-    enter=enter_native
 
     async def test_unchanged_confirmed_copy_preserves_source_bytes_and_main_draft(self):
         source=self.source();before=source.read_bytes()
@@ -1163,8 +1159,8 @@ class MoonOverrideAppTests(unittest.IsolatedAsyncioTestCase):
 
 class NativeGridAppTests(unittest.IsolatedAsyncioTestCase):
     asyncSetUp=setup_editor
-    source=NativeValueAppTests.source
-    enter=NativeValueAppTests.enter
+    source=NativeValueUIFixture.source
+    enter=NativeValueUIFixture.enter
 
     async def test_grid_controls_review_and_copy_without_enabling_or_rewriting_source(self):
         source=self.source();raw=source.read_bytes().replace(b'[jupiter]',b'grid=true\r\ngrid1=3\r\ngrid2=30\r\n[jupiter]');source.write_bytes(raw)
@@ -1188,8 +1184,7 @@ class TerminalTests(unittest.TestCase):
         save_view(source, View(20, -45), sys.executable)
         original = {p.name:p.read_bytes() for p in source.iterdir()}
         for key in (b'\x1b', b'\x03', b'\x04'):
-            master, slave = pty.openpty()
-            before = termios.tcgetattr(slave)
+            master, slave, before = open_terminal()
             env = {**os.environ, 'TERM': 'xterm-256color',
                    'PYTHONPATH': str(Path(module_file).parent.parent),
                    'PYTHONDONTWRITEBYTECODE': '1'}
@@ -1226,8 +1221,7 @@ class TerminalTests(unittest.TestCase):
         marker = self.root / 'must-not-execute'
         (source / 'xp.def').write_text('touch ' + str(marker) + '\n')
         (source / 'xp.conf').write_text('[earth]\n')
-        master, slave = pty.openpty()
-        before = termios.tcgetattr(slave)
+        master, slave, before = open_terminal()
         env = {**os.environ, 'TERM':'xterm-256color',
                'PYTHONPATH':str(Path(module_file).parent.parent), 'PYTHONDONTWRITEBYTECODE':'1'}
         try:
@@ -1273,7 +1267,7 @@ try: result=app.run()
 finally: app.workspace.close()
 raise SystemExit(3 if result==('cancelled',None) else 1)
 """)
-        master,slave=pty.openpty();before=termios.tcgetattr(slave)
+        master,slave,before=open_terminal()
         env={**os.environ,'TERM':'xterm-256color','PYTHONPATH':str(Path(module_file).parent.parent),'PYTHONDONTWRITEBYTECODE':'1'}
         process=subprocess.Popen([sys.executable,'-B',str(probe),str(self.root)],stdin=slave,stdout=slave,stderr=slave,env=env)
         output=b''
@@ -1306,7 +1300,7 @@ raise SystemExit(3 if result==('cancelled',None) else 1)
         saved=save_view(self.root/'captured-scene',View(clouds='captured',capture_id=frozen.identity),sys.executable,capture=frozen)
         source.rename(self.root/'producer-offline')
         original={p.name:p.read_bytes() for p in saved.iterdir()}
-        master,slave=pty.openpty();before=termios.tcgetattr(slave)
+        master,slave,before=open_terminal()
         env={**os.environ,'TERM':'xterm-256color','PYTHONPATH':str(Path(module_file).parent.parent),'PYTHONDONTWRITEBYTECODE':'1'}
         process=subprocess.Popen([sys.executable,'-B','-m','configurator','--root',str(self.root),'--view',str(saved)],stdin=slave,stdout=slave,stderr=slave,env=env)
         output=b''

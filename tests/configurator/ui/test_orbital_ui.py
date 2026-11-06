@@ -4,12 +4,12 @@ from textual.widgets import Button,Input,Select,Static
 from configurator.model import ROOT
 from configurator.workspace import open_view
 from tests.configurator.ui import fixtures
-from tests.configurator.ui import test_resources_ui as resource_fixtures
+from tests.configurator.ui import support_resources as resource_fixtures
 click=fixtures.click
 
 class OrbitalUITests(unittest.IsolatedAsyncioTestCase):
     asyncSetUp=fixtures.setup_editor
-    renderer=resource_fixtures.ResourceUITests.renderer
+    renderer=resource_fixtures.ResourceUIFixture.renderer
 
     async def test_stock_camera_conflicts_mode_retention_undo_and_safe_save_reopen(self):
         source=ROOT/'scripts/configurator/samples/scenes/earthrise-lunar-orbit.conf'

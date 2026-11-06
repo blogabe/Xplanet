@@ -1,4 +1,5 @@
 """Portable configurator contracts without Textual or real desktop processes."""
+from tests.support import prepare_fixture
 from configurator.resources import identity
 import asyncio
 import os
@@ -182,16 +183,32 @@ class PreviewTests(unittest.IsolatedAsyncioTestCase):
 @unittest.skipUnless(Path('/bin/zsh').exists(), 'zsh command boundary')
 class LauncherTests(unittest.TestCase):
     def test_help_and_noninteractive_config_need_no_dependencies_or_setup(self):
-        root = ROOT
-        for arguments, status in ((['config', '--help'], 0), (['config','--guide'],0), (['config'], 2)):
-            done = subprocess.run([str(root / 'scripts/xplanet.sh'), *arguments],
-                                  capture_output=True, text=True)
-            self.assertEqual(done.returncode, status, done.stderr)
-        self.assertIn('interactive terminal', done.stderr)
+        from tests.support import copy_launcher
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            scripts = root / 'scripts'
+            scripts.mkdir()
+            copy_launcher(scripts / 'xplanet.sh')
+            shutil.copy2(ROOT / 'scripts/run-configurator', scripts / 'run-configurator')
+            guide = root / 'docs/configurator/user-guide.md'
+            guide.parent.mkdir(parents=True)
+            shutil.copy2(ROOT / 'docs/configurator/user-guide.md', guide)
+            unexpected = root / 'unexpected-runtime'
+            runner = scripts / 'run-totalmarker'
+            runner.write_text('#!/bin/sh\ntouch '+shlex.quote(str(unexpected))+'\nexit 91\n')
+            runner.chmod(0o700)
+            environment = {'PATH': '/usr/bin:/bin', 'HOME': str(root),
+                           'PYTHONDONTWRITEBYTECODE': '1'}
+            for arguments, status in ((['config', '--help'], 0), (['config','--guide'],0), (['config'], 2)):
+                with self.subTest(arguments=arguments):
+                    done = subprocess.run([str(scripts / 'xplanet.sh'), *arguments],
+                                          cwd=root, env=environment,
+                                          capture_output=True, text=True)
+                    self.assertEqual(done.returncode, status, done.stderr)
+                    self.assertFalse(unexpected.exists(), 'help/non-TTY entry must not invoke a runtime')
+            self.assertIn('interactive terminal', done.stderr)
 
     def test_configurator_helper_propagates_result_without_parsing_output(self):
-        if not shutil.which('zsh'):
-            self.skipTest('zsh launcher integration requires zsh')
         root = ROOT
         with tempfile.TemporaryDirectory() as directory:
             script = Path(directory) / 'run-configurator'
@@ -200,14 +217,14 @@ class LauncherTests(unittest.TestCase):
                 command = ('script_dir=' + shlex.quote(directory) + '; source ' +
                            shlex.quote(str(root / 'scripts/lib/xplanet/configurator.zsh')) +
                            '; configure_xplanet; print -r -- "$?:$configuration_result"')
-                done = subprocess.run(['zsh', '-c', command], capture_output=True, text=True)
+                done = subprocess.run(['/bin/zsh', '-c', command], capture_output=True, text=True)
                 self.assertEqual(done.stdout.strip(), f'{status}:{expected}')
             script.write_text('#!/bin/sh\nexit 0\n')
             for option, expected in (('--prepare', 'prepared'), ('--help', 'info'), ('--guide','info')):
                 command = ('script_dir=' + shlex.quote(directory) + '; source ' +
                            shlex.quote(str(root / 'scripts/lib/xplanet/configurator.zsh')) +
                            '; configure_xplanet ' + option + '; print -r -- "$configuration_result"')
-                done = subprocess.run(['zsh', '-c', command], capture_output=True, text=True)
+                done = subprocess.run(['/bin/zsh', '-c', command], capture_output=True, text=True)
                 self.assertEqual(done.stdout.strip(), expected)
 
 
@@ -869,30 +886,11 @@ class EarthLayerTests(unittest.TestCase):
         self.assertEqual(parse_saved_view(inactive.definition('/trusted/xplanet').encode(),inactive.body()).view,inactive)
 
 
-class CloudCaptureTests(unittest.TestCase):
-    def setUp(self):
-        import hashlib,json
-        from configurator.model import ROOT
-        self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup)
-        self.root=Path(self.tmp.name).resolve()
-        for name in ('config','images','.state/totalmarker'):(self.root/name).mkdir(parents=True)
-        config=(ROOT/'config/totalmarker.example.toml').read_text().replace('resolution = 4096','resolution = 2048').replace('auth_mode = "none"','auth_mode = "basic"').replace('username = ""','username = "PrivateUser"').replace('password = ""','password = "PrivatePassword"')
-        (self.root/'config/totalmarker.toml').write_text(config)
-        self.image=(ROOT/'maps/clouds/clouds_26Aug2011_2048.jpeg').read_bytes()
-        self.image_path=self.root/'images/clouds-2048.jpg';self.image_path.write_bytes(self.image)
-        self.state_path=self.root/'.state/totalmarker/state.json'
-        self.record={'image_sha256':hashlib.sha256(self.image).hexdigest(),'source_image_sha256':hashlib.sha256(self.image).hexdigest(),
-                     'checked_at':1700000030,'successful_at':1700000020,'installed_at':1700000000,'last_outcome':'failed',
-                     'last_error':{'at':1700000030,'message':'Private error details'}}
-        self.save_state()
+from tests.configurator.support_cloud import CloudCaptureFixture
 
-    def save_state(self):
-        import json
-        self.state_path.write_text(json.dumps({'schema':1,'products':{'clouds':self.record}}))
+class CloudCaptureTests(CloudCaptureFixture, unittest.TestCase):
 
-    def capture(self):
-        from configurator.cloud_capture import capture_existing
-        return capture_existing(self.root,now=1700000040)
+
 
     def test_capture_is_read_only_and_provenance_excludes_source_secrets_and_paths(self):
         from totalmarker.paths import RootFS
@@ -986,7 +984,7 @@ class CloudCaptureTests(unittest.TestCase):
         from datetime import datetime,timezone
         from configurator.cloud_capture import capture_existing
         created=datetime(2026,11,3,12,tzinfo=timezone.utc)
-        payload=('EarthDesk Cloud Image Created '+created.strftime('%a %b %d %H:%M:%S UTC %Y')).encode()
+        payload=b'EarthDesk Cloud Image Created Tue Nov 03 12:00:00 UTC 2026'
         raw=self.image[:2]+b'\xff\xfe'+(len(payload)+2).to_bytes(2,'big')+payload+self.image[2:]
         self.image_path.write_bytes(raw);self.record.update(image_sha256=hashlib.sha256(raw).hexdigest(),source_image_sha256=hashlib.sha256(raw).hexdigest(),source_created_at=created.timestamp())
         self.save_state();frozen=capture_existing(self.root,now=created.timestamp()+60)
@@ -1039,7 +1037,7 @@ class NamedSceneTests(unittest.TestCase):
 
     def test_multiple_named_pairs_and_all_owned_assets_stay_associated(self):
         from configurator.library import save_named,list_scenes
-        fixture=CloudCaptureTests();fixture.setUp();self.addCleanup(fixture.doCleanups)
+        fixture=prepare_fixture(self,CloudCaptureFixture)
         frozen=fixture.capture();view=View(places='on',places_text='0 0 "Center"',routes='on',routes_text='0 0 30 30',clouds='captured',capture_id=frozen.identity)
         target=save_named(self.library/'summer.conf',view,sys.executable,capture=frozen)
         save_named(self.library/'winter.conf',View(30),sys.executable)
@@ -1198,7 +1196,7 @@ class ConfiguratorAuditTests(unittest.TestCase):
             self.assertEqual((target/'xp.conf').read_text(),'replacement preserved')
 
     def test_capture_repr_is_bounded_and_does_not_dump_image_or_provenance(self):
-        fixture=CloudCaptureTests();fixture.setUp();self.addCleanup(fixture.doCleanups)
+        fixture=prepare_fixture(self,CloudCaptureFixture)
         frozen=fixture.capture();self.assertEqual(repr(frozen),'FrozenCloud()')
         self.assertNotIn('source_created_at',repr(frozen))
 
@@ -1271,7 +1269,7 @@ class PlanetaryTests(unittest.TestCase):
         self.assertIsNotNone(replace(view,target='earth').capture_problem(None))
 
     def test_retained_frozen_cloud_survives_planet_save_without_entering_render_body(self):
-        fixture=CloudCaptureTests();fixture.setUp();self.addCleanup(fixture.doCleanups);frozen=fixture.capture()
+        fixture=prepare_fixture(self,CloudCaptureFixture);frozen=fixture.capture()
         view=View(target='moon',clouds='captured',capture_id=frozen.identity)
         with tempfile.TemporaryDirectory() as temp:
             from configurator.library import save_named

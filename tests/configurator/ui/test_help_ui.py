@@ -15,10 +15,13 @@ class HelpUITests(unittest.IsolatedAsyncioTestCase):
             with patch('configurator.app.open_image') as viewer:
                 await pilot.press('f1');await pilot.pause();self.assertIsInstance(self.app.screen,StudioHelp)
                 markdown=self.app.screen.query_one('#studio-help-text',Markdown)
-                self.assertIn('Scene studio user guide',markdown.source);self.assertFalse(markdown._open_links)
+                self.assertIn('Scene studio user guide',markdown.source)
                 await pilot.press('f1');await pilot.pause();self.assertFalse(isinstance(self.app.screen,StudioHelp))
                 await click(pilot,'#help');await pilot.pause();self.assertIsInstance(self.app.screen,StudioHelp)
-                self.app.screen.on_markdown_link_clicked(Markdown.LinkClicked(self.app.screen.query_one(Markdown),'recovery.md'))
+                with patch.object(self.app,'open_url') as browser:
+                    self.app.screen.query_one(Markdown).post_message(Markdown.LinkClicked(self.app.screen.query_one(Markdown),'recovery.md'))
+                    await pilot.pause()
+                    browser.assert_not_called()
                 self.assertIn('no browser opened',str(self.app.screen.query_one('#studio-help-link',Static).render()))
                 await pilot.press('escape');await pilot.pause();viewer.assert_not_called()
             self.assertEqual(self.app.history.current,before);self.assertFalse(self.app.history.dirty)

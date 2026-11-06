@@ -10,7 +10,8 @@ from textual.widgets import Select,Input,Static
 from configurator.app import ConfiguratorApp
 from configurator.model import ViewDocument
 from configurator.workspace import Workspace,open_view
-from tests.configurator import test_astronomy_scene as fixtures
+from tests.support import prepare_fixture
+from tests.configurator import support_astronomy_scene as fixtures
 
 
 async def click(pilot,selector):
@@ -19,7 +20,7 @@ async def click(pilot,selector):
 
 class AstronomyUI(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
-        self.fixture=fixtures.AstronomySceneTests();self.fixture.setUp();self.addCleanup(self.fixture.doCleanups)
+        self.fixture=prepare_fixture(self,fixtures.AstronomySceneFixture)
         self.view,self.data=self.fixture.scene()
         self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup);self.root=Path(self.temp.name).resolve();(self.root/'config').mkdir()
         self.workspace=Workspace();self.addCleanup(self.workspace.close)

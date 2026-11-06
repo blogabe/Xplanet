@@ -1,4 +1,5 @@
 """Saving continues a draft without overwriting or discarding earlier history."""
+from tests.configurator.ui.terminal_support import open_terminal
 import io,unittest
 from contextlib import redirect_stdout
 from textual.widgets import Button,Input,Static,Select
@@ -120,8 +121,13 @@ class ContinuityUITests(unittest.IsolatedAsyncioTestCase):
                 await pilot.press('escape');await pilot.press('ctrl+c')
 
 
-    async def test_real_terminal_dirty_exit_confirmation_and_interrupt_restore_screen(self):
-        import os,pty,select,subprocess,sys,termios,time
+
+
+class ContinuityTerminalTests(unittest.TestCase):
+    setUp=fixtures.prepare_editor
+
+    def test_real_terminal_dirty_exit_confirmation_and_interrupt_restore_screen(self):
+        import os,select,subprocess,sys,termios,time
         from pathlib import Path
         from configurator import __file__ as module
         driver=self.root/'driver.py'
@@ -151,40 +157,41 @@ finally: w.close()
 sys.exit(report_result(result))
 """)
         for interrupt in (b'\x03',b'\x04'):
-            (self.root/'exit-requests').unlink(missing_ok=True)
-            master,slave=pty.openpty();before=termios.tcgetattr(slave)
-            env={**os.environ,'HOME':str(self.root),'TERM':'xterm-256color','PYTHONPATH':str(Path(module).parent.parent),'PYTHONDONTWRITEBYTECODE':'1'}
-            process=subprocess.Popen([sys.executable,'-B',str(driver),str(self.root)],stdin=slave,stdout=slave,stderr=slave,env=env,cwd=self.root)
-            output=b''
-            def until(marker):
-                nonlocal output
-                deadline=time.monotonic()+10
-                while marker not in output and process.poll() is None and time.monotonic()<deadline:
-                    if select.select([master],[],[],.1)[0]:output+=os.read(master,65536)
-                self.assertTrue(marker in output,output[-1000:])
-            try:
-                until(b'Leave the scene editor?')
-                if interrupt==b'\x04':
-                    os.write(master,b'\r')
+            with self.subTest(interrupt=interrupt):
+                (self.root/'exit-requests').unlink(missing_ok=True)
+                master,slave,before=open_terminal()
+                env={**os.environ,'HOME':str(self.root),'TERM':'xterm-256color','PYTHONPATH':str(Path(module).parent.parent),'PYTHONDONTWRITEBYTECODE':'1'}
+                process=subprocess.Popen([sys.executable,'-B',str(driver),str(self.root)],stdin=slave,stdout=slave,stderr=slave,env=env,cwd=self.root)
+                output=b''
+                def until(marker):
+                    nonlocal output
                     deadline=time.monotonic()+10
-                    while not (self.root/'kept-dirty').exists() and time.monotonic()<deadline:
+                    while marker not in output and process.poll() is None and time.monotonic()<deadline:
                         if select.select([master],[],[],.1)[0]:output+=os.read(master,65536)
-                    self.assertEqual((self.root/'kept-dirty').read_text(),'True')
-                    # The default decision kept the dirty draft; only Ctrl-D exits.
-                    self.assertIsNone(process.poll())
-                os.write(master,interrupt)
-                if interrupt==b'\x04':
+                    self.assertTrue(marker in output,output[-1000:])
+                try:
+                    until(b'Leave the scene editor?')
+                    if interrupt==b'\x04':
+                        os.write(master,b'\r')
+                        deadline=time.monotonic()+10
+                        while not (self.root/'kept-dirty').exists() and time.monotonic()<deadline:
+                            if select.select([master],[],[],.1)[0]:output+=os.read(master,65536)
+                        self.assertEqual((self.root/'kept-dirty').read_text(),'True')
+                        # The default decision kept the dirty draft; only Ctrl-D exits.
+                        self.assertIsNone(process.poll())
+                    os.write(master,interrupt)
+                    if interrupt==b'\x04':
+                        deadline=time.monotonic()+10
+                        while (not (self.root/'exit-requests').exists() or int((self.root/'exit-requests').read_text())<2) and time.monotonic()<deadline:
+                            if select.select([master],[],[],.1)[0]:output+=os.read(master,65536)
+                        self.assertIsNone(process.poll());os.write(master,b'\x03')
                     deadline=time.monotonic()+10
-                    while (not (self.root/'exit-requests').exists() or int((self.root/'exit-requests').read_text())<2) and time.monotonic()<deadline:
+                    while process.poll() is None and time.monotonic()<deadline:
                         if select.select([master],[],[],.1)[0]:output+=os.read(master,65536)
-                    self.assertIsNone(process.poll());os.write(master,b'\x03')
-                deadline=time.monotonic()+10
-                while process.poll() is None and time.monotonic()<deadline:
-                    if select.select([master],[],[],.1)[0]:output+=os.read(master,65536)
-                self.assertEqual(process.wait(timeout=2),3,output[-1000:])
-                while select.select([master],[],[],0)[0]:output+=os.read(master,65536)
-                self.assertIn(b'\x1b[?1049h',output);self.assertIn(b'\x1b[?1049l',output)
-                self.assertEqual(termios.tcgetattr(slave),before);self.assertFalse((self.root/'config/scenes').exists())
-            finally:
-                if process.poll() is None:process.kill();process.wait()
-                os.close(master);os.close(slave)
+                    self.assertEqual(process.wait(timeout=2),3,output[-1000:])
+                    while select.select([master],[],[],0)[0]:output+=os.read(master,65536)
+                    self.assertIn(b'\x1b[?1049h',output);self.assertIn(b'\x1b[?1049l',output)
+                    self.assertEqual(termios.tcgetattr(slave),before);self.assertFalse((self.root/'config/scenes').exists())
+                finally:
+                    if process.poll() is None:process.kill();process.wait()
+                    os.close(master);os.close(slave)

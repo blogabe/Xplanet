@@ -94,7 +94,7 @@ name_contains = "ISS"
             transport = ScriptedTransport(Response(200, {}, discovery),
                                           Response(200, {}, sample_for(25544, name)))
             result = run(self.fs, settings, fetcher=Fetcher(transport), now=EPOCH + 10 + index * 8000)
-            self.assertIn(result.outcome, ('changed', 'unchanged'))
+            self.assertEqual(result.outcome, 'changed' if index == 0 else 'unchanged')
             self.assertEqual(result.count, 1)
             self.assertEqual(len(transport.calls), 2)
             if index == 0:

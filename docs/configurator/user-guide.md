@@ -166,7 +166,7 @@ or `--view` to resume; cross-session undo history is not restored. For example:
 | F1 / Help | Read this guide; F1 or Escape returns to the previous screen. |
 | Ctrl-C during work | Cancel owned preview/capture/set/export preparation and stay in the editor. |
 | Another Ctrl-C during cancellation, or Ctrl-C while idle | Emergency exit using only completed recovery checkpoints. Recent edits may be absent. |
-| Ctrl-D / Ctrl-Q / main Escape / Cancel | Request exit; dirty drafts offer Continue editing, Keep recovery draft and exit, or Discard. |
+| Ctrl-D / Ctrl-Q / main Escape / Cancel | Request exit; dirty drafts offer Keep editing, Keep recovery draft and exit, or Discard. |
 | Escape in a dialog | Normally returns from that dialog. |
 
 Private draft recovery is debounced under `.state/configurator/drafts`. It retains

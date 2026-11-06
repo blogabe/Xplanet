@@ -4,6 +4,7 @@ from pathlib import Path
 import hashlib,math,os,re,stat
 from .model import NUMERIC_FIELDS,TARGETS
 from .fileio import fingerprint,OwnedFiles
+from .owned_io import checkpoint
 from .workspace import read_bounded
 
 LIMIT=256*1024
@@ -160,6 +161,7 @@ class NativePatch:
             if read_bounded(child,LIMIT)!=self.original:raise ValueError('Source bytes changed; reopen before editing.')
             with os.scandir(directory) as listing:
                 for count,entry in enumerate(listing,1):
+                    checkpoint()
                     if count>10000:raise ValueError('Source directory exceeds the review bound.')
                     if entry.name.casefold() in (target.name.casefold(),target.with_suffix('.def').name.casefold()):raise ValueError('Destination or matching definition already exists (including case aliases); choose another stem.')
             # Compare path identity too: do not publish into a substituted directory.

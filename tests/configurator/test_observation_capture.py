@@ -14,29 +14,11 @@ def icon():
     return b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',struct.pack('>IIBBBBB',1,1,8,2,0,0,0))+chunk(b'IDAT',zlib.compress(b'\0\xff\0\0'))+chunk(b'IEND',b'')
 
 
-class ObservationCaptureTests(unittest.TestCase):
-    def setUp(self):
-        self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup);self.root=Path(self.temp.name).resolve()
-        for folder in ('config','markers','arcs','images','.state/totalmarker'):(self.root/folder).mkdir(parents=True)
-        config=(ROOT/'config/totalmarker.example.toml').read_text()
-        self.config=self.root/'config/totalmarker.toml';self.config.write_text(config)
-        self.state={'schema':1,'products':{}}
-        self.install('quake',quake_marker(b'1 2 "M6 image=observed-quake.png" color=Red symbolsize=12\n',1700000000))
-        self.install('volcano',volcano_marker(b'3 4 "Cone" align=Above color=Yellow image=none\n',1700000000))
-        self.install('storm',storm_marker(b'5 6 "Cyclone" align=Above color=SkyBlue\n',1700000000),render_arc(b'5 6 7 8 color=Blue\n',1700000000))
-        self.save_state()
+from tests.configurator.support_observations import ObservationCaptureFixture
 
-    def install(self,product,marker,arc=None):
-        (self.root/'markers'/product).write_bytes(marker)
-        row={'marker_sha256':hashlib.sha256(marker).hexdigest(),'installed_at':1700000000,'checked_at':1700000060,'successful_at':1700000000,'last_outcome':'changed'}
-        if arc is not None:
-            (self.root/'arcs'/product).write_bytes(arc);row.update(arc_sha256=hashlib.sha256(arc).hexdigest(),source_at=1699999900,source_valid_until_at=1700003600)
-        if product=='quake':row.update(feed_generated_at=1699999950,latest_origin_at=1699999900)
-        self.state['products'][product]=row
+class ObservationCaptureTests(ObservationCaptureFixture, unittest.TestCase):
 
-    def save_state(self):(self.root/'.state/totalmarker/state.json').write_text(json.dumps(self.state))
-    def capture(self,products=('quake','volcano','storm')):return capture_existing(self.root,products,now=1700000100)
-    def inventory(self):return {str(p.relative_to(self.root)):(p.read_bytes(),p.stat().st_mtime_ns) for p in self.root.rglob('*') if p.is_file()}
+
 
     def test_capture_all_products_binds_hashes_and_sources_without_writes(self):
         self.state['products']['quake']['last_error']={'at':1700000001,'message':'PrivateErrorToken'};self.save_state()
@@ -111,10 +93,10 @@ class ObservationCaptureTests(unittest.TestCase):
         self.assertEqual(dict(frozen.payload)[names('quake')[0]],b'# Frozen TotalMarker quake markers v1\n')
 
 class ObservationSceneTests(unittest.TestCase):
-    setUp=ObservationCaptureTests.setUp
-    install=ObservationCaptureTests.install
-    save_state=ObservationCaptureTests.save_state
-    capture=ObservationCaptureTests.capture
+    setUp=ObservationCaptureFixture.setUp
+    install=ObservationCaptureFixture.install
+    save_state=ObservationCaptureFixture.save_state
+    capture=ObservationCaptureFixture.capture
 
     def test_named_and_legacy_saves_reopen_offline_and_preserve_source(self):
         import sys
@@ -179,10 +161,10 @@ class ObservationSceneTests(unittest.TestCase):
 
 
 class ObservationIconRaceTests(unittest.TestCase):
-    setUp=ObservationCaptureTests.setUp
-    install=ObservationCaptureTests.install
-    save_state=ObservationCaptureTests.save_state
-    capture=ObservationCaptureTests.capture
+    setUp=ObservationCaptureFixture.setUp
+    install=ObservationCaptureFixture.install
+    save_state=ObservationCaptureFixture.save_state
+    capture=ObservationCaptureFixture.capture
 
     def test_icon_is_rechecked_after_metadata_and_cannot_change_silently(self):
         from configurator import observation_capture as module
@@ -204,10 +186,10 @@ class ObservationIconRaceTests(unittest.TestCase):
 import asyncio,sys
 
 class ObservationWorkerTests(unittest.IsolatedAsyncioTestCase):
-    setUp=ObservationCaptureTests.setUp
-    install=ObservationCaptureTests.install
-    save_state=ObservationCaptureTests.save_state
-    capture=ObservationCaptureTests.capture
+    setUp=ObservationCaptureFixture.setUp
+    install=ObservationCaptureFixture.install
+    save_state=ObservationCaptureFixture.save_state
+    capture=ObservationCaptureFixture.capture
 
     async def test_real_worker_capture_retention_budget_and_private_cleanup(self):
         from configurator.model import View
@@ -242,10 +224,10 @@ class ObservationWorkerTests(unittest.IsolatedAsyncioTestCase):
 
 
 class ObservationPrefixSizeTests(unittest.TestCase):
-    setUp=ObservationCaptureTests.setUp
-    install=ObservationCaptureTests.install
-    save_state=ObservationCaptureTests.save_state
-    capture=ObservationCaptureTests.capture
+    setUp=ObservationCaptureFixture.setUp
+    install=ObservationCaptureFixture.install
+    save_state=ObservationCaptureFixture.save_state
+    capture=ObservationCaptureFixture.capture
 
     def test_named_prefix_cannot_publish_a_marker_larger_than_its_reopen_bound(self):
         import sys

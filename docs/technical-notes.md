@@ -217,3 +217,9 @@ Access restrictions and stale weekly coverage remain failures; neither endpoint
 is guaranteed available. Do not bypass access controls or substitute download
 success for coverage validation. No configuration or provider is changed by
 reading these instructions.
+
+
+Unexpected TotalMarker failures retain the generic JSON error and exit status 2.
+Standard error additionally identifies the exception category and a project-relative
+Python source location when available. It omits exception messages, locals, raw
+tracebacks, URLs and absolute host paths; keep the short diagnostic with a bug report.

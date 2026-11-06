@@ -6,7 +6,7 @@ from textual.widgets import Input,Static
 from configurator.__main__ import report_result
 from configurator.selection import inspect_selection,UncertainSelection
 from tests.configurator.ui import fixtures
-from tests.configurator.ui import test_handoff_ui as handoff_fixtures
+from tests.configurator.ui import support_handoff as handoff_fixtures
 click=fixtures.click
 
 class AuditDiagnosticUITests(unittest.IsolatedAsyncioTestCase):
@@ -21,9 +21,9 @@ class AuditDiagnosticUITests(unittest.IsolatedAsyncioTestCase):
             self.assertIsNone(self.workspace.process);self.assertIsNone(self.workspace.latest)
 
 class SelectionSaveUITests(unittest.IsolatedAsyncioTestCase):
-    asyncSetUp=handoff_fixtures.HandoffUITests.asyncSetUp
-    enter=handoff_fixtures.HandoffUITests.enter
-    export_and_review_apply=handoff_fixtures.HandoffUITests.export_and_review_apply
+    asyncSetUp=handoff_fixtures.HandoffUIFixture.asyncSetUp
+    enter=handoff_fixtures.HandoffUIFixture.enter
+    export_and_review_apply=handoff_fixtures.HandoffUIFixture.export_and_review_apply
 
     async def test_successful_apply_then_save_reports_both_and_preserves_selection(self):
         async with self.app.run_test(size=(110,50)) as pilot:

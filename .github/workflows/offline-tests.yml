@@ -39,6 +39,7 @@ jobs:
           python-version: '3.11'
       - name: Isolated configurator interactions
         env:
+          TZ: UTC
           PYTHONPATH: scripts:.
           PYTHONDONTWRITEBYTECODE: '1'
         run: |

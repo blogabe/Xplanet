@@ -3,6 +3,7 @@ from dataclasses import dataclass,field
 import hashlib,os,re,stat
 from pathlib import Path
 from .fileio import fingerprint,new_directory
+from .owned_io import checkpoint
 from .workspace import open_view,read_bounded
 
 TEXT_LIMIT=256*1024
@@ -51,6 +52,7 @@ def inspect_native(source):
         with os.scandir(directory) as listing:
             actual=set()
             for entry in listing:
+                checkpoint()
                 actual.add(entry.name)
                 if len(actual)>10000:raise ValueError('Source directory is too large for exact filename review.')
         if not {name for name,_ in doc.native_files}<=actual:
@@ -65,6 +67,7 @@ def inspect_native(source):
     fd=os.open(directory,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW);opened=[];files=[]
     try:
         for name in candidates:
+            checkpoint()
             try:child=os.open(name,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK,dir_fd=fd)
             except FileNotFoundError:continue
             info=os.fstat(child);opened.append((name,child,info))

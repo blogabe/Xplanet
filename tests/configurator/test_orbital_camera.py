@@ -7,7 +7,7 @@ from configurator.workspace import open_view,save_view
 from configurator.library import save_named
 from configurator.handoff import create_plan,stage_plan,check_bundle
 from configurator.selection import apply_bundle,inspect_selection,read_revision,REVISIONS,ARGS
-from tests.configurator import test_scene_handoff as fixtures
+from tests.configurator import support_handoff as fixtures
 
 
 def orbital(**changes):
@@ -73,7 +73,7 @@ class OrbitalCameraTests(unittest.TestCase):
 
 
 class OrbitalHandoffTests(unittest.TestCase):
-    setUp=fixtures.HandoffTests.setUp
+    setUp=fixtures.HandoffFixture.setUp
 
     def test_review_freezes_coordinates_and_recomputes_centre_for_desktop_dimensions(self):
         view=orbital();scene=save_named(self.root/'config/scenes/rise.conf',view,sys.executable)

@@ -1,4 +1,6 @@
 """Review-only handoff interaction and preservation tests; no activation."""
+from tests.configurator.ui.support_handoff import HandoffUIFixture, prepare_handoff
+from tests.configurator.ui.terminal_support import open_terminal
 from pathlib import Path
 import sys,tempfile,unittest,asyncio,threading
 from unittest.mock import patch
@@ -12,30 +14,12 @@ from configurator.fileio import OwnedFiles
 from tests.configurator.ui.fixtures import click
 
 
-class HandoffUITests(unittest.IsolatedAsyncioTestCase):
-    async def asyncSetUp(self):
-        self.temp=tempfile.TemporaryDirectory(dir='/tmp');self.addCleanup(self.temp.cleanup)
-        self.root=Path(self.temp.name).resolve();(self.root/'config').mkdir()
-        self.legacy=self.root/'config/xp.def';self.legacy.write_bytes(b'$(touch never-execute)\n# opaque\n')
-        self.scene=save_named(self.root/'config/scenes/earth.conf',View(),sys.executable)
-        self.source={p:p.read_bytes() for p in (self.legacy,self.scene,self.scene.with_suffix('.def'))}
-        self.target=self.root/'config/review'
-        self.workspace=Workspace();self.addCleanup(self.workspace.close)
-        # Isolate handoff publication; recovery has its own explicit integration suite.
-        self.app=ConfiguratorApp(self.root,sys.executable,self.workspace,recovery=False)
 
-    async def enter(self,pilot):
-        await click(pilot,'#handoff')
-        self.app.screen.query_one('#handoff-source',Input).value=str(self.scene)
-        self.app.screen.query_one('#handoff-geometry',Input).value='1280x720'
-        self.app.screen.query_one('#handoff-destination',Input).value=str(self.target)
-        await pilot.pause()
 
-    def unchanged(self):
-        for path,raw in self.source.items():self.assertEqual(path.read_bytes(),raw)
-        self.assertFalse((self.root/'never-execute').exists());self.assertFalse((self.root/'.state').exists())
+class HandoffUITests(HandoffUIFixture, unittest.IsolatedAsyncioTestCase):
 
-    def status(self):return str(self.app.screen.query_one('#handoff-status',Static).render())
+
+
 
     async def test_open_cancel_review_and_escape_are_readonly_and_preserve_dirty_draft(self):
         async with self.app.run_test(size=(110,50)) as pilot:
@@ -119,60 +103,7 @@ class HandoffUITests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual((self.target/'earth.conf').read_bytes(),b'external edit\n')
         self.unchanged()
 
-    async def test_real_terminal_modal_escape_ctrlc_ctrld_restore_tty_and_original_screen(self):
-        import os,pty,select,subprocess,termios,time
-        from configurator import __file__ as module_file
-        driver=self.root/'terminal_fixture.py'
-        driver.write_text('''from pathlib import Path
-import sys
-from textual.widgets import Button
-from configurator.app import ConfiguratorApp
-from configurator.workspace import Workspace
-class TestApp(ConfiguratorApp):
-    def on_mount(self):
-        super().on_mount()
-        self.call_after_refresh(self.query_one('#handoff',Button).press)
-workspace=Workspace()
-try:
-    result=TestApp(Path(sys.argv[1]),sys.executable,workspace).run()
-    sys.exit(3 if result and result[0]=='cancelled' else 2)
-finally:workspace.close()
-''')
-        for key in (b'\x1b\x1b',b'\x03',b'\x04'):
-            master,slave=pty.openpty();before=termios.tcgetattr(slave)
-            env={**os.environ,'TERM':'xterm-256color','HOME':str(self.root),'PYTHONPATH':str(Path(module_file).parent.parent),'PYTHONDONTWRITEBYTECODE':'1'}
-            process=subprocess.Popen([sys.executable,'-B',str(driver),str(self.root)],stdin=slave,stdout=slave,stderr=slave,env=env)
-            output=b''
-            try:
-                deadline=time.monotonic()+10
-                while b'Scene handoff' not in output and time.monotonic()<deadline:
-                    if select.select([master],[],[],.1)[0]:output+=os.read(master,65536)
-                self.assertIn(b'Scene handoff',output)
-                # Distinct Escape presses: close modal first, then leave the editor.
-                for byte in key:
-                    os.write(master,bytes([byte]))
-                    if key==b'\x1b\x1b':time.sleep(.15)
-                if key==b'\x04':
-                    while b'Leave the scene editor?' not in output and time.monotonic()<deadline:
-                        if select.select([master],[],[],.1)[0]:output+=os.read(master,65536)
-                    self.assertIn(b'Leave the scene editor?',output)
-                    # Open handoff fields are transient, not part of recovery.
-                    # Continue editing is the default; explicitly choose discard.
-                    os.write(master,b'\t\r')
-                while process.poll() is None and time.monotonic()<deadline:
-                    if select.select([master],[],[],.1)[0]:output+=os.read(master,65536)
-                self.assertEqual(process.wait(timeout=2),3,output[-1000:])
-                while select.select([master],[],[],0)[0]:output+=os.read(master,65536)
-                self.assertIn(b'\x1b[?1049h',output);self.assertIn(b'\x1b[?1049l',output)
-                self.assertEqual(termios.tcgetattr(slave),before);self.assertFalse(self.target.exists())
-            finally:
-                if process.poll() is None:process.kill();process.wait()
-                os.close(master);os.close(slave)
-        self.unchanged()
 
-    async def export_and_review_apply(self,pilot):
-        await self.enter(pilot);await click(pilot,'#handoff-review-button');await click(pilot,'#handoff-confirm')
-        await click(pilot,'#handoff-apply-review');await pilot.pause()
 
     async def test_apply_requires_confirmation_keeps_dirty_draft_and_never_restarts(self):
         from configurator.selection import inspect_selection,read_revision
@@ -263,3 +194,66 @@ finally:workspace.close()
                 self.assertIn('cancelled',self.status())
                 self.assertFalse(self.target.exists())
             finally:release.set()
+
+
+class HandoffTerminalTests(unittest.TestCase):
+    setUp=prepare_handoff
+
+    def test_real_terminal_modal_escape_ctrlc_ctrld_restore_tty_and_original_screen(self):
+        import os,select,subprocess,termios,time
+        from configurator import __file__ as module_file
+        driver=self.root/'terminal_fixture.py'
+        driver.write_text('''from pathlib import Path
+import sys
+from textual.widgets import Button
+from configurator.app import ConfiguratorApp
+from configurator.workspace import Workspace
+class TestApp(ConfiguratorApp):
+    def on_mount(self):
+        super().on_mount()
+        self.call_after_refresh(self.query_one('#handoff',Button).press)
+workspace=Workspace()
+try:
+    result=TestApp(Path(sys.argv[1]),sys.executable,workspace).run()
+    sys.exit(3 if result and result[0]=='cancelled' else 2)
+finally:workspace.close()
+''')
+        for key in (b'\x1b\x1b',b'\x03',b'\x04'):
+            with self.subTest(key=key):
+                master,slave,before=open_terminal()
+                env={**os.environ,'TERM':'xterm-256color','HOME':str(self.root),'PYTHONPATH':str(Path(module_file).parent.parent),'PYTHONDONTWRITEBYTECODE':'1'}
+                process=subprocess.Popen([sys.executable,'-B',str(driver),str(self.root)],stdin=slave,stdout=slave,stderr=slave,env=env)
+                output=b''
+                try:
+                    deadline=time.monotonic()+10
+                    while b'Scene handoff' not in output and time.monotonic()<deadline:
+                        if select.select([master],[],[],.1)[0]:output+=os.read(master,65536)
+                    self.assertIn(b'Scene handoff',output)
+                    # Distinct Escape presses: close modal first, then leave the editor.
+                    for byte in key:
+                        os.write(master,bytes([byte]))
+                        if key==b'\x1b\x1b':time.sleep(.15)
+                    if key==b'\x04':
+                        while b'Leave the scene editor?' not in output and time.monotonic()<deadline:
+                            if select.select([master],[],[],.1)[0]:output+=os.read(master,65536)
+                        self.assertIn(b'Leave the scene editor?',output)
+                        # Open handoff fields are transient, not part of recovery.
+                        # Continue editing is the default; explicitly choose discard.
+                        os.write(master,b'\t\r')
+                    while process.poll() is None and time.monotonic()<deadline:
+                        if select.select([master],[],[],.1)[0]:output+=os.read(master,65536)
+                    self.assertEqual(process.wait(timeout=2),3,output[-1000:])
+                    while select.select([master],[],[],0)[0]:output+=os.read(master,65536)
+                    self.assertIn(b'\x1b[?1049h',output);self.assertIn(b'\x1b[?1049l',output)
+                    self.assertEqual(termios.tcgetattr(slave),before);self.assertFalse(self.target.exists())
+                finally:
+                    if process.poll() is None:process.kill();process.wait()
+                    os.close(master);os.close(slave)
+        self.unchanged()
+
+
+    def unchanged(self):
+        for path, raw in self.source.items():
+            self.assertEqual(path.read_bytes(), raw)
+        self.assertFalse((self.root / 'never-execute').exists())
+        self.assertFalse((self.root / '.state').exists())

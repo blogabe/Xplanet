@@ -3,11 +3,11 @@ import json,unittest
 from textual.widgets import Input,Static,Select
 from configurator.export_ui import RenderExport
 from tests.configurator.ui import fixtures
-from tests.configurator.ui import test_resources_ui as resources
+from tests.configurator.ui import support_resources as resources
 click=fixtures.click
 class ExportUITests(unittest.IsolatedAsyncioTestCase):
     asyncSetUp=fixtures.setup_editor
-    renderer=resources.ResourceUITests.renderer
+    renderer=resources.ResourceUIFixture.renderer
     async def prepare(self,pilot):
         self.app.query_one('#renderer',Input).value=str(self.renderer());await pilot.pause()
         await click(pilot,'#preview');await self.app.workers.wait_for_complete();await pilot.pause()
