@@ -5,7 +5,7 @@ nonblocking store lock serializes publication/quota accounting, not UI editing.
 Only explicit discard or replacing this session's older checkpoints removes data.
 """
 import asyncio
-from .owned_io import checkpoint as io_checkpoint
+from .owned_io import checkpoint as io_checkpoint,begin_publication
 from contextlib import contextmanager
 from dataclasses import dataclass,field
 import fcntl,hashlib,json,math,os,re,stat,time,uuid
@@ -90,10 +90,27 @@ def private(info,directory=False):
     if not (stat.S_ISDIR(info.st_mode) if directory else stat.S_ISREG(info.st_mode)) or info.st_uid!=os.geteuid() or info.st_mode&0o077:raise ValueError('Recovery files/directories must be private, regular and owned by this user; permissions were not changed.')
 
 
-def read(fd,name,limit):
+def retained_material(path,reason):
+    return ValueError(f'Recovery material retained at {path}: {reason}. Inspect this path manually; move unexpected material out of recovery storage, or remove it only if unwanted, then retry. No permissions were changed.')
+
+
+def finder_regular(info):
+    if not stat.S_ISREG(info.st_mode) or info.st_uid!=os.geteuid():raise ValueError('Finder metadata must be a regular file owned by this user')
+
+
+def private_at(info,path,directory=False):
+    try:private(info,directory)
+    except ValueError as exc:raise retained_material(path,str(exc)) from exc
+
+
+def read(fd,name,limit,*,finder=False):
     child=os.open(name,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK,dir_fd=fd)
     try:
-        before=os.fstat(child);private(before)
+        before=os.fstat(child)
+        if finder:
+            if name!='.DS_Store':raise ValueError('Only named Finder metadata may use this read policy.')
+            finder_regular(before)
+        else:private(before)
         if before.st_size>limit:raise ValueError('Recovery file exceeds its bound.')
         chunks=[];size=0
         while True:
@@ -202,24 +219,33 @@ class RecoveryStore:
 
     def usage(self,fd):
         count=0;total=0
-        for item in os.scandir(fd):
-            count+=1
-            if count>ENTRY_LIMIT:raise ValueError('Recovery directory entry limit reached.')
-            info=item.stat(follow_symlinks=False)
-            if stat.S_ISREG(info.st_mode):
-                if item.name != '.DS_Store':private(info)
-                elif info.st_uid != os.geteuid():raise ValueError('Foreign Finder metadata retained; inspect recovery storage.')
-                total+=info.st_size
-            elif stat.S_ISDIR(info.st_mode) and SESSION.fullmatch(item.name):
-                child=os.open(item.name,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=fd)
-                try:
-                    private(os.fstat(child),True)
-                    for entry in os.scandir(child):
-                        count+=1
-                        if count>ENTRY_LIMIT:raise ValueError('Recovery directory entry limit reached.')
-                        info=entry.stat(follow_symlinks=False);private(info);total+=info.st_size
-                finally:os.close(child)
-            else:raise ValueError('Unknown or linked recovery material retained; inspect it before writing.')
+        with os.scandir(fd) as listing:
+            for item in listing:
+                io_checkpoint();count+=1;path=self.path/item.name
+                if count>ENTRY_LIMIT:raise retained_material(path,'Recovery directory entry limit reached')
+                info=item.stat(follow_symlinks=False)
+                if stat.S_ISREG(info.st_mode):
+                    if item.name=='.DS_Store':
+                        try:finder_regular(info)
+                        except ValueError as exc:raise retained_material(path,str(exc)) from exc
+                    else:private_at(info,path)
+                    total+=info.st_size
+                elif stat.S_ISDIR(info.st_mode) and SESSION.fullmatch(item.name):
+                    child=os.open(item.name,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=fd)
+                    try:
+                        private_at(os.fstat(child),path,True)
+                        with os.scandir(child) as children:
+                            for entry in children:
+                                io_checkpoint();count+=1;entry_path=path/entry.name
+                                if count>ENTRY_LIMIT:raise retained_material(entry_path,'Recovery directory entry limit reached')
+                                info=entry.stat(follow_symlinks=False)
+                                if entry.name=='.DS_Store':
+                                    try:finder_regular(info)
+                                    except ValueError as exc:raise retained_material(entry_path,str(exc)) from exc
+                                else:private_at(info,entry_path)
+                                total+=info.st_size
+                    finally:os.close(child)
+                else:raise retained_material(path,'Unknown or linked recovery material')
         return total
 
     def new_session(self):return RecoverySession(self,uuid.uuid4().hex)
@@ -296,18 +322,35 @@ class RecoveryStore:
                     elif owner.identity!=identity or owner.active is None:raise ValueError('Recovery ownership is no longer held.')
                     known={'active.lock','head.json'};records=head(fd)
                     for sha in records:
+                        io_checkpoint()
                         item=recover(fd,identity,sha);known.add(sha+'.json');known.update(item.record['objects'])
-                    files={entry.name for entry in os.scandir(fd)}
+                    files=set()
+                    with os.scandir(fd) as listing:
+                        for entry in listing:
+                            io_checkpoint();files.add(entry.name)
+                            if len(files)>ENTRY_LIMIT:raise retained_material(self.path/identity,'Recovery directory entry limit reached')
+                    if '.DS_Store' in files:
+                        try:finder_regular(os.stat('.DS_Store',dir_fd=fd,follow_symlinks=False))
+                        except ValueError as exc:raise retained_material(self.path/identity/'.DS_Store',str(exc)) from exc
+                        known.add('.DS_Store')
                     for name in files-known:
-                        if not SHA.fullmatch(name):raise ValueError('Unrecognized recovery material retained; discard was refused: '+name)
+                        io_checkpoint()
+                        if not SHA.fullmatch(name):raise retained_material(self.path/identity/name,'Unrecognized recovery material; discard was refused')
                         raw,_=read(fd,name,BLOB_LIMIT)
-                        if digest(raw)!=name:raise ValueError('Changed orphan recovery object retained; discard was refused.')
+                        if digest(raw)!=name:raise retained_material(self.path/identity/name,'Changed orphan recovery object; discard was refused')
                     if not known<=files:raise ValueError('Incomplete recovery material retained; discard was refused.')
                     owned=OwnedFiles(fd)
                     for name in files:
-                        raw,stamp=read(fd,name,BLOB_LIMIT if SHA.fullmatch(name) else META_LIMIT);owned.created[name]=stamp;owned.expected[name]=(len(raw),hashlib.sha256(raw).digest())
+                        io_checkpoint()
+                        try:raw,stamp=read(fd,name,BLOB_LIMIT if SHA.fullmatch(name) or name=='.DS_Store' else META_LIMIT,finder=name=='.DS_Store')
+                        except (OSError,ValueError) as exc:raise retained_material(self.path/identity/name,str(exc)) from exc
+                        owned.created[name]=stamp;owned.expected[name]=(len(raw),hashlib.sha256(raw).digest())
                     same_directory(self.path/identity,fd)
-                    if owned.cleanup():raise ValueError('Changed recovery material retained; discard was incomplete.')
+                    # Verification can be cancelled without deleting anything. Once
+                    # deletion starts, finish owned cleanup and report its outcome.
+                    begin_publication()
+                    retained=owned.cleanup()
+                    if retained:raise retained_material(self.path/identity/retained[0],'Changed recovery material; discard was incomplete')
                 finally:
                     if active is not None:os.close(active)
             os.rmdir(identity,dir_fd=directory);os.fsync(directory)

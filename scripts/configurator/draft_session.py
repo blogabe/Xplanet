@@ -8,10 +8,10 @@ class DraftSession:
         self.packing=OwnedIO()
         self.store=RecoveryStore(root);self.snapshot=snapshot;self.notify=notify
         self.session=None;self.sessions=[];self.timer=None;self.task=None
-        self.first_pending=None;self.signature=None;self.last_complete=None;self.closing=False
+        self.first_pending=None;self.signature=None;self.last_complete=None;self.closing=False;self.retiring=None
 
     def changed(self):
-        if self.closing:return
+        if self.closing or self.retiring is not None:return
         loop=asyncio.get_running_loop()
         if self.first_pending is None:self.first_pending=loop.time()
         if self.timer:self.timer.cancel()
@@ -19,12 +19,13 @@ class DraftSession:
 
     def start(self):
         self.timer=None
-        if self.closing:return
+        if self.closing or self.retiring is not None:return
         if self.task and not self.task.done():
             self.timer=asyncio.get_running_loop().call_later(.2,self.start);return
         self.task=asyncio.create_task(self.write())
 
     async def write(self):
+        if self.closing or self.retiring is not None:return False
         self.first_pending=None
         session=None
         try:
@@ -48,6 +49,7 @@ class DraftSession:
             if session is not None and self.session is not session:session.close()
 
     async def flush(self):
+        if self.closing or self.retiring is not None:return False
         if self.timer:self.timer.cancel();self.timer=None
         if self.task and not self.task.done():await self.task
         return await self.write()
@@ -57,15 +59,28 @@ class DraftSession:
         if self.task and not self.task.done():
             self.task.cancel();await asyncio.gather(self.task,return_exceptions=True)
 
-    async def discard_current(self):
-        await self.cancel_writer()
-        if self.session is not None:
+    async def discard_current(self,*,run=None):
+        if self.retiring is not None:raise ValueError('Recovery cleanup is still finishing.')
+        self.retiring=asyncio.current_task();session=None
+        try:
+            await self.cancel_writer()
             session=self.session
             try:
-                if self.last_complete and self.last_complete[0]==session.identity:self.store.discard(session.identity,owner=session)
-            except (OSError,ValueError) as exc:self.notify('Saved/discarded draft, but recovery material was retained: '+str(exc))
-            session.close();self.session=None
-        self.signature=None;self.last_complete=None
+                if session is not None and self.last_complete and self.last_complete[0]==session.identity:
+                    await (run or self.packing.run)(self.store.discard,session.identity,owner=session)
+            except asyncio.CancelledError:
+                self.notify('Recovery cleanup cancelled; earlier checkpoints retained. Saved files and the draft were not changed by cleanup.')
+                return False
+            except (OSError,ValueError) as exc:
+                self.notify('Saved/discarded draft, but recovery material was retained at '+str(self.store.path/session.identity)+': '+str(exc))
+                return False
+            return True
+        finally:
+            if session is not None:
+                session.close()
+                if self.session is session:self.session=None
+            if session is not None or self.session is None:self.signature=None;self.last_complete=None
+            self.first_pending=None;self.retiring=None
 
     def boundary(self):
         # Opening another document retains earlier complete draft checkpoints.
@@ -77,6 +92,10 @@ class DraftSession:
     async def stop(self):
         self.closing=True
         await self.cancel_writer()
+        retirement=self.retiring
+        if retirement is not None and retirement is not asyncio.current_task():
+            retirement.cancel();await asyncio.gather(retirement,return_exceptions=True)
+        await self.packing.stop()
 
     def close(self):
         self.packing.close()

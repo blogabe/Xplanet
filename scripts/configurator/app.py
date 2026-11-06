@@ -1178,9 +1178,12 @@ class ConfiguratorApp(App):
             self.status('Save cancelled. Nothing was written.')
             return
         content=self.query_one('#content');content.disabled=True
+        written=None;phase='save'
         try:
             self.saved = await self.workspace.file_operation(save_named if Path(destination).suffix.lower()=='.conf' else save_view,destination,view,renderer,config_bytes=self.document.config,capture=self.workspace.capture_for(view),observations=self.workspace.observations_for(view),astronomy=self.workspace.astronomy_for(view))
+            written=self.saved
             if keep_open or self.exit_prompting:
+                phase='reopening the saved copy'
                 try:document=await self.workspace.file_operation(open_view,self.saved)
                 except (ValueError,OSError) as exc:
                     self.status(f'Copy saved to {self.saved}, but reopening it failed: {exc}. Draft and undo retained; inspect the copy before continuing.')
@@ -1188,16 +1191,21 @@ class ConfiguratorApp(App):
                 self.document=document
                 self.recovery_origin=None
                 self.history.record(self.raw_fields());self.history.mark_saved()
-                if self.recovery:await self.recovery.discard_current()
+                if self.recovery:
+                    phase='recovery cleanup'
+                    await self.recovery.discard_current(run=self.workspace.file_operation)
                 self.query_one('#view-source',Static).update(self.source_description())
                 self.query_one('#destination',Input).value=self.copy_destination()
                 self.update_controls();self.update_preview_state()
                 self.status(f'New copy saved to {self.saved}. Continue editing; undo and captures remain. Selection and running desktop unchanged.')
             else:
-                if self.recovery:await self.recovery.discard_current()
+                if self.recovery:
+                    phase='recovery cleanup'
+                    await self.recovery.discard_current(run=self.workspace.file_operation)
                 self.exit(('saved',str(self.saved),self.selection_label) if self.selection_label is not None else ('saved',str(self.saved)))
         except asyncio.CancelledError:
-            self.status('Save cancelled; draft and prior copies retained. Inspect the chosen destination before retrying.')
+            if written is None:self.status('Save cancelled; draft and prior copies retained. Inspect the chosen destination before retrying.')
+            else:self.status(f'Copy saved to {written}, but {phase} was cancelled. Draft and undo retained; inspect the saved copy before retrying.')
         except (ValueError, OSError) as exc:
             self.status(str(exc))
 
@@ -1242,7 +1250,7 @@ class ConfiguratorApp(App):
 
     async def discard_exit(self):
         await self.stop_for_exit()
-        if self.recovery:await self.recovery.discard_current()
+        if self.recovery:await self.recovery.discard_current(run=self.workspace.file_operation)
         await self.finish_exit()
 
     def action_quit(self):
