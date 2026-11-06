@@ -185,9 +185,9 @@ display on a later login. Stopping a display does not disable login automation.
 Start reports launchd's acceptance, not proof that the renderer produced an image;
 renderer errors go to `logs/xplanet-error.log`. Normal and configured executable
 names (including a resolved symlink target) are included in broad stop. Desktop
-launch resolves executable symlinks. macOS name lookup cannot reliably discover
-unmanaged, physically renamed binaries with names longer than 19 characters; use
-the normal Xplanet binary name for those older manual launches.
+launch resolves executable symlinks. Unmanaged renderers with names outside this
+set are not automatically discovered. Keep the normal `xplanet` executable name
+for manual launches; historical scene metadata does not add names to Stop's scope.
 
 ## Renderer troubleshooting
 
