@@ -60,7 +60,7 @@ Stock scenes use fixed 2000-01-01 12:00 UTC. `jupiter-inner-enlarged` and
 named copy. Enlarged presets are illustrative, not event reconstructions.
 
 
-A bounded [orbital-guide layer](orbits.md) is now available for
+A bounded [orbital-guide layer](orbits.md) supports
 configured moons, with explicit sampling and shared style. It does not change
 camera framing, orbital positions or the visibility limitation described above.
 

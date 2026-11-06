@@ -15,20 +15,12 @@ The 191230Z reissue says Invest 96A was *previously* at 4.0N 57.0E, then
 57.1E. This is the live-source regression case, and the old coordinate must
 not become a marker or arc point.
 
-At 2026-10-19 15:05 UTC, a storm-only run fetched the then-current official
-sources and published into a temporary root under `dev/tests/.tmp`: four
-markers (Trudy, Wati, Invest 93S, Champi), 11 marker-file lines and 107
-arc-file lines with observed and forecast segments. It did not write the
-working `markers/storm` or `arcs/storm` paths.
-
 `live-20261020/` holds raw public JTWC RSS, its linked numbered warning and
 formation alert, and both significant advisories. `manifest.json` records
 their URLs, retrieval times, byte counts and SHA-256 hashes. The RSS labels
 `sh9327web.txt` as `TCFA Text`; its bulletin is an alert for Invest 93S,
 not a numbered warning. ABIO supplies the same current position. The ABPW
-issue interval occurs on the `SUBJ` line. On 2026-10-20, a separate storm-only
-live validation produced three storm records and isolated marker/arc text under
-ignored `dev/reference/`; it did not update runtime markers or arcs.
+issue interval occurs on the `SUBJ` line.
 
 `live-20261020-promotion/` captures raw official JTWC ABIO, ABPW, RSS,
 linked WP29/SH02 warning text and KMZ, plus the contemporaneous empty NHC
@@ -55,8 +47,10 @@ manifest preserves the retrieval metadata and byte hash.
 `jtwc-abpw-20261026-2230.txt` and `jtwc-rss-20261027-reissue.xml` exercise
 ABPW's distinct reissue header and validity start, plus the matching RSS
 reissue link. Their byte hashes are pinned in `test_storm_sources.py`.
-No retrieval manifest is retained for these two files, so their original
-retrieval times and response metadata are unverified.
+Their exact indexed fixture bytes are pinned in the shared
+[fixture provenance receipt](../provenance.json). Original retrieval times, request
+URL, HTTP metadata and transformation history are not independently established;
+the historical provider attribution is not a newly authenticated response capture.
 
 The residual-TCFA promotion regression deliberately combines the older
 captured alert with an injected link in the later promotion RSS. This is

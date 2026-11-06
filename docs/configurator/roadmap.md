@@ -6,8 +6,7 @@ native, reusable scenes. The same editor can help someone find a first desktop
 view or build a much richer planetary experiment.
 
 This is a direction for discussion, not a fixed sequence, release schedule or
-promise to implement every idea. Active work and decisions belong in the local
-configurator open-items tracker. Current behavior is documented in the
+promise to implement every idea. Implemented behavior and its limits are documented in the
 [user guide](user-guide.md) and [module architecture](architecture.md).
 
 ## What exists, and what the evidence means
@@ -255,13 +254,15 @@ Review-only named-scene handoff export/check is implemented. It freezes known
 native/captured bytes, binds baselines and compiles explicit display arguments;
 it does not activate a selection or change jobs. Explicit immutable named-scene
 selection and guarded restoration are
-implemented; restart remains separate and visible UTM validation is deferred. Bounded native numeric copying also covers grid subdivisions, without
+implemented; restart remains separate. Earlier isolated guest smoke tests are
+revision/workflow-specific, not certification of the current branch or selected
+desktop activation, fresh builds or login/reboot. Bounded native numeric copying also covers grid subdivisions, without
 enabling grids or reconstructing arbitrary definitions.
 
 ### Preview and stock scenes
 
-The studio stores bounded preview dimensions (1920×1080 for new and stock
-scenes), explicitly diagnoses the selected binary and renderer lookup evidence,
+The studio stores bounded preview dimensions (display-aware for blank UI drafts,
+1920×1080 for fallback/stock scenes), explicitly diagnoses the selected binary and renderer lookup evidence,
 and inspects the immutable scene selected for the next start. The stock set has
 24 scenes, with paired moon-to-planet viewpoints. A fixed lunar orbital camera demonstrates a limb, crescent Earth and Sun
 in a separately labeled Earthrise-style stock scene; body-centre Earth-from-Moon
@@ -270,7 +271,8 @@ import. Centre offsets and a generated frozen coordinate row round-trip safely. 
 
 The bounded native numeric-copy tool includes cloud gamma/threshold and
 illustrative magnification. It preserves no-op bytes and opaque content; broad
-path/resource/definition editing remains outside its contract.
+resource relocation, resource-list editing and definition execution remain outside
+its contract; literal grid and simple image paths are supported as described below.
 
 
 Implemented workflow increment: save-and-continue with retained undo/captures and

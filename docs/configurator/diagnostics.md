@@ -1,6 +1,9 @@
 # Preview geometry and resource diagnostics
 
-New scenes start at **1920×1080**. Enter another canonical `WIDTHxHEIGHT` in the
+Blank UI drafts use the primary macOS display's backing-pixel size when it fits
+the preview bounds. Detection failure or an oversized primary display falls back
+to **1920×1080** with an explanation. Saved/stock scenes retain their own dimensions;
+stock scenes and comparison sheets use 1920×1080. Enter another canonical `WIDTHxHEIGHT` in the
 preview size field: for example 2160×1080 (2:1), 3840×2160, or a square frame.
 Texture-map aspect ratio does not dictate output aspect ratio. Framing, projection
 and image dimensions are separate choices.

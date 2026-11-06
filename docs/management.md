@@ -1,9 +1,9 @@
-# Terminal management groundwork
+# Terminal management
 
 Run `scripts/xplanet.sh` without arguments in a terminal to open management.
 Opening management assesses saved health once when configured; it does not refresh providers or change configuration. Leaving or cancelling makes no operational changes. `q` or EOF exits;
 Ctrl-C interrupts. In capable terminals, Up/Down moves the highlight, digits 1–9 or h
-highlight an option, and Enter activates it; q exits immediately. Limited terminals
+highlight an option (h selects 10, Help), and Enter activates it; q exits immediately. Limited terminals
 use numbered line input. Windows smaller than 100 columns × 34 rows also use
 numbered input and normal scrollback so full status remains available instead
 of scrolling off the alternate screen. Enlarging then reopening restores arrows. With redirected input or output, no arguments prints usage instead. `--help` and named commands retain their direct behavior.
@@ -65,8 +65,9 @@ failure, neutral for unassessed freshness with valid output, and dim for disable
 Text labels remain authoritative; JSON and nonterminal output have no colors.
 
 Management delegates start, stop, restart, update and saved health to the existing
-commands. It confirms lifecycle/update actions; stop still stops **all** the
-current user's Xplanet processes, and restart performs that same stop first.
+commands. It confirms lifecycle/update actions; stop removes the managed desktop
+job and stops this user's normal/configured renderer processes, including finite
+renders, and restart performs that same stop first.
 The foreground launchd renderer has no automatic respawn after intentional stop.
 
 The screen separates desktop process/job status, next-start selection and saved data health. It
@@ -139,6 +140,23 @@ or failed. Cancelling or stopping still retains any preparation already complete
 Installer failures keep their output on screen until acknowledged; direct install
 and setup retain their documented exit statuses.
 
+## Quick start
+
+1. Install through the [README one-liner](../README.md#install-on-macos), or clone
+   into a new directory and run `./scripts/xplanet.sh` for guided management.
+2. Follow Guided setup: prepare personal files, choose data sources and review
+   the proposed schedules. Keep unconfigured products disabled; cloud access
+   needs your source and credentials, and volcano needs an explicit source choice.
+3. Accept the optional start offer, or run `./scripts/xplanet.sh start` afterward.
+   This asks launchd to run the configured renderer; it does not certify a frame.
+4. Expect the desktop image to update asynchronously. If it does not, inspect
+   `logs/xplanet-error.log` and Finder automation permission before retrying.
+5. Run `./scripts/xplanet.sh health` for saved data status. Only an explicit
+   `health --live` checks provider access. Failed refreshes retain older output.
+6. To explore scenes independently, run `./scripts/xplanet.sh config --prepare`
+   once, then `./scripts/xplanet.sh config`. Saving, selecting and restarting are
+   separate actions; the [studio guide](configurator/user-guide.md) explains them.
+
 ## Desktop commands
 
 `setup --help` lists setup modes without inspecting configuration or prerequisites.
@@ -151,8 +169,9 @@ The `render` command saves a frame at the configured
 dimensions, while `preview` uses a fixed 1920×1080 size. Both render the custom
 Earth configuration, not a selected studio revision or unsaved draft. Use Preview
 in the configurator for a studio scene. `stop` signals
-ALL of this user's Xplanet processes, including finite renders and other checkouts,
-and succeeds when none is running. It first removes the managed desktop job.
+all current-user processes named `xplanet` or by the trusted configured renderer,
+including matching finite renders and other checkouts, and succeeds when none is running.
+It does not discover arbitrary executable names from historical scenes. It first removes the managed desktop job.
 `restart` performs that same broad stop, then starts one display. Custom-configuration `start`
 catches up a configured monthly map; selected scenes retain their reviewed map.
 Start asks launchd to run one foreground desktop, without
@@ -188,7 +207,7 @@ refreshing providers or changing services. A completed but unrecognized/failed p
 reports unknown support; execution/storage problems remain failures. Cancelling the
 confirmation runs nothing and returns directly to the menu.
 
-**h) Help** displays the same intent-grouped usage as `xplanet.sh --help`: scene
+**10) Help** (h shortcut) displays the same intent-grouped usage as `xplanet.sh --help`: scene
 exploration, installation/maintenance, desktop control, data refresh, diagnostics,
 housekeeping/development, and unavailable commands. Detailed switches and the
 studio guide remain in the linked subcommand help. Both long
@@ -210,8 +229,9 @@ Python lifecycle dependency or automatic renderer respawn is introduced.
 
 This coordinates this version's commands, not arbitrary manual launchctl commands
 or older scripts. Concurrent requests execute serially rather than guaranteeing
-wall-clock invocation order. A later explicit Start can follow Stop. The separate
-original missing-job incident is not proven resolved by this overlap correction.
+wall-clock invocation order. A later explicit Start can follow Stop. The original missing-job incident was subsequently reported working, but its
+cause was not reproduced. This overlap correction does not prove that incident
+resolved; recurring failures still need their exact log and job state.
 
 **Xplanet build** summarizes the last recorded renderer diagnostic. Diagnostics (9)
 shows its reported compile-time features and raw `-version` output; it cannot
@@ -301,9 +321,11 @@ than bypassing trust. No particular historical Homebrew version is inferred.
 
 ## Checkout size
 
-The bundled map tree is approximately 610 MiB before Git history, caches and the
-private configurator environment. Allow several gigabytes of disk space; network
-transfer depends on compression and history. A manual `git clone --depth 1`
+The bundled map tree is approximately 610 MiB. The reviewed full checkout was
+about 1.3 GB on disk including Git objects, with about 0.7 GB of packed history;
+these are size observations, not fixed download promises. Network transfer varies
+with compression/history, and the private UI runtime, caches and saved scenes add
+space. Allow several gigabytes for working headroom. A manual `git clone --depth 1`
 reduces downloaded history while retaining the complete current map tree and a
 normal remote upstream. Bootstrap keeps its existing clone behavior. Shallow
 history is less useful for development and historical comparisons.
@@ -314,15 +336,19 @@ history is less useful for development and historical comparisons.
   to prepare its pinned private dependencies; updates never install them silently.
 - Missing or changed selected revision: inspect Selected scene / handoff, reopen
   the saved scene and explicitly review/select it again. There is no silent fallback.
-- Accepted start without visible wallpaper: inspect the desktop log and macOS
-  Finder automation permission. Acceptance is asynchronous, not proof of a frame.
+- Accepted start without visible wallpaper: inspect `logs/xplanet-error.log` and
+  macOS Finder automation permission. Acceptance is asynchronous, not proof of a frame.
+- Restart reports that `local.xplanet.desktop` was not found: let any in-flight
+  lifecycle request finish, then retry `restart` once. Restart uses the stop scope
+  above. If it recurs, retain the exact error and desktop log rather than repeatedly
+  stopping/starting or assuming the earlier intermittent incident was fixed.
 - Source problems: run saved `health` first, then explicitly choose `health --live`
   if provider access should be checked. Retained output is not proof of freshness.
 
 ## Disable desktop automation
 
 Run `scripts/xplanet.sh stop` to remove the managed desktop job and stop this
-user's Xplanet processes. This does not remove login/data-refresh LaunchAgents.
+user's normal/configured Xplanet processes as described above. This does not remove login/data-refresh LaunchAgents.
 Review their named `local.xplanet.*` files in `~/Library/LaunchAgents` and use
 macOS's normal job-management tools if disabling them. Preserve custom settings,
 saved scenes and data before removing an installation. There is no automatic

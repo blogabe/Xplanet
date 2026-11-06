@@ -41,8 +41,10 @@ incomplete directory for inspection. Normal updates do not install UI dependenci
 
 ## Explore, preview, save or cancel
 
-The studio starts with a 1920×1080 target view; bounded custom dimensions are available using stock or selected bundled
-textures, with no live overlays. Fields remain freely editable; this is not a serial installation wizard.
+Blank UI drafts start at the primary macOS display's bounded backing-pixel size,
+with an explained 1920×1080 fallback. Saved/stock scenes keep their dimensions.
+Previews use stock or selected bundled textures and explicitly frozen layers;
+there are no live overlay references. Fields remain freely editable; this is not a serial installation wizard.
 
 For a fixed observer above the Moon and percentage frame-centre controls, see
 [Lunar orbital camera](orbital-camera.md).
@@ -372,7 +374,8 @@ Geographic views can choose fixed longitude or local solar hour (0 midnight,
 Space views add geographic observer distance measured from the target center in
 body radii, body/galactic/orbital north and counterclockwise rotation. Distance
 is distinct from radius/FOV image framing, and is inactive for body-origin
-observers. Hidden values remain in review/history and v10 native saves. Earlier
+observers. Composition was introduced in v7 and remains retained in current native
+saves, review and history. Earlier
 v2–v6 scenes reopen with composition defaults; v7 composition scenes still reopen. No trajectories or external
 ephemerides are imported by these controls.
 
@@ -412,7 +415,7 @@ associated files. No desktop Apply or lifecycle change is performed.
 
 The [stock scene guide](stock-scenes.md) lists the current 24 starting
 points, including Mars, Jupiter, Saturn and Uranus viewed from their moons.
-All shipped scenes now start at 1920×1080. Ordinary body-origin cameras remain body-centre viewpoints. The separate
+Shipped scenes start at 1920×1080. Ordinary body-origin cameras remain body-centre viewpoints. The separate
 [orbital Earthrise-style camera](orbital-camera.md) adds a lunar limb,
 crescent Earth and Sun; it is not a surface/terrain or historical reconstruction.
 
@@ -506,8 +509,8 @@ See [native literal copies](native-values.md) for limits and context.
 
 ### Additional moons and relationship presets
 
-The target/viewpoint selectors now include the bundled Mars, Galilean and Saturnian
-moons, Miranda, Pluto and Charon. Four more stock scenes illustrate Europa from
+The target/viewpoint selectors include the bundled Mars, Galilean and Saturnian
+moons, Miranda, Pluto and Charon. Relationship stock scenes include Europa from
 Jupiter, Mars from Phobos, Saturn from Titan and Pluto from Charon. These are
 finite views, without magnification tricks or guaranteed simultaneous visibility
 of the system. See [planetary bodies and limits](planetary.md).
@@ -523,7 +526,7 @@ Health and scene summaries identify enlargement; do not use enlarged overlaps as
 eclipse predictions. Switch to a map or another target and the choices remain
 stored but inactive. See [system composition](systems.md).
 
-New stock scenes are `jupiter-inner-enlarged` and `saturn-inner-enlarged` (10× moons),
+System stock scenes include `jupiter-inner-enlarged` and `saturn-inner-enlarged` (10× moons),
 and `pluto-charon-system` (physical sizes). These are manually framed examples,
 not a promise that every moon is visible. None changes desktop configuration.
 

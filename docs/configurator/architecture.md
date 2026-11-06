@@ -25,9 +25,13 @@ executables and asset roots are never adopted by the UI. Native files stay the
 scene record; there is no sidecar settings store.
 
 The loader opens real files through a directory descriptor, refuses symlinks and
-non-regular inputs, bounds definitions/body/annotations to 16 KiB each (cloud JPEG
-to 32 MiB and provenance to 8 KiB), and checks file identity/metadata
-across the read, including optional declared geographic files. A changed or ambiguous pair fails without replacing the draft.
+non-regular inputs, and bounds each declared file by its type: definitions/body/
+geographic annotations to 16 KiB, lunar camera rows to 256 bytes, cloud JPEG to
+32 MiB with 8 KiB metadata, observation marker/arc text to 256 KiB with 16 KiB
+metadata, and astronomy text to 256 KiB with 8 KiB metadata. Supported captured
+PNG icons are capped at 1 MiB each; accumulated capture history is bounded to
+128 MiB. File identity/metadata are checked across each read, including optional
+associated files. A changed or ambiguous pair fails without replacing the draft.
 The immutable document retains loaded body bytes as a recognized source snapshot,
 not a watcher. Preview/save validate that source format, then generate the current
 draft’s body; revised appearance never accidentally copies an older source body. Later source edits are preserved, and saving always
@@ -311,7 +315,8 @@ Geographic views can choose fixed longitude or local solar hour (0 midnight,
 Space views add geographic observer distance measured from the target center in
 body radii, body/galactic/orbital north and counterclockwise rotation. Distance
 is distinct from radius/FOV image framing, and is inactive for body-origin
-observers. Hidden values remain in review/history and v9 native saves. Earlier
+observers. Composition was introduced in v7 and remains retained in current native
+saves, review and history. Earlier
 v2–v6 scenes reopen with composition defaults; v7 composition remains readable. No trajectories or external
 ephemerides are imported by these controls.
 

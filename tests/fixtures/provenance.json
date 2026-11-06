@@ -1,0 +1,49 @@
+{
+  "schema": 1,
+  "pin_basis": "Exact current Git-index fixture bytes, not a new retrieval or authentication of the original response.",
+  "scope": "Selected fixtures without original retrieval receipts. Other captures keep their adjacent manifests.",
+  "records": [
+    {
+      "path": "usgs_quake_selected_20261019.geojson",
+      "provider_attribution": "USGS",
+      "role": "selected GeoJSON parsing fixture",
+      "bytes": 2122,
+      "sha256": "d36c9c46e3acaa560ee39e8da4e0f5f16a929742d855b184f6ba5fe92daac9c5",
+      "source_status": "Historical provider attribution; original fetch receipt unavailable.",
+      "retrieval_verified": false,
+      "retrieved_at": null,
+      "source_url": null,
+      "http_status": null,
+      "http_headers": null,
+      "transformation_history": "Not independently established from retained receipts."
+    },
+    {
+      "path": "storm/jtwc-abpw-20261026-2230.txt",
+      "provider_attribution": "JTWC",
+      "role": "ABPW reissue-header and validity-interval fixture",
+      "bytes": 1153,
+      "sha256": "510e0b6e8b3c4b765c852725a3efafd3936f5a49ad79da4f61e9ef472d6f7395",
+      "source_status": "Historical provider attribution; original fetch receipt unavailable.",
+      "retrieval_verified": false,
+      "retrieved_at": null,
+      "source_url": null,
+      "http_status": null,
+      "http_headers": null,
+      "transformation_history": "Not independently established from retained receipts."
+    },
+    {
+      "path": "storm/jtwc-rss-20261027-reissue.xml",
+      "provider_attribution": "JTWC",
+      "role": "RSS reissue-link fixture",
+      "bytes": 6738,
+      "sha256": "c3a695d2f549b04e33f2552a673d1fdd3eafd637970a1dd3dad34d9b2838cb20",
+      "source_status": "Historical provider attribution; original fetch receipt unavailable.",
+      "retrieval_verified": false,
+      "retrieved_at": null,
+      "source_url": null,
+      "http_status": null,
+      "http_headers": null,
+      "transformation_history": "Not independently established from retained receipts."
+    }
+  ]
+}
