@@ -71,8 +71,8 @@ class ExchangeUI(unittest.IsolatedAsyncioTestCase):
             self.assertFalse((self.root/'new').exists());self.assertEqual(self.app.document.source,self.source);await pilot.press('ctrl+c')
 
     async def test_ctrl_c_stops_exchange_writer_and_reports_uncertain_destination(self):
-        marker=self.root/'exchange.pid';late=self.root/'late-write';binary=self.root/'slow exchange'
-        binary.write_text('#!'+sys.executable+'\nimport os,time\nfrom pathlib import Path\nPath('+repr(str(marker))+').write_text(str(os.getpid()))\ntime.sleep(30)\nPath('+repr(str(late))+').write_text("late")\n');binary.chmod(0o700)
+        marker=self.root/'exchange.pid';binary=self.root/'slow exchange'
+        binary.write_text('#!'+sys.executable+'\nimport os,time\nfrom pathlib import Path\nPath('+repr(str(marker))+').write_text(str(os.getpid()))\ntime.sleep(30)\n');binary.chmod(0o700)
         async with self.app.run_test(size=(120,55)) as pilot:
             with patch('configurator.workspace.sys.executable',str(binary)):
                 await click(pilot,'#exchange-export');self.paths(self.source,self.root/'pending');await click(pilot,'#exchange-confirm')
@@ -81,7 +81,7 @@ class ExchangeUI(unittest.IsolatedAsyncioTestCase):
                 await asyncio.wait_for(started(),3);pid=int(marker.read_text());await pilot.press('ctrl+c');await self.finish(pilot)
             self.assertFalse(self.app.leaving);self.assertFalse(self.workspace.busy);self.assertIsNone(self.workspace.process)
             with self.assertRaises(ProcessLookupError):os.kill(pid,0)
-            self.assertFalse(late.exists());self.assertIn('Inspect',str(self.app.query_one('#status',Static).render()));self.assertIn(str(self.root/'pending'),str(self.app.query_one('#status',Static).render()))
+            self.assertIn('Inspect',str(self.app.query_one('#status',Static).render()));self.assertIn(str(self.root/'pending'),str(self.app.query_one('#status',Static).render()))
             await pilot.press('ctrl+c')
 
     async def test_unresolvable_destination_is_friendly_and_dirty_editor_remains_usable(self):

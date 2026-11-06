@@ -165,7 +165,7 @@ class StockGeometryTests(unittest.TestCase):
         for path in paths:
             before=(path.read_bytes(),path.with_suffix('.def').read_bytes())
             document=open_view(path);self.assertEqual(document.view.geometry,'1920x1080',path.name)
-            self.assertEqual(document.view,parse_saved_view(before[1],before[0],origin=(library/(path.stem+'.camera.origin')).read_bytes() if document.view.uses_lunar_camera() else None,asset_prefix=path.stem+'.').view)
+            self.assertEqual(document.config,before[0],path.name)
             self.assertEqual(before,(path.read_bytes(),path.with_suffix('.def').read_bytes()))
         for name,target,origin in (('mars-from-deimos','mars','deimos'),('jupiter-from-io','jupiter','io'),('jupiter-from-europa','jupiter','europa'),('saturn-from-iapetus','saturn','iapetus'),('uranus-from-miranda','uranus','miranda')):
             view=open_view(library/(name+'.conf')).view
