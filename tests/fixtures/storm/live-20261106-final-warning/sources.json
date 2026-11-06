@@ -1,0 +1,51 @@
+{
+  "purpose": "Direct official public-source capture for final-warning transition regression",
+  "responses": [
+    {
+      "file": "jtwc-abpw.txt",
+      "url": "https://www.metoc.navy.mil/jtwc/products/abpwweb.txt",
+      "sha256": "5de30bad0d840ca9af8fd6c546781d110c04f31c94472536352b586650d48734",
+      "bytes": 2716,
+      "status": 200,
+      "date": "Fri, 06 Nov 2026 06:55:45 GMT",
+      "last-modified": "Fri, 06 Nov 2026 05:51:14 GMT"
+    },
+    {
+      "file": "jtwc-abio.txt",
+      "url": "https://www.metoc.navy.mil/jtwc/products/abioweb.txt",
+      "sha256": "27cbd8b03d138ac420a367a30d8b8f9277f784135f20c3543aff485a362ac17e",
+      "bytes": 1944,
+      "status": 200,
+      "last-modified": "Thu, 05 Nov 2026 18:00:15 GMT",
+      "date": "Fri, 06 Nov 2026 06:56:08 GMT"
+    },
+    {
+      "file": "jtwc-rss.xml",
+      "url": "https://www.metoc.navy.mil/jtwc/rss/jtwc.rss",
+      "sha256": "17d7926bc6359e3d62bc2ed8a72f719bf2998eda4354d1b8360ec421f9523dab",
+      "bytes": 4979,
+      "status": 200,
+      "last-modified": "Fri, 06 Nov 2026 06:54:21 GMT",
+      "date": "Fri, 06 Nov 2026 06:56:07 GMT"
+    },
+    {
+      "file": "jtwc-99w-alert.txt",
+      "url": "https://www.metoc.navy.mil/jtwc/products/wp9926web.txt",
+      "sha256": "40a36b6356e0982395043972eb8d97250f4dcb802fb84d824c40aaa0655df5e2",
+      "bytes": 1977,
+      "status": 200,
+      "last-modified": "Fri, 06 Nov 2026 02:17:14 GMT",
+      "date": "Fri, 06 Nov 2026 06:56:06 GMT"
+    },
+    {
+      "file": "nhc-current.json",
+      "url": "https://www.nhc.noaa.gov/CurrentStorms.json",
+      "sha256": "faea5cf4718512d456018c5081c2b274d7709e4f7f69e4d0bb2556d0d33360d7",
+      "bytes": 24,
+      "status": 200,
+      "last-modified": "Fri, 30 Oct 2026 10:42:00 GMT",
+      "date": "Fri, 06 Nov 2026 06:55:33 GMT"
+    }
+  ],
+  "capture_date_utc": "2026-11-06"
+}

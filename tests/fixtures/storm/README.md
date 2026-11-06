@@ -61,3 +61,10 @@ retrieval times and response metadata are unverified.
 The residual-TCFA promotion regression deliberately combines the older
 captured alert with an injected link in the later promotion RSS. This is
 synthetic source sequencing, not evidence that JTWC published that sequence.
+
+`live-20261106-final-warning/` contains independently downloaded, unmodified
+public NHC/JTWC responses with per-response URL, HTTP date and SHA-256 receipts.
+ABPW retains an explicitly cross-referenced final warning for 30W after RSS
+retires that warning. The snapshot still includes the active 99W and 94S
+invests. Final-warning recognition must not excuse a missing active warning,
+ambiguous reference, expired source interval or failed publication.
