@@ -10,8 +10,8 @@ A label is green through its configured warning interval, yellow through twice t
 
 ## Fetches and provider limits
 
-The configured check interval can skip a network request when matching, valid local output was fetched recently. For clouds, `Cached image retained` means no HTTP request occurred; `Server reported no change` means HTTP 304. An identical HTTP 200 also leaves the installed image unchanged. A newer server modification time can still accompany an older embedded cloud creation time. Storm caching is additionally bounded by advisory validity. The shipped cloud, quake
-and volcano example intervals leave a small margin below their launchd periods so
+The configured check interval can skip a network request when matching, valid local output was fetched recently. For clouds, `Cached image retained` means no HTTP request occurred; `Server reported no change` means HTTP 304. An identical HTTP 200 also leaves the installed image unchanged. A newer server modification time can still accompany an older embedded cloud creation time. Storm caching is additionally bounded by advisory validity. The default and example cloud, quake
+and volcano intervals leave a small margin below their launchd periods so
 minor start-time jitter does not skip a whole cycle. Existing personal intervals
 are preserved; strict interval comparisons are unchanged.
 
@@ -192,3 +192,28 @@ configured state/output/journal collisions and source-evidence captures are
 excluded. Writers outside this protocol cannot be coordinated by a stat check;
 launchd stdout/stderr `.log` files are therefore reported as skipped and preserved.
 No trim has run merely because this command is installed.
+
+Provider marker labels use Xplanet's literal quoted-label grammar, which has no
+backslash escaping: embedded double quotes become apostrophes, backslashes become
+slashes, and non-printable characters become spaces. This prevents provider text
+from becoming marker options. Frozen observation capture applies the same rule;
+unsafe older escaped labels are refused with recapture guidance rather than
+silently rewriting a hash-bound saved scene. Numeric transparency values retain
+the producer's digit syntax.
+
+Provider XML refuses document type declarations, including encoded XML. KMZ
+members are bounded while decompressed, not solely by archive metadata. Failed
+live-health prerequisites produce a nonzero error with access **not checked**;
+that does not mean an HTTP request failed. Saved health remains network-free.
+
+## Volcano sources
+
+The official GVP CAP endpoint is
+`https://volcano.si.edu/news/WeeklyVolcanoCAP.xml`; it is the code's default when
+no explicit URL is configured. The shipped personal-config example deliberately
+uses an invalid URL until a source is chosen. Set that official URL explicitly,
+or choose `provider = "weekly_html"` to use the fixed official weekly page.
+Access restrictions and stale weekly coverage remain failures; neither endpoint
+is guaranteed available. Do not bypass access controls or substitute download
+success for coverage validation. No configuration or provider is changed by
+reading these instructions.

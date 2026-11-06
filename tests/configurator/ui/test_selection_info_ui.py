@@ -2,7 +2,7 @@
 from pathlib import Path
 import sys,unittest
 from textual.widgets import Button,Input,Static
-import test_app as fixtures
+from tests.configurator.ui import fixtures
 from configurator.app import ConfiguratorApp
 from configurator.model import View
 from configurator.library import save_named
@@ -12,7 +12,7 @@ click=fixtures.click
 
 
 class SelectedInfoUITests(unittest.IsolatedAsyncioTestCase):
-    asyncSetUp=fixtures.AppTests.asyncSetUp
+    asyncSetUp=fixtures.setup_editor
 
     def selected(self):
         scene=save_named(self.root/'config/scenes/chosen.conf',View(),sys.executable)

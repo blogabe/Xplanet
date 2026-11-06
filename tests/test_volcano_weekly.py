@@ -1,6 +1,7 @@
 """Synthetic contracts plus a reduced fixture derived from the saved GVP page."""
 from datetime import datetime, timezone
 from pathlib import Path
+import hashlib
 import json
 
 from totalmarker.errors import FeedError
@@ -46,7 +47,10 @@ class WeeklyVolcanoTests(Sandbox):
     def test_curated_actual_page_structure_has_all_27_joinable_reports(self):
         folder = Path(__file__).parent / 'fixtures'
         manifest = json.loads((folder / 'gvp_weekly_20261019_manifest.json').read_bytes())
-        page = parse_weekly_html((folder / 'gvp_weekly_20261019_structural.html').read_bytes())
+        raw=(folder/'gvp_weekly_20261019_structural.html').read_bytes()
+        self.assertEqual(hashlib.sha256(raw).hexdigest(),manifest['structural_fixture']['sha256'])
+        self.assertEqual(len(raw),manifest['structural_fixture']['size_bytes'])
+        page=parse_weekly_html(raw)
         self.assertEqual((page.period_start.isoformat(), page.period_end.isoformat()),
                          (manifest['period_start'], manifest['period_end']))
         self.assertEqual([{'id': item.id, 'name': item.name, 'country': item.country,

@@ -9,6 +9,7 @@ import re
 
 from .errors import FeedError
 from .labels import legacy_time
+from .marker_text import quoted_label
 
 IDENTITY = re.compile(r"^(?:AL|EP|CP|WP|NI|IO|SI|SP|SH|SA)[0-9]{2}(?:19|20)[0-9]{2}$")
 TIMESTAMP_LIMIT = 32503680000
@@ -141,9 +142,7 @@ def validate_snapshot(snapshot, *, required_groups):
     return snapshot
 
 
-def _quote(value):
-    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
-
+_quote = quoted_label
 
 def _coord(point):
     return f"{point.lat: 7.2f} {point.lon: 7.2f}"

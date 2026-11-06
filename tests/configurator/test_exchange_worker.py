@@ -121,7 +121,7 @@ class ExchangeExitReportTests(unittest.TestCase):
             recovery_notice='';exchange_notice='Inspect chosen destination: partial or complete copy may exist.'
             recovery=None;termination_signal=None
             def __init__(self,*args,**kwargs):pass
-            def run(self):return ('cancelled',None)
+            async def run_async(self):return ('cancelled',None)
         output=StringIO()
         with tempfile.TemporaryDirectory() as root,patch.dict(sys.modules,{'configurator.app':SimpleNamespace(ConfiguratorApp=FakeApp)}),patch.object(sys,'argv',['configurator','--root',root]),patch('sys.stdin.isatty',return_value=True),redirect_stdout(output),patch.object(output,'isatty',return_value=True):
             code=entry.main()
@@ -136,7 +136,7 @@ class ExchangeExitReportTests(unittest.TestCase):
             recovery_notice='';exchange_notice='Inspect pending destination after fatal interruption.'
             recovery=None;termination_signal=None
             def __init__(self,*args,**kwargs):pass
-            def run(self):raise RuntimeError('fixture fatal')
+            async def run_async(self):raise RuntimeError('fixture fatal')
         output=StringIO()
         with tempfile.TemporaryDirectory() as root,patch.dict(sys.modules,{'configurator.app':SimpleNamespace(ConfiguratorApp=FakeApp)}),patch.object(sys,'argv',['configurator','--root',root]),patch('sys.stdin.isatty',return_value=True),redirect_stdout(output),patch.object(output,'isatty',return_value=True):
             with self.assertRaisesRegex(RuntimeError,'fixture fatal'):entry.main()

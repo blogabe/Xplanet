@@ -2,11 +2,11 @@
 import json,unittest
 from textual.widgets import Input,Static,Select
 from configurator.export_ui import RenderExport
-import test_app as fixtures
-import test_resources_ui as resources
+from tests.configurator.ui import fixtures
+from tests.configurator.ui import test_resources_ui as resources
 click=fixtures.click
 class ExportUITests(unittest.IsolatedAsyncioTestCase):
-    asyncSetUp=fixtures.AppTests.asyncSetUp
+    asyncSetUp=fixtures.setup_editor
     renderer=resources.ResourceUITests.renderer
     async def prepare(self,pilot):
         self.app.query_one('#renderer',Input).value=str(self.renderer());await pilot.pause()

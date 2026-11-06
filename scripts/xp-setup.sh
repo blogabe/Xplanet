@@ -1,8 +1,9 @@
 #!/bin/zsh
+emulate -R zsh
 set -u
 umask 077
 
-script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+script_dir=$(CDPATH= cd -- "$(dirname -- "${0:A}")" && pwd -P)
 project_root=$(CDPATH= cd -- "$script_dir/.." && pwd -P)
 
 # Help must return before definitions, prerequisites or preparation are inspected.
@@ -43,6 +44,9 @@ fi
 prepare_launchd_files() (
     temporary=''
     trap '[[ -z "$temporary" ]] || rm -f -- "$temporary"' EXIT
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
+    trap 'exit 129' HUP
 
     fail() { print -u2 -- "Launchd preparation refused: $1"; exit 2; }
     entry_exists() { [[ -e "$1" || -L "$1" ]]; }
@@ -109,8 +113,9 @@ prepare_launchd_files() (
                 fail "Unexpected installation-root placeholders: $path"
         fi
         if [[ "$kind" == local ]]; then
-            [[ "$(plist_get "$path" WorkingDirectory)" == "$working" ]] ||
-                fail "Review local launchd WorkingDirectory: $path"
+            value=$(plist_get "$path" WorkingDirectory)
+            [[ "$value" == /* && "${value:A}" == "$working" ]] ||
+                fail "Review local launchd WorkingDirectory: $value (resolved: ${value:A}; expected: $working)"
             value=$(plist_get "$path" ProgramArguments.0)
             [[ "$value" == /* || "$value" == */* ]] ||
                 fail "Review local launchd ProgramArguments.0: $path"
@@ -314,6 +319,9 @@ migrate_map_link() (
     verify_target "$name" "$target"
     temporary=$(mktemp -d "$project_root/${name:h}/.map-link.XXXXXXXX") || fail "Cannot prepare $name relocation"
     trap 'rm -f -- "$temporary/link"; rmdir -- "$temporary"' EXIT
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
+    trap 'exit 129' HUP
     ln -s -- "$target" "$temporary/link" || fail "Cannot prepare $name relocation"
     [[ -L "$entry" && "$(readlink "$entry")" == "$previous" ]] ||
         fail "Preparation stopped at $name: link changed during confirmation"
@@ -353,11 +361,17 @@ map_count=0
 stock_maps=false
 while IFS= read -r line || [[ -n "$line" ]]; do
     [[ "$line" =~ '^[[:space:]]*#' ]] && continue
-    if [[ "$line" =~ '^[[:space:]]*EARTH_MAP_PRE[[:space:]]*=' ]]; then
+    if [[ "$line" =~ '^[[:space:]]*(export[[:space:]]+)?EARTH_MAP_PRE[[:space:]]*=(.*)$' ]]; then
         (( map_count += 1 ))
-        if [[ "$line" =~ '^[[:space:]]*EARTH_MAP_PRE[[:space:]]*=[[:space:]]*stock[[:space:]]*$' ]]; then
+        value="$match[2]"
+        value="${value#"${value%%[![:space:]]*}"}"
+        value="${value%"${value##*[![:space:]]}"}"
+        if [[ ${#value} -ge 2 && "$value[1]" == "$value[-1]" && ( "$value[1]" == "'" || "$value[1]" == '"' ) ]]; then
+            value="$value[2,-2]"
+        fi
+        if [[ "$value" == stock ]]; then
             stock_maps=true
-        elif [[ "$line" =~ '^[[:space:]]*EARTH_MAP_PRE[[:space:]]*=[[:space:]]*([A-Za-z0-9][A-Za-z0-9_.-]*)/([A-Za-z0-9][A-Za-z0-9_.-]*)[[:space:]]*$' ]]; then
+        elif [[ "$value" =~ '^([A-Za-z0-9][A-Za-z0-9_.-]*)/([A-Za-z0-9][A-Za-z0-9_.-]*)$' ]]; then
             stock_maps=false
             map_folder="$match[1]"
             map_name="$match[2]"
@@ -454,11 +468,8 @@ python_bin=$("$script_dir/run-totalmarker" --python-path) || {
     exit 2
 }
 # Validate an existing shared choice separately from a temporary environment override.
-shared_python="$python_bin"
-if [[ -e "$project_root/config/totalmarker.python" || -L "$project_root/config/totalmarker.python" ]]; then
-    shared_python=$(unset TOTALMARKER_PYTHON; "$script_dir/run-totalmarker" --python-path) ||
-        fail "Saved TotalMarker interpreter is unavailable; use Advanced Python to choose one"
-fi
+shared_python=$(unset TOTALMARKER_PYTHON; "$script_dir/run-totalmarker" --python-path) ||
+    fail "Shared TotalMarker interpreter is unavailable; use Advanced Python to record a choice. A temporary TOTALMARKER_PYTHON override is not saved."
 XPLANET_BIN=''
 XPLANET_HOME=''
 XPLANET_CONFIG=''
@@ -588,9 +599,9 @@ done
 [[ -z "$solar_notice" ]] || print -- "$solar_notice"
 if [[ ! -e "$project_root/config/totalmarker.python" && ! -L "$project_root/config/totalmarker.python" ]]; then
     source "$script_dir/lib/xplanet/python-runtime.zsh" || fail "missing Python runtime helper"
-    (unset TOTALMARKER_PYTHON; python_save_selection "$python_bin" --if-missing) ||
+    (unset TOTALMARKER_PYTHON; python_save_selection "$shared_python" --if-missing) ||
         fail "Could not record the TotalMarker interpreter; prior preparation was retained"
-    print -- "Recorded TotalMarker interpreter: $python_bin"
+    print -- "Recorded TotalMarker interpreter: $shared_python"
 fi
 # The separate exploration flow never silently applies proposed desktop files.
 print -- "Explore sample views with scripts/xplanet.sh config; saving there does not apply setup settings."
@@ -686,14 +697,14 @@ if ask "Step 3) Install and register Xplanet automation?"; then
         for job in "${jobs[@]}"; do
             agent="$HOME/Library/LaunchAgents/local.xplanet.$job.plist"
             label="local.xplanet.$job"
-            if launchctl list "$label" >/dev/null 2>&1; then
+            if launchctl print "gui/$EUID/$label" >/dev/null 2>&1; then
                 print -- "Already registered: $label (left unchanged; loaded settings were not reverified)."
                 continue
             fi
             if ! launchctl load -w "$agent"; then
                 print -u2 -- "launchd could not load $job; review installed job status."
                 failures+=("launchd $job load")
-            elif ! launchctl list "local.xplanet.$job" >/dev/null 2>&1; then
+            elif ! launchctl print "gui/$EUID/local.xplanet.$job" >/dev/null 2>&1; then
                 print -u2 -- "launchd did not confirm registration of $job."
                 failures+=("launchd $job registration")
             fi

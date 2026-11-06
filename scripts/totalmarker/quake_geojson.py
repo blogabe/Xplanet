@@ -6,6 +6,7 @@ import math
 
 from .errors import FeedError
 from .labels import legacy_time
+from .marker_text import quoted_label
 
 
 @dataclass(frozen=True)
@@ -102,10 +103,7 @@ def _color(mag, selected, thresholds):
     return thresholds[-1][1]
 
 
-def _quoted(value):
-    value = "".join(" " if c in '\r\n' or ord(c) < 32 else c for c in value)
-    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
-
+_quoted = quoted_label
 
 def _size(mag, options):
     standard = (mag * 20 + 4) * options.pixel_factor

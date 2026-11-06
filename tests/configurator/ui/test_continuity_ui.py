@@ -5,11 +5,11 @@ from textual.widgets import Button,Input,Static,Select
 from configurator.__main__ import report_result
 from configurator.workspace import open_view
 from configurator.model import ROOT
-import test_app as fixtures
+from tests.configurator.ui import fixtures
 click=fixtures.click
 
 class ContinuityUITests(unittest.IsolatedAsyncioTestCase):
-    asyncSetUp=fixtures.AppTests.asyncSetUp
+    asyncSetUp=fixtures.setup_editor
 
     async def test_continue_save_sets_baseline_keeps_undo_and_reports_prior_copy_on_exit(self):
         target=self.root/'config/scenes/one.conf'
@@ -93,7 +93,7 @@ class ContinuityUITests(unittest.IsolatedAsyncioTestCase):
     async def test_literal_native_path_and_grid_copy_keeps_source_and_editor_unchanged(self):
         source=self.root/'native.conf';source.write_bytes(b'[earth]\nmap=old.jpg # retain\ngrid=false\nunknown=opaque\n');before=source.read_bytes()
         async with self.app.run_test(size=(110,50)) as pilot:
-            await fixtures.NativeValueAppTests.enter(self,pilot,source)
+            await fixtures.enter_native(self,pilot,source)
             self.app.screen.query_one('#native-value-map',Input).value='../maps/new.jpg'
             self.app.screen.query_one('#native-value-grid',Input).value='true';await pilot.pause()
             await click(pilot,'#native-patch-review-button');await pilot.pause()

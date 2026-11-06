@@ -1,3 +1,15 @@
+# Xplanet parses decimal CLI values using the process locale.
+renderer_numeric_locale() {
+    local inherited_all="${LC_ALL:-}" category
+    if [[ -n "$inherited_all" ]]; then
+        for category in LC_CTYPE LC_COLLATE LC_MESSAGES LC_MONETARY LC_TIME; do
+            export "$category=$inherited_all"
+        done
+    fi
+    unset LC_ALL
+    export LC_NUMERIC=C
+}
+
 # Scene helpers contain literal data handling only; legacy mode stays the default.
 source "$script_dir/lib/xplanet/scene.zsh" || return 2
 source "$script_dir/lib/xplanet/lifecycle.zsh" || return 2
@@ -5,6 +17,8 @@ source "$script_dir/lib/xplanet/lifecycle.zsh" || return 2
 # Private zsh helpers, sourced by xplanet.sh after root discovery.
 
 select_earth_map() (
+    local checking=false
+    [[ "${1:-}" != --check ]] || checking=true
     [[ -f "$project_root/config/xp.def" && ! -L "$project_root/config/xp.def" ]] ||
         fail "missing real config/xp.def"
     XPLANET_HOME=''
@@ -30,18 +44,27 @@ select_earth_map() (
         fail "Monthly map is absent or not a regular file: $source"
     for directory in .state .state/totalmarker; do
         if [[ ! -e "$project_root/$directory" && ! -L "$project_root/$directory" ]]; then
+            if [[ "$checking" == true ]]; then continue; fi
             mkdir -- "$project_root/$directory" || fail "Cannot create $directory"
         fi
         [[ -d "$project_root/$directory" && ! -L "$project_root/$directory" ]] ||
             fail "$directory must be a real directory"
     done
     lockdir="$project_root/.state/totalmarker/map.lock.d"
-    mkdir -- "$lockdir" 2>/dev/null ||
-        fail "Earth map selection is locked at $lockdir; another earth command may be running. If none is running after an interruption, remove that empty lock directory with rmdir and retry."
-    trap 'rmdir -- "$lockdir"' EXIT
-    trap 'exit 130' INT
-    trap 'exit 143' TERM
-    trap 'exit 129' HUP
+    if [[ "$checking" == true ]]; then
+        [[ ! -e "$lockdir" && ! -L "$lockdir" ]] || fail "Earth map selection is locked at $lockdir; retry after the current selection finishes"
+        [[ -w "$project_root/images" ]] || fail "images must be writable for Earth map selection"
+        local state_parent="$project_root/.state/totalmarker"
+        while [[ ! -d "$state_parent" ]]; do state_parent="${state_parent:h}"; done
+        [[ -w "$state_parent" ]] || fail "Earth map state directory must be writable: $state_parent"
+    else
+        mkdir -- "$lockdir" 2>/dev/null ||
+            fail "Earth map selection is locked at $lockdir; another earth command may be running. If none is running after an interruption, remove that empty lock directory with rmdir and retry."
+        trap 'rmdir -- "$lockdir"' EXIT
+        trap 'exit 130' INT
+        trap 'exit 143' TERM
+        trap 'exit 129' HUP
+    fi
     cd "$project_root/images" || fail "Cannot enter images directory"
     if [[ -e earth.png || -L earth.png ]]; then
         [[ -L earth.png ]] || fail "images/earth.png is not a symlink; refusing to replace it"
@@ -60,6 +83,10 @@ select_earth_map() (
             print -- "Earth map unchanged: $source"
             exit 0
         fi
+    fi
+    if [[ "$checking" == true ]]; then
+        print -- "Earth map prerequisites verified: $source"
+        exit 0
     fi
     temporary=".earth-$$-$RANDOM.tmp"
     ln -s -- "$target" "$temporary" || fail "Cannot prepare Earth map link"
@@ -97,7 +124,8 @@ load_render_config() {
     fi
 }
 
-render_frame() {
+render_frame() (
+    renderer_numeric_locale
     local geometry="$1" output="$2" temporary="$3"
     "$XPLANET_BIN" -body earth \
         -searchdir "$project_root" \
@@ -112,7 +140,7 @@ render_frame() {
         -output "$output" \
         -tmpdir "$temporary" \
         -num_times 1
-}
+)
 
 desktop_command() {
     XPLANET_SCENE_DIRECTORY=''
@@ -138,15 +166,45 @@ desktop_command() {
 desktop_label=local.xplanet.desktop
 desktop_domain="gui/$EUID"
 
+desktop_job_owned() {
+    local line value program='' working='' in_arguments=false
+    local -a arguments
+    while IFS= read -r line; do
+        value="${line#"${line%%[![:space:]]*}"}"
+        value="${value%"${value##*[![:space:]]}"}"
+        if [[ "$value" == 'program = '* ]]; then
+            [[ -z "$program" ]] || return 1
+            program="${value#program = }"
+        elif [[ "$value" == 'working directory = '* ]]; then
+            [[ -z "$working" ]] || return 1
+            working="${value#working directory = }"
+        elif [[ "$value" == 'arguments = {' ]]; then
+            [[ "$in_arguments" == false && ${#arguments} == 0 ]] || return 1
+            in_arguments=true
+        elif [[ "$in_arguments" == true ]]; then
+            if [[ "$value" == '}' ]]; then in_arguments=false
+            else arguments+=("$value")
+            fi
+        fi
+    done <<< "$1"
+    [[ "$in_arguments" == false && "$program" == /bin/zsh && "$working" == "$project_root" &&
+       ${#arguments} == 2 && "$arguments[1]" == /bin/zsh && "$arguments[2]" == "$script_dir/lib/xplanet/desktop.zsh" ]]
+}
+
 _start_xplanet() {
     local -a desktop_args
-    local map_note state temporary attempt
+    local map_note state temporary attempt job_info registered=false
     desktop_command
+    command -v launchctl >/dev/null || fail "launchctl is required for the desktop"
+    if job_info=$(launchctl print "$desktop_domain/$desktop_label" 2>/dev/null); then
+        desktop_job_owned "$job_info" || fail "desktop job belongs to another or unverified checkout; use explicit restart to replace it"
+        registered=true
+    fi
     if [[ -n "${EARTH_MAP_PRE:-}" ]]; then
         map_note=$(select_earth_map) || return $?
     fi
-    command -v launchctl >/dev/null || fail "launchctl is required for the desktop"
-    if ! launchctl print "$desktop_domain/$desktop_label" >/dev/null 2>&1; then
+    [[ -z "$map_note" ]] || interactive_note "$map_note"
+    if [[ "$registered" == false ]]; then
         # Do not start a second desktop on top of the old -fork installation.
         # An explicit restart authorizes the same broad termination as stop.
         local existing
@@ -163,6 +221,9 @@ _start_xplanet() {
         # Use macOS's plist writer, never interpolate paths into XML or shell text.
         (
             trap 'rm -f -- "$temporary"' EXIT
+            trap 'exit 130' INT
+            trap 'exit 143' TERM
+            trap 'exit 129' HUP
             /usr/bin/plutil -create xml1 "$temporary" &&
             /usr/bin/plutil -insert Label -string "$desktop_label" "$temporary" &&
             /usr/bin/plutil -insert ProgramArguments -xml '<array/>' "$temporary" &&
@@ -204,9 +265,8 @@ xplanet_pids() {
             names+=("${XPLANET_BIN:t}" "${XPLANET_BIN:A:t}")
         fi
     fi
-    local scene_names
-    scene_names=$(scene_renderer_names)
-    [[ -z "$scene_names" ]] || names+=("${(@f)scene_names}")
+    # Immutable scene metadata is data, not authority to signal arbitrary
+    # process names. launchd stops its own selected renderer during bootout.
     local -A seen
     for name in ${(u)names}; do
         # pgrep takes an ERE even with -x; configured names are literal.
@@ -276,6 +336,13 @@ _stop_xplanet() {
 }
 
 _restart_xplanet() {
+    # Validate the requested command before removing a working display. Start
+    # validates again after stop; no map links or service state change here.
+    (
+        local -a desktop_args
+        desktop_command
+        [[ -z "${EARTH_MAP_PRE:-}" ]] || select_earth_map --check >/dev/null
+    ) || return $?
     _stop_xplanet quiet || return $?
     _start_xplanet
 }

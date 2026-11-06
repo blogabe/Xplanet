@@ -33,7 +33,7 @@ install_xplanet() {
     installed="$prefix/bin/xplanet"
     [[ -x "$installed" ]] || install_failed "Homebrew Xplanet binary is not executable at $installed."
     print -- "macOS may request security approval during a finite Xplanet launch. Review any prompts yourself."
-    if ask_install "Run one Xplanet frame now to request macOS approvals?"; then
+    if ask_install "Render one frame to the desktop background to request macOS approvals?"; then
         (cd "$project_root" && "$installed" "-searchdir=$project_root" -num_times=1) ||
             install_failed "The one-frame Xplanet launch failed."
     else

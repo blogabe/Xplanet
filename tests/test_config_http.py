@@ -1,5 +1,7 @@
 import base64
 import io
+import json
+import os
 import ssl
 from urllib.error import HTTPError
 from unittest.mock import patch
@@ -273,3 +275,53 @@ class FetchTests(Sandbox):
             server.server_close()
             worker.join(timeout=2)
         self.assertFalse(worker.is_alive())
+
+
+class NetworkWorkerBoundaryTests(Sandbox):
+    def test_credentials_and_url_travel_only_over_stdin_to_isolated_worker(self):
+        secret='DUMMY_PRIVATE_CREDENTIAL';url='https://example.invalid/PRIVATE_PATH_TOKEN'
+        seen={}
+        class Process:
+            returncode=0
+            def __init__(self):self.stdin=io.BytesIO();self.stdout=io.BytesIO()
+            def communicate(self,payload,timeout):
+                seen['request']=json.loads(payload)
+                return b'{"status":200,"headers":{},"reason":"OK"}\nbody',None
+            def poll(self):return 0
+            def wait(self):return 0
+        def spawn(argv,**kwargs):seen['argv']=argv;seen['options']=kwargs;return Process()
+        with patch('totalmarker.http.subprocess.Popen',side_effect=spawn):
+            result=HTTPTransport().request(url,{'Authorization':'Basic '+secret},3,1024)
+        self.assertEqual(result.body,b'body')
+        self.assertEqual(seen['argv'][1:4],['-I','-B','-c'])
+        self.assertNotIn(secret,' '.join(seen['argv']));self.assertNotIn(url,' '.join(seen['argv']))
+        self.assertEqual(seen['request']['url'],url)
+        self.assertEqual(seen['request']['headers']['Authorization'],'Basic '+secret)
+        self.assertTrue(seen['options']['close_fds'])
+        self.assertEqual(seen['options']['stderr'],__import__('subprocess').DEVNULL)
+
+    def test_environment_proxies_are_explicitly_disabled(self):
+        with patch.dict(os.environ,{'HTTPS_PROXY':'http://proxy.invalid:1234'}), patch('totalmarker.http.build_opener') as build:
+            HTTPTransport().opener
+        proxy=next(item for item in build.call_args.args if isinstance(item,__import__('urllib.request',fromlist=['ProxyHandler']).ProxyHandler))
+        self.assertEqual(proxy.proxies,{})
+
+
+class KMZReadBoundTests(Sandbox):
+    def test_decompression_is_bounded_even_if_archive_metadata_understates_size(self):
+        from types import SimpleNamespace
+        from totalmarker.storm_sources import parse_jtwc_kmz
+        from totalmarker.errors import FeedError
+        limit=4*1024*1024
+        class Stream(io.BytesIO):
+            def read(stream,count=-1):
+                self.assertEqual(count,limit+1)
+                return b'x'*(limit+1)
+        class Archive:
+            def __enter__(self):return self
+            def __exit__(self,*args):pass
+            def infolist(self):return [SimpleNamespace(file_size=1)]
+            def getinfo(self,name):return SimpleNamespace(file_size=1)
+            def open(self,member):return Stream()
+        with patch('totalmarker.storm_sources.ZipFile',return_value=Archive()),self.assertRaisesRegex(FeedError,'KML exceeds the size limit'):
+            parse_jtwc_kmz(b'fixture',None,None,None)

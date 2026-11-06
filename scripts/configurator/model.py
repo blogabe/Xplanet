@@ -113,6 +113,14 @@ def number(value):
     return text[:-2] if text.endswith('.0') else text
 
 
+def draft_number(value):
+    """Summaries accept incomplete editor fields; validation remains authoritative."""
+    try:
+        return number(value) if math.isfinite(float(value)) else 'invalid'
+    except (ValueError, TypeError, OverflowError):
+        return 'invalid'
+
+
 def utc_date(value):
     if not re.fullmatch(r'[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z', value):
         raise ValueError('Use UTC YYYY-MM-DDTHH:MM:SSZ, for example 2000-01-01T12:00:00Z.')
@@ -507,7 +515,7 @@ class View:
             except ValueError:selected='invalid override table'
             detail=('; overrides: '+selected) if selected else ''
             return f'{self.target.title()} system textures; shared moon scale {scale}×'+detail+f'; no visibility isolation or auto-fit; shadow {self.planet_shade}%'+(f'; illustrative orbits {self.orbit_color}, {self.orbit_width}px' if self.uses_orbits() else '')
-        if self.target!='earth':return f'bundled {self.target.title()} texture; shadow {number(self.planet_shade)}%; grid {self.grid}; label {self.label}; Earth layers inactive'
+        if self.target!='earth':return f'bundled {self.target.title()} texture; shadow {draft_number(self.planet_shade)}%; grid {self.grid}; label {self.label}; Earth layers inactive'
         day = 'stock day' if self.map_family == 'stock' else f'{self.map_family} / month {self.month} (2004)'
         text=f'{day}; {self.night} night; twilight {self.twilight}°; grid {self.grid}; label {self.label}; places {self.places}; routes {self.routes}'
         layers=[f'{field}={getattr(self,field)}'+(' (inactive for fixed UTC)' if field=='clouds' and self.clouds=='captured' and self.time_mode=='fixed' else '') for field in ('relief','specular','clouds') if getattr(self,field)!='off']
@@ -939,8 +947,10 @@ def recognized_body(config):
                 if any(count!=1 for count in counts):return False
                 astronomy_refs.extend(refs)
         if astronomy_refs:
-            for line in astronomy_refs:text=text.replace(line,'')
-            return recognized_body(text.encode())
+            suffix=''.join(astronomy_refs)
+            sections=re.findall(r'^\[([^]\n]+)\]$',text,re.M)
+            if not text.endswith(suffix) or not sections or sections[-1]!='earth':return False
+            return recognized_body(text[:-len(suffix)].encode())
         observed={}
         for product in OBS_PRODUCTS:
             marker,arc,_=observation_names(product)

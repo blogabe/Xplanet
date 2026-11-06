@@ -1,4 +1,5 @@
 #!/bin/zsh
+emulate -R zsh
 
 set -u
 
@@ -31,7 +32,7 @@ if [[ "${1:-}" == bootstrap ]]; then
     /bin/zsh "$bootstrap_tmp/xp-bootstrap.sh" "$bootstrap_ref"
     exit $?
 fi
-script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+script_dir=$(CDPATH= cd -- "$(dirname -- "${0:A}")" && pwd -P)
 project_root=$(CDPATH= cd -- "$script_dir/.." && pwd -P)
 
 fail() {

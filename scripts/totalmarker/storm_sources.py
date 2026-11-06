@@ -18,6 +18,7 @@ from zipfile import BadZipFile, ZipFile
 import xml.etree.ElementTree as ET
 
 from .errors import FeedError
+from .xmlsafe import parse as parse_xml
 from .storm_advisory import parse_advisory
 from .storm_model import (ForecastPoint, Storm, StormSnapshot, TrackPoint,
                           validate_snapshot)
@@ -210,7 +211,7 @@ def _jtwc_url(url):
 
 def parse_jtwc_rss(body):
     try:
-        root = ET.fromstring(body)
+        root = parse_xml(body)
     except ET.ParseError:
         raise FeedError("Storm JTWC RSS is invalid XML") from None
     if root.tag != "rss":
@@ -446,7 +447,11 @@ def parse_jtwc_kmz(body, current, identity, name):
             member = archive.getinfo("doc.kml")
             if member.file_size > 4 * 1024 * 1024:
                 raise FeedError("Storm JTWC KML exceeds the size limit")
-            root = ET.fromstring(archive.read(member))
+            with archive.open(member) as stream:
+                raw = stream.read(4 * 1024 * 1024 + 1)
+            if len(raw) > 4 * 1024 * 1024:
+                raise FeedError("Storm JTWC KML exceeds the size limit")
+            root = parse_xml(raw)
     except (BadZipFile, KeyError, ET.ParseError, OSError, zlib.error,
             NotImplementedError, RuntimeError):
         raise FeedError("Storm JTWC KMZ is invalid") from None

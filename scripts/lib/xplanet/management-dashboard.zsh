@@ -35,7 +35,7 @@ management_health_records() (
     trap 'exit 130' INT
     trap 'exit 143' TERM
     trap 'exit 129' HUP
-    (ulimit -f 32 || exit 2; exec "$script_dir/run-totalmarker" health --dashboard) >"$capture" 2>&1 &
+    (ulimit -f 32 || exit 2; exec "$script_dir/run-totalmarker" health --dashboard) >|"$capture" 2>&1 &
     worker=$!
     unsetopt monitor
     for attempt in {1..50}; do

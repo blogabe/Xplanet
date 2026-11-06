@@ -3,11 +3,11 @@ import unittest
 from textual.widgets import Input,Static
 from configurator.app import STOCK_LIBRARY
 from configurator.renderer_discovery import discover
-import test_app as fixtures
-import test_resources_ui as resources
+from tests.configurator.ui import fixtures
+from tests.configurator.ui import test_resources_ui as resources
 
 class RendererDiscoveryUITests(unittest.IsolatedAsyncioTestCase):
-    asyncSetUp=fixtures.AppTests.asyncSetUp
+    asyncSetUp=fixtures.setup_editor
     renderer=resources.ResourceUITests.renderer
     async def test_project_renderer_note_and_stock_open_retain_local_choice(self):
         import shlex

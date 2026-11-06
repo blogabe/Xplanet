@@ -85,7 +85,7 @@ not a complete image decoder or a sandbox for an arbitrary renderer binary.
 
 ## Camera and time
 
-Targets are Earth, Moon and the eight major planets (Earth included). `View.arguments()` emits one coherent active strategy:
+Targets include Earth, the other major planets, supported moons and system views; see [planetary support](planetary.md). `View.arguments()` emits one coherent active strategy:
 projected maps use geographic coordinates and omit space framing; non-projected
 space views use geographic coordinates or a body origin, with radius or FOV.
 The model retains inactive choices instead of clearing them on mode switches.
@@ -94,7 +94,7 @@ prefilling widgets. Every retained field is validated so a saved scene can reope
 
 Now emits no date override. Fixed UTC is parsed as an aware calendar instant and
 encoded to the engine's GMT `YYYYMMDD.HHMMSS` syntax without using host-local time.
-The studio currently bounds dates to 1800–2200 and framing to documented UI ranges;
+The studio bounds fixed dates to 1800–2200; Pluto/Charon geometry has a narrower 1800–2099 range. Framing also has documented UI limits;
 these are product limits, not universal engine limits or accuracy guarantees.
 The default low-precision source (`EphemerisLow.cpp` in Xplanet 1.3.1) discusses
 that interval, but this project does not certify astronomical accuracy. No label,

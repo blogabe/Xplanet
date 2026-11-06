@@ -32,6 +32,8 @@
 !/examples/
 !/examples/README.md
 !/examples/*.example.toml
+!/maps/
+!/maps/README.md
 # Existing maps stay tracked; adding maps requires deliberate git add -f.
 # Unknown imagery/configuration under maps remains excluded by default.
 !/config/

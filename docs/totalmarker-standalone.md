@@ -41,3 +41,10 @@ against the checkout root. Failed refreshes preserve last-good outputs.
 Linux users manage scheduling (for example, cron or systemd timers) and Xplanet
 rendering separately. The macOS install, setup, desktop launcher and launchd
 plists do not apply to this workflow.
+
+## Offline tests
+
+In a Git checkout, run `PYTHONPATH=scripts:. python3 -B -m tests.run_portable`
+for the portable subset. `xplanet.sh test` runs the supported macOS suite and is
+not the Linux entry point. Hosted CI currently covers macOS only; Linux standalone
+support is distinct from continuous Linux validation.

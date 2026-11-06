@@ -2,7 +2,7 @@
 import argparse,asyncio,json,os,stat,sys,tempfile
 from dataclasses import asdict
 from pathlib import Path
-from .resources import Capabilities,BoundedLog,binary_signature,capabilities,safe
+from .resources import Capabilities,BoundedLog,binary_signature,capabilities,safe,renderer_environment
 
 CACHE=Path('.state/configurator/binary-evidence.json')
 LIMIT=256*1024
@@ -66,7 +66,7 @@ async def probe(renderer,timeout=5):
     try:
         with tempfile.TemporaryDirectory(prefix='xplanet-version-') as folder:
             work=Path(folder);config=work/'empty.conf';config.write_text('[default]\n')
-            env={**os.environ,'HOME':folder,'TMPDIR':folder,'XDG_CACHE_HOME':folder,'PYTHONDONTWRITEBYTECODE':'1'}
+            env=renderer_environment({**os.environ,'HOME':folder,'TMPDIR':folder,'XDG_CACHE_HOME':folder,'PYTHONDONTWRITEBYTECODE':'1'})
             try:
                 code=await workspace._run_child([str(binary),'-version','-output',str(work/'probe.png'),'-num_times','1','-tmpdir',folder,'-config',str(config)],work,env,log,timeout)
             except (OSError,asyncio.TimeoutError) as exc:log.feed(('\nProbe runtime error: '+(str(exc) or type(exc).__name__)).encode())

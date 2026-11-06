@@ -108,7 +108,7 @@ class VolcanoOptions:
     url: str = "https://volcano.si.edu/news/WeeklyVolcanoCAP.xml"
     marker: str = "markers/volcano"
     journal: str = ".state/totalmarker/volcano-pending.json"
-    interval: int = 24 * 3600
+    interval: int = 23 * 3600
     timeout: int = 30
     max_bytes: int = 8 * 1024 * 1024
     warning: int = 3 * 24 * 3600
@@ -131,7 +131,7 @@ class QuakeOptions:
     minimum: float = 6.0
     marker: str = "markers/quake"
     journal: str = ".state/totalmarker/quake-pending.json"
-    interval: int = 20 * 60
+    interval: int = 1100
     timeout: int = 30
     max_bytes: int = 32 * 1024 * 1024
     warning: int = 3 * 3600
@@ -704,7 +704,7 @@ def load_bytes(fs, raw, path):
         url=https_url(get("VolcanoURL") or VolcanoOptions.url),
         marker=get("VolcanoOutput") or VolcanoOptions.marker,
         journal=get("VolcanoJournalFile") or VolcanoOptions.journal,
-        interval=number("VolcanoCheckIntervalSeconds", 24 * 3600),
+        interval=number("VolcanoCheckIntervalSeconds", 82800),
         timeout=number("VolcanoTimeoutSeconds", 30, minimum=1, maximum=300),
         max_bytes=number("VolcanoMaxBytes", 8 * 1024 * 1024, minimum=1024,
                          maximum=32 * 1024 * 1024),
@@ -740,7 +740,7 @@ def load_bytes(fs, raw, path):
         duration=duration, size=size, minimum=decimal("QuakeMinimumSize", 6),
         marker=get("QuakeOutput") or QuakeOptions.marker,
         journal=get("QuakeJournalFile") or QuakeOptions.journal,
-        interval=number("QuakeCheckIntervalSeconds", 20 * 60),
+        interval=number("QuakeCheckIntervalSeconds", 1100),
         timeout=number("QuakeTimeoutSeconds", 30, minimum=1, maximum=300),
         max_bytes=number("QuakeMaxBytes", 32 * 1024 * 1024, minimum=1024,
                          maximum=128 * 1024 * 1024),
@@ -861,6 +861,8 @@ def load_bytes(fs, raw, path):
                 storm.journal, norad.satellite, norad.satellite + ".tle",
                 norad.journal, eclipse.marker, eclipse.arc,
                 eclipse.journal, santa.marker, santa.journal] if value]
+    if any(any(ord(char)<32 or ord(char)==127 for char in value) for value in outputs):
+        raise ConfigError("Configured output paths must not contain control characters")
     if path is not None:
         source = str(fs.resolve(path)).casefold()
         if any(str(fs.resolve(value)).casefold() == source for value in outputs):
@@ -872,7 +874,7 @@ def load_bytes(fs, raw, path):
     return Settings(
         provider, https_url(url), resolution, AuthSpec(auth_mode, user, password,
         user_env, pass_env), **paths,
-        interval=number("CloudCheckIntervalSeconds", 3600),
+        interval=number("CloudCheckIntervalSeconds", 3300),
         timeout=number("CloudTimeoutSeconds", 30, minimum=1, maximum=300),
         max_bytes=number("CloudMaxBytes", 32 * 1024 * 1024, minimum=1024,
                          maximum=128 * 1024 * 1024),

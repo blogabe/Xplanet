@@ -2,6 +2,7 @@
 import asyncio
 from datetime import datetime,timezone
 import json
+import os
 import re
 import signal
 import sys
@@ -29,7 +30,6 @@ from .native_patch import NativePatch
 from .native_edit_ui import NativePatchPath,NativePatchScreen
 from .handoff_ui import HandoffScreen
 from .selection_info_ui import SelectedSceneScreen
-from .resources import safe
 from .library_ui import SceneLibrary
 from .exchange_ui import SceneExchange
 from .eclipse_import_ui import EclipseImport
@@ -45,7 +45,7 @@ from .binary_diagnostics import cached as cached_binary_evidence,store as store_
 from .workspace import Workspace, configuration_issues, open_view, save_view
 
 
-STOCK_LIBRARY=Path(__file__).with_name('samples')/'scenes'
+STOCK_LIBRARY=Path(__file__).resolve().with_name('samples')/'scenes'
 
 
 class ConfirmSave(ModalScreen[bool]):
@@ -179,7 +179,7 @@ class ReportScreen(ModalScreen):
 
     def __init__(self, title, sections, images=()):
         super().__init__()
-        self.report_title, self.sections, self.images = title, sections, images
+        self.report_title, self.sections, self.images = safe(title), tuple(safe(section) for section in sections), images
 
     def compose(self) -> ComposeResult:
         with VerticalScroll():
@@ -187,13 +187,13 @@ class ReportScreen(ModalScreen):
             for section in self.sections:
                 yield Static(section, markup=False)
             for index, (label, snapshot) in enumerate(self.images):
-                yield Static(f'{label}: {snapshot.view.summary()}\nRenderer: {snapshot.renderer}\nCompleted UTC: {snapshot.completed_utc}\n{snapshot.path}', markup=False)
+                yield Static(safe(f'{label}: {snapshot.view.summary()}\nRenderer: {snapshot.renderer}\nCompleted UTC: {snapshot.completed_utc}\n{snapshot.path}'), markup=False)
                 if snapshot.cloud_provenance:
-                    yield Static(describe_capture(json.loads(snapshot.cloud_provenance)),markup=False)
+                    yield Static(safe(describe_capture(json.loads(snapshot.cloud_provenance))),markup=False)
                 for product,provenance in snapshot.astronomy_provenance:
-                    yield Static(describe_astronomy_metadata(json.loads(provenance)),markup=False)
+                    yield Static(safe(describe_astronomy_metadata(json.loads(provenance))),markup=False)
                 if snapshot.observation_provenance:
-                    yield Static('Active frozen observations in this preview: '+', '.join(snapshot.view.uses_observations())+'\n'+describe_observation_metadata(json.loads(snapshot.observation_provenance)),markup=False)
+                    yield Static(safe('Active frozen observations in this preview: '+', '.join(snapshot.view.uses_observations())+'\n'+describe_observation_metadata(json.loads(snapshot.observation_provenance))),markup=False)
                 yield Button('Open ' + label, id=f'report-image-{index}', disabled=not Path('/usr/bin/open').is_file())
             yield Button('Back', id='close-report')
 
@@ -208,6 +208,7 @@ class ReportScreen(ModalScreen):
 
 
 class ConfiguratorApp(App):
+    ENABLE_COMMAND_PALETTE = False
     TITLE = 'Xplanet · Scene studio'
     BINDINGS = [Binding('f1','help','Help',priority=True),
                 Binding('escape', 'request_exit', 'Cancel'),
@@ -531,29 +532,37 @@ class ConfiguratorApp(App):
         return 'Ready. No personal configuration was read.'
 
     def load(self, source):
+        self.run_worker(self.load_document(source))
+
+    async def load_document(self,source):
         if source is None:
             self.status('Open cancelled. Draft and source files are unchanged.')
             return
+        content=self.query_one('#content');content.disabled=True
         try:
-            document = open_view(source)
-        except (ValueError, OSError) as exc:
-            self.status(f'Cannot open view: {exc}')
-            return
-        if self.recovery:self.recovery.boundary()
-        self.recovery_origin=None
-        self.workspace.reset_captures(document.capture,document.observations,document.astronomy)
-        self.document = document
-        values = {field: number(value) if field in NUMERIC_FIELDS else value
-                  for field, value in vars(document.view).items()}
-        values['renderer'] = self.query_one('#renderer', Input).value
-        self.restore_fields(values)
-        self.history.reset(self.raw_fields())
-        self.update_controls()
-        self.query_one('#destination', Input).value = self.copy_destination()
-        self.query_one('#view-source', Static).update(self.source_description())
-        self.update_preview_state()
-        self.status(self.open_message())
-
+            try:
+                document = await self.workspace.file_operation(open_view,source)
+            except asyncio.CancelledError:
+                self.status('Open cancelled; current draft and source retained.')
+                return
+            except (ValueError, OSError) as exc:
+                self.status(f'Cannot open view: {exc}')
+                return
+            if self.recovery:self.recovery.boundary()
+            self.recovery_origin=None
+            self.workspace.reset_captures(document.capture,document.observations,document.astronomy)
+            self.document = document
+            values = {field: number(value) if field in NUMERIC_FIELDS else value
+                      for field, value in vars(document.view).items()}
+            values['renderer'] = self.query_one('#renderer', Input).value
+            self.restore_fields(values)
+            self.history.reset(self.raw_fields())
+            self.update_controls()
+            self.query_one('#destination', Input).value = self.copy_destination()
+            self.query_one('#view-source', Static).update(self.source_description())
+            self.update_preview_state()
+            self.status(self.open_message())
+        finally:content.disabled=False
     def on_mount(self):
         self.history = DraftHistory(self.raw_fields())
         self.controls_ready = True
@@ -571,6 +580,7 @@ class ConfiguratorApp(App):
             self.set_interval(1,self.check_terminal)
 
     async def on_unmount(self):
+        await self.workspace.stop()
         if self.recovery:await self.recovery.stop();self.recovery.close()
         loop=asyncio.get_running_loop()
         for sig,previous in self.signal_handlers.items():
@@ -578,7 +588,7 @@ class ConfiguratorApp(App):
         self.signal_handlers={}
 
     def check_terminal(self):
-        try:connected=sys.stdin.isatty() and sys.stdout.isatty()
+        try:connected=os.isatty(0) and os.isatty(1)
         except (OSError,ValueError):connected=False
         if not connected:self.external_termination(signal.SIGHUP)
 
@@ -787,6 +797,7 @@ class ConfiguratorApp(App):
         self.update_preview_state()
 
     def update_preview_state(self):
+        self.query_one('#recovery',Button).disabled=self.recovery is None or self.workspace.busy
         latest = self.workspace.latest
         if latest:
             matches = latest.matches(self.draft(), self.query_one('#renderer', Input).value, self.document.config)
@@ -832,7 +843,7 @@ class ConfiguratorApp(App):
         self.push_screen(ReportScreen('Configuration health', sections))
 
     def status(self, message):
-        self.query_one('#status', Static).update(message)
+        self.query_one('#status', Static).update(safe(message))
 
     def on_button_pressed(self, event: Button.Pressed):
         action = event.button.id
@@ -842,7 +853,7 @@ class ConfiguratorApp(App):
             self.push_screen(SceneExchange(mode,str(self.document.source or '') if mode=='export' else '',renderer,self.history.dirty),lambda request:self.start_scene_exchange(mode,request,renderer))
         elif action == 'load':
             self.capture_edit()
-            self.push_screen(OpenView(str(self.document.source or self.root / 'dev' / 'earth-view'), self.history.dirty), self.load)
+            self.push_screen(OpenView(str(self.document.source or STOCK_LIBRARY / 'earth-september.conf'), self.history.dirty), self.load)
         elif action == 'moon-scales':
             view=self.draft()
             if not view.uses_system() or self.workspace.busy:self.status('Individual scales are available in an idle system-space draft.');return
@@ -911,7 +922,7 @@ class ConfiguratorApp(App):
             snapshot=self.workspace.latest if kind=='preview' else self.workspace.comparison_latest
             if snapshot is not None and not self.workspace.busy:
                 description=(snapshot.view.summary()+'\nRender completed: '+snapshot.completed_utc) if kind=='preview' else ('Three recorded '+('imagery-month' if snapshot.plan.parameter=='month' else 'framing')+' snapshots; epoch '+snapshot.plan.epoch)
-                destination=self.root/'dev'/('export-'+kind+'-'+datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S'))
+                destination=self.root/'config'/('export-'+kind+'-'+datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S'))
                 self.push_screen(RenderExport(kind,description,str(destination)),lambda path:self.start_export(kind,snapshot,path))
         elif action == 'compare':
             if self.workspace.previous and self.workspace.latest:
@@ -1149,14 +1160,16 @@ class ConfiguratorApp(App):
         if not confirmed:
             self.status('Save cancelled. Nothing was written.')
             return
+        content=self.query_one('#content');content.disabled=True
         try:
-            self.saved = (save_named if Path(destination).suffix.lower()=='.conf' else save_view)(destination,view,renderer,config_bytes=self.document.config,capture=self.workspace.capture_for(view),observations=self.workspace.observations_for(view),astronomy=self.workspace.astronomy_for(view))
+            self.saved = await self.workspace.file_operation(save_named if Path(destination).suffix.lower()=='.conf' else save_view,destination,view,renderer,config_bytes=self.document.config,capture=self.workspace.capture_for(view),observations=self.workspace.observations_for(view),astronomy=self.workspace.astronomy_for(view))
             if keep_open:
-                try:document=open_view(self.saved)
+                try:document=await self.workspace.file_operation(open_view,self.saved)
                 except (ValueError,OSError) as exc:
                     self.status(f'Copy saved to {self.saved}, but reopening it failed: {exc}. Draft and undo retained; inspect the copy before continuing.')
                     return
                 self.document=document
+                self.recovery_origin=None
                 self.history.record(self.raw_fields());self.history.mark_saved()
                 if self.recovery:await self.recovery.discard_current()
                 self.query_one('#view-source',Static).update(self.source_description())
@@ -1166,8 +1179,12 @@ class ConfiguratorApp(App):
             else:
                 if self.recovery:await self.recovery.discard_current()
                 self.exit(('saved',str(self.saved),self.selection_label) if self.selection_label is not None else ('saved',str(self.saved)))
+        except asyncio.CancelledError:
+            self.status('Save cancelled; draft and prior copies retained. Inspect the chosen destination before retrying.')
         except (ValueError, OSError) as exc:
             self.status(str(exc))
+
+        finally:content.disabled=False
 
     def action_help(self):
         if isinstance(self.screen,StudioHelp):self.screen.action_back()
@@ -1203,6 +1220,9 @@ class ConfiguratorApp(App):
         if self.recovery:await self.recovery.discard_current()
         await self.finish_exit()
 
+    def action_quit(self):
+        self.action_request_exit()
+
     def action_request_exit(self):
         if not self.exit_prompting and not self.leaving:self.run_worker(self.action_cancel())
 
@@ -1224,6 +1244,7 @@ class ConfiguratorApp(App):
         operation=operation or self.workspace.operation
         try:
             await self.workspace.stop()
+            if operation=='files':return
             if not self.leaving and operation=='exchange':self.status('Scene exchange interrupted. Inspect the chosen destination before retrying; a partial or complete new copy may exist. Draft and prior previews retained.')
             elif not self.leaving:self.status('Operation cancelled. Draft and last successful preview retained. Ctrl-C while idle exits; Ctrl-D/Ctrl-Q requests exit.')
         finally:self.cancelling_operation=False
@@ -1231,6 +1252,9 @@ class ConfiguratorApp(App):
     async def action_force_cancel(self):
         if self.leaving:
             self.workspace.kill_owned()
+            if self.workspace.owned_io.owner is not None:
+                self.workspace.owned_io.request_cancel()
+                return
             self.exit(self.completed_result())
             return
         await self.finish_exit(emergency=True)

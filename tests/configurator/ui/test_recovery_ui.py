@@ -3,12 +3,12 @@ import asyncio,os,signal,sys,unittest
 from pathlib import Path
 from textual.widgets import Input,Button,Static,Checkbox
 from configurator.app import ConfiguratorApp
-import test_app as fixtures
+from tests.configurator.ui import fixtures
 click=fixtures.click
 
 class RecoveryUITests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
-        await fixtures.AppTests.asyncSetUp(self)
+        await fixtures.setup_editor(self)
         self.app=ConfiguratorApp(self.root,str(Path(sys.executable).resolve()),self.workspace,recovery=True)
 
     async def test_opening_and_cancelling_clean_editor_creates_no_recovery_files(self):

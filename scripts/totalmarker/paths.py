@@ -24,6 +24,8 @@ class RootFS:
             raise StorageError("Root must be an existing directory without symlink ancestors")
 
     def resolve(self, path, *, write=False, follow_symlinks=True):
+        if any(ord(char) < 32 or ord(char) == 127 for char in os.fspath(path)):
+            raise StorageError("Paths must not contain control characters")
         path = Path(path)
         if ".." in path.parts:
             raise StorageError("Parent traversal is not allowed")

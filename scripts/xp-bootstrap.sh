@@ -1,4 +1,5 @@
 #!/bin/zsh
+emulate -R zsh
 
 # Invoked by xplanet.sh bootstrap; no checkout-local files are available here.
 set -u

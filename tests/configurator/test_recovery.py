@@ -199,3 +199,22 @@ class RecoveryDirectoryTests(unittest.IsolatedAsyncioTestCase):
         import json
         value=json.loads((moved/session.identity/'head.json').read_bytes())
         self.assertTrue(all((moved/session.identity/(sha+'.json')).exists() for sha in value['revisions']))
+
+    async def test_finder_metadata_does_not_block_checkpoint_and_is_preserved(self):
+        first=self.session();await first.checkpoint(*self.proposal())
+        metadata=self.store.path/'.DS_Store';metadata.write_bytes(b'Finder metadata');metadata.chmod(0o644)
+        second=self.session();await second.checkpoint(*self.proposal(latitude='30'))
+        self.assertEqual(metadata.read_bytes(),b'Finder metadata')
+        self.assertTrue(self.store.path.exists())
+
+    async def test_explicit_discard_includes_only_hash_verified_orphan_objects(self):
+        session=self.session();await session.checkpoint(*self.proposal());session.close()
+        raw=b'unreferenced owned checkpoint object';orphan=self.store.path/session.identity/digest(raw)
+        orphan.write_bytes(raw);orphan.chmod(0o600)
+        self.store.discard(session.identity)
+        self.assertFalse(orphan.parent.exists())
+
+    async def test_source_hint_controls_do_not_prevent_checkpoint(self):
+        record,blobs=pack(self.current,self.current,SAMPLE.read_bytes(),self.w,'odd\nname\x1b')
+        self.assertEqual(record['source'],'odd name ')
+        session=self.session();await session.checkpoint(record,blobs)

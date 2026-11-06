@@ -1,4 +1,5 @@
 """Bounded, attempt-specific binary and renderer lookup evidence, never guesses."""
+from .owned_io import checkpoint as io_checkpoint
 from dataclasses import dataclass
 from datetime import datetime,timezone
 from pathlib import Path
@@ -6,6 +7,17 @@ import hashlib,os,re,stat,sys
 from .model import Issue
 
 LOG_LIMIT=32768
+
+
+def renderer_environment(environment):
+    """Only the renderer's numeric parser needs C; preserve other locale categories."""
+    result=dict(environment)
+    all_locale=result.pop('LC_ALL',None)
+    if all_locale:
+        for category in ('LC_CTYPE','LC_COLLATE','LC_MESSAGES','LC_MONETARY','LC_TIME'):
+            result[category]=all_locale
+    result['LC_NUMERIC']='C'
+    return result
 
 
 def file_identity(info):return (info.st_dev,info.st_ino,info.st_size,info.st_mtime_ns,info.st_ctime_ns)
@@ -22,6 +34,7 @@ def binary_signature(path):
         if not stat.S_ISREG(before.st_mode) or before.st_size>limit:raise ValueError('Choose a readable regular renderer of at most 512 MiB.')
         sha=hashlib.sha256();count=0
         while chunk:=os.read(fd,65536):
+            io_checkpoint()
             count+=len(chunk)
             if count>limit:raise ValueError('Renderer exceeds the 512 MiB identity bound.')
             sha.update(chunk)

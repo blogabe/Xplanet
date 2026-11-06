@@ -58,7 +58,7 @@ update_tap_formula() {
     brew_bin=$(command -v brew) || fail "Git checkout updated, but Homebrew is unavailable; the Xplanet formula was not checked"
     [[ "$brew_bin" == /* && -x "$brew_bin" ]] || fail "Homebrew must be an executable on PATH"
     git_bin=$(command -v git) || fail "Git is required to compare the installed Xplanet formula"
-    command -v plutil >/dev/null || fail "macOS plutil is required to read the installed Xplanet receipt"
+    [[ -x /usr/bin/plutil ]] || fail "macOS plutil is required to read the installed Xplanet receipt"
     print -- "Checking the blogabe/xplanet Homebrew formula..."
     "$brew_bin" update || fail "Git checkout updated, but Homebrew could not update its taps; Xplanet was not reinstalled"
     tap_root=$(HOMEBREW_NO_AUTO_UPDATE=1 "$brew_bin" --repository blogabe/xplanet) ||
@@ -71,13 +71,13 @@ update_tap_formula() {
        "$formula_path" == "$tap_root/"* ]] || fail "Homebrew returned an unexpected tap or formula path"
     receipt="$prefix/INSTALL_RECEIPT.json"
     [[ -f "$receipt" ]] || fail "installed Xplanet has no Homebrew receipt; cannot verify its build"
-    installed_tap=$(plutil -extract source.tap raw -o - "$receipt") ||
+    installed_tap=$(/usr/bin/plutil -extract source.tap raw -o - "$receipt") ||
         fail "installed Xplanet receipt has no tap identity"
     [[ "$installed_tap" == blogabe/xplanet ]] ||
         fail "installed Xplanet came from $installed_tap, not blogabe/xplanet; refusing to switch formula"
-    installed_path=$(plutil -extract source.path raw -o - "$receipt") ||
+    installed_path=$(/usr/bin/plutil -extract source.path raw -o - "$receipt") ||
         fail "installed Xplanet receipt has no formula path"
-    installed_commit=$(plutil -extract source.tap_git_head raw -o - "$receipt") ||
+    installed_commit=$(/usr/bin/plutil -extract source.tap_git_head raw -o - "$receipt") ||
         fail "installed Xplanet receipt has no tap commit; review its build options and reinstall manually"
     [[ "$installed_path" == "$tap_root/"* &&
        "$installed_commit" =~ '^[0-9a-f]{40,64}$' ]] ||
@@ -101,13 +101,13 @@ update_tap_formula() {
         print -- "Xplanet tap formula unchanged; no reinstall needed."
         return 0
     fi
-    count=$(plutil -extract used_options raw -o - "$receipt") ||
+    count=$(/usr/bin/plutil -extract used_options raw -o - "$receipt") ||
         fail "installed Xplanet build options are unavailable; refusing to lose them"
     [[ "$count" == <-> && "$count" -le 32 ]] ||
         fail "installed Xplanet build options are invalid"
     options=()
     for ((index = 0; index < count; index++)); do
-        option=$(plutil -extract "used_options.$index" raw -o - "$receipt") ||
+        option=$(/usr/bin/plutil -extract "used_options.$index" raw -o - "$receipt") ||
             fail "could not read installed Xplanet build option $index"
         [[ "$option" =~ '^--(with|without)-[A-Za-z0-9-]+$' ]] ||
             fail "installed Xplanet build option is not supported for automatic reinstall: $option"
@@ -124,9 +124,9 @@ update_tap_formula() {
     refreshed_receipt="$refreshed_prefix/INSTALL_RECEIPT.json"
     [[ -f "$refreshed_receipt" ]] ||
         fail "Xplanet reinstall returned success without an installed receipt"
-    [[ "$(plutil -extract source.tap raw -o - "$refreshed_receipt")" == blogabe/xplanet ]] ||
+    [[ "$(/usr/bin/plutil -extract source.tap raw -o - "$refreshed_receipt")" == blogabe/xplanet ]] ||
         fail "Xplanet reinstall did not retain the blogabe/xplanet tap"
-    refreshed_commit=$(plutil -extract source.tap_git_head raw -o - "$refreshed_receipt") ||
+    refreshed_commit=$(/usr/bin/plutil -extract source.tap_git_head raw -o - "$refreshed_receipt") ||
         fail "Xplanet reinstall did not record tap provenance"
     refreshed_blob=$("$git_bin" -C "$tap_root" rev-parse --verify "$refreshed_commit:$current_rel") ||
         fail "Xplanet reinstall provenance cannot be verified"

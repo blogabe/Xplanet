@@ -1,4 +1,5 @@
 """Review-only deployment bundles. No selection, renderer execution or service API."""
+from .owned_io import checkpoint as io_checkpoint
 from dataclasses import dataclass,field
 from pathlib import Path
 import hashlib,json,os,re,stat
@@ -35,6 +36,7 @@ def file_record(path,limit=FILE_LIMIT,*,missing=False):
         if not stat.S_ISREG(before.st_mode) or before.st_size>limit:raise ValueError('Handoff inputs must be bounded regular files: '+str(path))
         sha=hashlib.sha256();count=0
         while chunk:=os.read(fd,65536):
+            io_checkpoint()
             count+=len(chunk)
             if count>limit:raise ValueError('Handoff input grew beyond its bound.')
             sha.update(chunk)

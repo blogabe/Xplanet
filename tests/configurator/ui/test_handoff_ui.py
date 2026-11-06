@@ -1,6 +1,6 @@
 """Review-only handoff interaction and preservation tests; no activation."""
 from pathlib import Path
-import sys,tempfile,unittest
+import sys,tempfile,unittest,asyncio,threading
 from unittest.mock import patch
 from textual.widgets import Button,Input,Static
 from configurator.app import ConfiguratorApp
@@ -9,7 +9,7 @@ from configurator.library import save_named
 from configurator.model import View
 from configurator.workspace import Workspace
 from configurator.fileio import OwnedFiles
-from test_app import click
+from tests.configurator.ui.fixtures import click
 
 
 class HandoffUITests(unittest.IsolatedAsyncioTestCase):
@@ -236,3 +236,30 @@ finally:workspace.close()
         self.assertEqual(self.app.return_value,('selected',selected.revision))
         self.assertEqual(inspect_selection(self.root),selected)
         for path,data in self.source.items():self.assertEqual(path.read_bytes(),data)
+
+    async def test_slow_review_keeps_ui_responsive_and_escape_cancels_owned_reader(self):
+        from configurator.handoff import create_plan
+        entered=threading.Event();release=threading.Event()
+        def held(*args):
+            entered.set()
+            if not release.wait(5):raise AssertionError('review barrier expired')
+            return create_plan(*args)
+        async with self.app.run_test(size=(110,50)) as pilot:
+            await self.enter(pilot)
+            try:
+                with patch('configurator.handoff_ui.create_plan',side_effect=held):
+                    await click(pilot,'#handoff-review-button')
+                    self.assertTrue(await asyncio.to_thread(entered.wait,3))
+                    self.assertTrue(self.workspace.busy)
+                    await pilot.press('escape')
+                    async def requested():
+                        while not self.workspace.owned_io.cancel.is_set():await asyncio.sleep(0)
+                    await asyncio.wait_for(requested(),3)
+                    release.set()
+                    async def finished():
+                        while self.workspace.busy:await asyncio.sleep(0)
+                    await asyncio.wait_for(finished(),3);await pilot.pause()
+                self.assertFalse(self.app.leaving)
+                self.assertIn('cancelled',self.status())
+                self.assertFalse(self.target.exists())
+            finally:release.set()

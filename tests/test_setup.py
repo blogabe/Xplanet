@@ -15,6 +15,19 @@ from .support import PROJECT, Sandbox, wait_for_prompt, copy_launcher, stub_laun
 
 
 class SetupTests(Sandbox):
+    def test_literal_map_assignment_accepts_quotes_export_and_never_executes_expressions(self):
+        scripts,env,_=self._shell_fixture()
+        definition=self.root/'config/xp.def';original=definition.read_text()
+        for assignment in ('export EARTH_MAP_PRE="world/world"',"EARTH_MAP_PRE='world/world'",' EARTH_MAP_PRE = world/world '):
+            definition.write_text(original.replace('EARTH_MAP_PRE=world/world',assignment))
+            result=self._inspect(scripts,env,'--dry-run')
+            self.assertEqual(result.returncode,0,(assignment,result.stderr))
+        sentinel=self.base/'must-not-execute'
+        definition.write_text(original.replace('EARTH_MAP_PRE=world/world','EARTH_MAP_PRE=$(touch '+str(sentinel)+')'))
+        result=self._inspect(scripts,env,'--dry-run')
+        self.assertEqual(result.returncode,2)
+        self.assertFalse(sentinel.exists())
+
     def test_help_returns_before_configuration_prerequisites_or_actions(self):
         scripts, env, products = self._shell_fixture()
         guard = self.base / "help-must-not-execute"
@@ -503,9 +516,9 @@ class SetupTests(Sandbox):
                          ["quake", "storm", "volcano", "clouds"])
         jobs = ("start", "earth-map", "quake", "storm", "volcano", "clouds")
         self.assertEqual(calls.read_text().splitlines(), [line for job in jobs for line in (
-            f"list local.xplanet.{job}",
+            f"print gui/{os.geteuid()}/local.xplanet.{job}",
             f"load -w {home}/Library/LaunchAgents/local.xplanet.{job}.plist",
-            f"list local.xplanet.{job}")])
+            f"print gui/{os.geteuid()}/local.xplanet.{job}")])
         for job in jobs:
             local = examples / f"local.xplanet.{job}.plist"
             self.assertEqual((home / "Library/LaunchAgents" / local.name).readlink(), local)
@@ -516,7 +529,7 @@ class SetupTests(Sandbox):
                                input="y\n\ny\ny\ny\ny\ny\n", capture_output=True,
                                text=True, check=False)
         self.assertEqual(again.returncode, 0, again.stderr)
-        self.assertEqual(calls.read_text().splitlines(), [f"list local.xplanet.{job}" for job in jobs])
+        self.assertEqual(calls.read_text().splitlines(), [f"print gui/{os.geteuid()}/local.xplanet.{job}" for job in jobs])
         self.assertEqual(again.stdout.count("left unchanged"), len(jobs))
         # macOS 27 reports identity but omits cwd/environment. Preserve the job
         # without falsely claiming those missing settings were verified.
@@ -526,7 +539,7 @@ class SetupTests(Sandbox):
                                  input="y\n\ny\ny\ny\ny\ny\n", capture_output=True,
                                  text=True, check=False)
         self.assertEqual(omitted.returncode, 0, omitted.stderr)
-        self.assertEqual(calls.read_text().splitlines(), [f"list local.xplanet.{job}" for job in jobs])
+        self.assertEqual(calls.read_text().splitlines(), [f"print gui/{os.geteuid()}/local.xplanet.{job}" for job in jobs])
         self.assertEqual(omitted.stdout.count("loaded settings were not reverified"), len(jobs))
         # A same-label loaded definition is not parsed or reverified;
         # it remains untouched even if its settings differ.
@@ -550,7 +563,10 @@ class SetupTests(Sandbox):
     def test_saved_project_selection_is_shared_by_new_launchd_jobs(self):
         self._selected_python_jobs(shared=True)
 
-    def _selected_python_jobs(self, shared):
+    def test_temporary_python_override_is_not_persisted_for_scheduled_jobs(self):
+        self._selected_python_jobs(shared=False, override=True)
+
+    def _selected_python_jobs(self, shared, override=False):
         scripts, env, _ = self._shell_fixture()
         shutil.copy2(PROJECT / "scripts/run-totalmarker", scripts / "run-totalmarker")
         examples = scripts / "launchd"
@@ -582,9 +598,14 @@ class SetupTests(Sandbox):
             (scripts.parent / "config/totalmarker.python").write_text(str(selected) + "\n")
         env.update(HOME=str(home), PATH=f"{bin_dir}:/bin",
                    TM_BREW_PREFIX=str(prefix))
+        active=selected
+        if override:
+            active=self.base/'temporary interpreter';active.symlink_to(sys.executable)
+            env['TOTALMARKER_PYTHON']=str(active)
         done = self._inspect(scripts, env, input="y\n\nn\nn\nn\nn\ny\n")
         self.assertEqual(done.returncode, 0, done.stderr)
-        self.assertIn(f"TotalMarker will use {selected}", done.stdout)
+        self.assertIn(f"TotalMarker will use {active}", done.stdout)
+        if override:self.assertIn(f'unpinned scheduled jobs use {selected}',done.stdout)
         for job in ("start", "earth-map", "quake", "storm", "volcano"):
             local = examples / f"local.xplanet.{job}.plist"
             document = plistlib.loads(local.read_bytes())

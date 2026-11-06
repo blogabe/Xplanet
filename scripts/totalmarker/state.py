@@ -23,6 +23,8 @@ PAIR_JOURNAL_LIMIT = 4 * 1024 * 1024
 
 def publication_bytes(intent, journal_limit):
     """Reject an intent before writing files that recovery cannot read."""
+    if not isinstance(intent, dict) or not {'state', 'label'} <= intent.keys():
+        raise StorageError("Publication journal lacks required state or label; preserve it for recovery")
     if len(json_bytes(intent["state"])) > STATE_LIMIT:
         raise StorageError("Persistent state exceeds its size limit")
     label = intent["label"]

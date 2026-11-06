@@ -1,4 +1,5 @@
 #!/bin/zsh
+emulate -R zsh
 # Private foreground entrypoint owned by launchd; never call public start here.
 set -u
 project_root=$(CDPATH= cd -- "$(dirname -- "$0")/../../.." && pwd -P) || exit 2
@@ -20,4 +21,5 @@ if [[ -n "${XPLANET_SCENE_DIRECTORY:-}" ]]; then
     cd -- "$XPLANET_SCENE_DIRECTORY" || fail "selected scene revision moved"
     desktop_args+=(-tmpdir "$XPLANET_SCENE_TMPDIR")
 fi
+renderer_numeric_locale
 exec "$XPLANET_BIN" "${desktop_args[@]}"

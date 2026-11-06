@@ -106,7 +106,7 @@ class ExchangeTests(unittest.TestCase):
         archive=self.export()
         for name in ('../outside','/absolute','sub/file','sub\\file','bad\x1bname'):
             target=self.rewrite(archive,lambda files:files.update({name:b'evil'}))
-            with self.subTest(name=name),self.assertRaises(ValueError):self.import_(target)
+            with self.subTest(name=name),self.assertRaisesRegex(ValueError, 'Unsupported exchange member'):self.import_(target)
         for mode,compression,duplicate in ((stat.S_IFLNK|0o777,0,False),(stat.S_IFDIR|0o700,0,False),(stat.S_IFREG|0o600,zipfile.ZIP_DEFLATED,False),(stat.S_IFREG|0o600,0,True)):
             target=self.root/'malicious.zip'
             with zipfile.ZipFile(archive) as source,zipfile.ZipFile(target,'w') as out:
@@ -114,7 +114,9 @@ class ExchangeTests(unittest.TestCase):
                 row=zipfile.ZipInfo('evil');row.create_system=3;row.external_attr=mode<<16;row.compress_type=compression
                 out.writestr(row,b'evil')
                 if duplicate:out.writestr('evil',b'again')
-            with self.assertRaises(ValueError):self.import_(target)
+            reason='duplicate names' if duplicate else 'Unsupported exchange member'
+            with self.subTest(mode=mode, compression=compression, duplicate=duplicate), self.assertRaisesRegex(ValueError, reason):
+                self.import_(target)
         self.assertFalse((self.root/'outside').exists());self.assertFalse((self.root/'imported').exists())
 
     def test_forged_consistent_definition_still_not_executable_import(self):

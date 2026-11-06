@@ -67,8 +67,9 @@ python_provider_install() {
     python_provider_find "$1" >/dev/null
 }
 
-python_save_selection() {
-    local candidate=$1 temporary selection="$project_root/config/totalmarker.python"
+python_save_selection() (
+    emulate -L zsh
+    local candidate=$1 temporary='' selection="$project_root/config/totalmarker.python"
     [[ "${2:-}" == '' || "${2:-}" == --if-missing ]] || return 2
     [[ "$candidate" == /* && "$candidate" != *$'\n'* && "$candidate" != *$'\r'* ]] || return 2
     # An explicit environment override remains authoritative; never hide it.
@@ -81,17 +82,17 @@ python_save_selection() {
     mkdir -p -- "$project_root/config" || return 1
     [[ -d "$project_root/config" && ! -L "$project_root/config" ]] || return 1
     temporary=$(mktemp "$project_root/config/.totalmarker.python.XXXXXXXX") || return 1
-    {
-        print -r -- "$candidate" > "$temporary" || return 1
-        if [[ "${2:-}" == --if-missing ]]; then
-            ln -- "$temporary" "$selection"
-        else
-            mv -f -- "$temporary" "$selection"
-        fi
-    } always {
-        [[ ! -f "$temporary" ]] || rm -f -- "$temporary"
-    }
-}
+    trap '[[ -z "$temporary" ]] || rm -f -- "$temporary"' EXIT
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
+    trap 'exit 129' HUP
+    print -r -- "$candidate" >| "$temporary" || return 1
+    if [[ "${2:-}" == --if-missing ]]; then
+        ln -- "$temporary" "$selection"
+    else
+        mv -f -- "$temporary" "$selection"
+    fi
+)
 
 # Interactive selection is explicit; discovery and merely opening management never install.
 python_choose_runtime() {

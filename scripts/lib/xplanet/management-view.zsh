@@ -88,13 +88,14 @@ management_desktop_facts() {
             1) management_process='not detected' ;;
         esac
     fi
-    # A registered job is not necessarily a running process. Read only the
-    # current user's registration table, never plist/config contents.
-    if command -v launchctl >/dev/null && listing=$(launchctl list 2>/dev/null); then
-        management_job='not registered'
-        while read -r pid last label; do
-            [[ "$label" == local.xplanet.desktop ]] && management_job=registered
-        done <<< "$listing"
+    # Registration and process presence are separate facts in the GUI domain.
+    if command -v launchctl >/dev/null; then
+        launchctl print "gui/$EUID/local.xplanet.desktop" >/dev/null 2>&1
+        result=$?
+        case "$result" in
+            0) management_job=registered ;;
+            113) management_job='not registered' ;;
+        esac
     fi
 }
 

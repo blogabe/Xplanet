@@ -91,6 +91,13 @@ class ObservationCaptureTests(unittest.TestCase):
         with self.assertRaises(CaptureError):native(render_arc(b'1 2 3 4 image=icon.png\n',1700000000),'storm',True,source=True)
         normalized,_=native(quake_marker(b'1 2 "Quote \\" and slash \\\\" color=Red\n',1700000000),'quake',source=True)
         self.assertEqual(native(normalized,'quake')[0],normalized)
+        self.assertNotIn(b'\\',normalized)
+        with self.assertRaisesRegex(CaptureError,'Unsafe legacy'):
+            native(b'# Frozen TotalMarker quake markers v1\n1 2 "Quote \\" text" color=Red\n','quake')
+        transparent,_=native(quake_marker(b'1 2 "X" color=Red image=icon.png transparent=30\n',1700000000),'quake',source=True,icon='icon.png')
+        self.assertIn(b'transparent=30',transparent)
+        self.assertEqual(native(transparent,'quake')[0],transparent)
+
 
     def test_malformed_manifest_hashes_links_empty_data_and_failed_source_facts(self):
         frozen=self.capture(('quake',))

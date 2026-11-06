@@ -37,3 +37,37 @@ def check_source_paths(entries):
                 (name.startswith("scripts/launchd/") and
                  not name.endswith(".plist.example"))):
             raise RuntimeError(f"unsafe source entry: {name}")
+
+
+TEXT_SUFFIXES={'.py','.zsh','.sh','.md','.txt','.toml','.xml','.conf','.def','.example','.json','.yml','.yaml','.tsv','.html','.origin'}
+TEXT_LIMIT=5*1024*1024
+TEXT_TOTAL_LIMIT=64*1024*1024
+
+def index_text(root):
+    """Read bounded text blobs by immutable index identities, with no filters."""
+    import subprocess
+    raw=subprocess.check_output(['git','ls-files','--stage','-z'],cwd=root)
+    rows={};text=[]
+    for row in raw.split(b'\0'):
+        if not row:continue
+        metadata,name=row.split(b'\t',1);name=name.decode();mode,identity,stage=metadata.decode().split()
+        if stage!='0':raise RuntimeError('Unmerged index entry: '+name)
+        rows[name]=metadata.decode()
+        path=PurePosixPath(name)
+        if path.suffix.lower() in TEXT_SUFFIXES or path.name in {'LICENSE','.gitignore','.gitattributes','run-totalmarker','run-configurator'}:text.append((name,identity))
+    check_source_paths(rows)
+    if not text:return []
+    request=''.join(identity+'\n' for _,identity in text).encode()
+    checked=subprocess.check_output(['git','cat-file','--batch-check'],cwd=root,input=request).splitlines()
+    sizes=[int(line.split()[2]) for line in checked]
+    if any(size>TEXT_LIMIT for size in sizes) or sum(sizes)>TEXT_TOTAL_LIMIT:raise RuntimeError('Indexed text exceeds the reviewed privacy-scan budget')
+    raw=subprocess.check_output(['git','cat-file','--batch'],cwd=root,input=request)
+    import io
+    stream=io.BytesIO(raw);result=[]
+    for (name,identity),size in zip(text,sizes):
+        header=stream.readline().decode().strip().split()
+        if header!=[identity,'blob',str(size)]:raise RuntimeError('Unexpected indexed text object')
+        data=stream.read(size)
+        if len(data)!=size or stream.read(1)!=b'\n':raise RuntimeError('Incomplete indexed text object')
+        result.append((name,data))
+    return result

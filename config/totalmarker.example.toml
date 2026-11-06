@@ -82,6 +82,7 @@ detail_align = "Above"
 # CAP is selected; this example URL is deliberately invalid. "weekly_html"
 # uses the fixed official GVP weekly page and ignores the retained CAP URL.
 # Set a valid CAP URL or choose weekly_html before requesting volcano data.
+# Official CAP: https://volcano.si.edu/news/WeeklyVolcanoCAP.xml
 # Failed refreshes retain prior markers and the last successful refresh time.
 provider = "cap"
 url = "https://volcano.example.invalid/WeeklyVolcanoCAP.xml"
