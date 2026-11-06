@@ -61,6 +61,7 @@ management_choose() {
         esac
         management_read "Choose: " || return 1
         management_reply="$prefix$management_reply"
+        [[ "$management_reply" == [hH] ]] && management_reply=10
         return 0
     fi
     local previous
@@ -77,8 +78,9 @@ management_choose() {
         previous=$management_selected
         case "$management_key" in
             up) (( management_selected > 1 )) && (( management_selected -= 1 )) ;;
-            down) (( management_selected < 8 )) && (( management_selected += 1 )) ;;
-            [1-8]) management_selected=$management_key ;;
+            down) (( management_selected < 10 )) && (( management_selected += 1 )) ;;
+            [1-9]) management_selected=$management_key ;;
+            h|H) management_selected=10 ;;
             $'\n'|$'\r') management_reply=$management_selected; return 0 ;;
             q|Q) management_reply=q; return 0 ;;
         esac
@@ -87,5 +89,5 @@ management_choose() {
 }
 
 management_prompt() {
-    print -rn -- "Up/Down or 1-8: highlight; Enter: select; q: exit. Choose: "
+    print -rn -- "Up/Down or 1-9/h: highlight; Enter: select; q: exit. Choose: "
 }

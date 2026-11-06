@@ -39,7 +39,7 @@ class CloudTests(Sandbox):
         self.assertEqual(state["checked_at"], NOW)
         self.assertEqual(state["installed_at"], NOW)
         self.assertIn(legacy_time(NOW).encode(), self.fs.read(settings.labels))
-        self.assertIn(b'-53 -12 "', self.fs.read(settings.labels))
+        self.assertIn(b'-53 -13 "', self.fs.read(settings.labels))
         self.assertNotIn("cloud.example", self.fs.read(settings.log).decode())
 
     def test_cached_check_does_not_fetch_or_advance_timestamp(self):

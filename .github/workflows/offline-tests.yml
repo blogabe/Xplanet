@@ -22,21 +22,20 @@ jobs:
         run: |
           export TOTALMARKER_PYTHON="$(command -v python)"
           ./scripts/xplanet.sh test
-  portable:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python: ['3.11', '3.13']
+  configurator:
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - uses: actions/setup-python@v7
         with:
-          python-version: ${{ matrix.python }}
-      - name: Portable data and publication suite
+          python-version: '3.11'
+      - name: Isolated configurator interactions
         env:
-          TZ: UTC
-          PYTHONDONTWRITEBYTECODE: '1'
           PYTHONPATH: scripts:dev
-        run: python -m tests.run_portable
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          python -m venv "$RUNNER_TEMP/configurator"
+          "$RUNNER_TEMP/configurator/bin/python" -m pip install --require-hashes --only-binary=:all: -r scripts/configurator/requirements.txt
+          "$RUNNER_TEMP/configurator/bin/python" -B -m unittest discover -s dev/tests/configurator/ui -v

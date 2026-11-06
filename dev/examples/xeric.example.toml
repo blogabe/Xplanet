@@ -1,3 +1,5 @@
+# Requires Xeric credentials or environment references in [cloud.xeric].
+# Keep credentials out of version control.
 # Change resolution once; URL and output filename templates follow it.
 [cloud]
 provider = "xeric"

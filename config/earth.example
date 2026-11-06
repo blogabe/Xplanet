@@ -19,18 +19,8 @@
 #
 # 45.50  -73.60 "Montréal %c" lang=ja_JP.eucJP timezone=America/Montreal
 #
-# Although I've provided timezone values for all of the cities below,
-# they may not work on all operating systems.  The timezone is only
-# used if there are time formatting codes in the text string.
-#
-# Windows users will have to use the POSIX definition style
-# std offset dst [offset],start[/time],end[/time]
-#
-# For example, the Eastern US uses the following string:
-# timezone=EST+5EDT,M4.1.0/2,M10.5.0/2
-#
-# New Zealand would use
-# timezone=NZST-12NZDT,M10.1.0/2,M3.3.0/3
+# Timezone names depend on the operating system and are used only when
+# the label contains time formatting codes.
 #
 # The syntax is described at
 # http://www.opengroup.org/onlinepubs/007904975/functions/tzset.html

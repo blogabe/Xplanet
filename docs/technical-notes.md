@@ -96,15 +96,22 @@ To rerun setup, use `./scripts/xplanet.sh setup`. With an existing `config/xp.de
 `TOTALMARKER_PYTHON` to an absolute Python 3.11+ executable only to override the
 launcher's interpreter selection. No global `PATH` change is required.
 
+For renderer build/support troubleshooting, run `./scripts/xplanet.sh diagnostics`
+explicitly, or choose an absolute `--renderer` before setup. This records bounded
+self-reported capabilities, not original compiler flags; setup/start do not probe
+automatically. See [support evidence and limits](configurator/diagnostics.md#renderer-support-outside-the-studio).
+
 ## Setup checks and testing
 
 `./scripts/xplanet.sh setup --dry-run` lists safe preparation without writing. `setup --check` returns 0 when directory, link, and personal-file preparation is ready; 1 when safe preparation remains; and 2 for invalid or unsafe input. It does not test live providers or prove launchd jobs will run. Setup verifies existing personal launchd plists and preserves them rather than replacing them; it renders only missing ones. A provider refresh that returns a valid failed TotalMarker result is reported as an optional warning; malformed results, configuration errors, and preparation or automation failures remain setup failures.
 
 `./scripts/xplanet.sh test` runs offline tests with mocked HTTP, saved fixtures, and stubbed system commands. Passing tests do not establish future provider availability, a Homebrew build, or desktop and scheduled-job behavior on another Mac.
-The CI workflow runs the full suite on macOS with Python 3.11 and 3.13. Its Linux
-job runs `PYTHONPATH=scripts:dev python -m tests.run_portable`, an explicit data and
-publication subset; it does not claim macOS workflow coverage or hide those tests
-behind broad platform skips.
+The CI workflow runs the full suite on macOS with Python 3.11 and 3.13, plus the
+isolated configurator interactions on macOS Python 3.11. Ubuntu jobs are currently
+disabled. Historical Linux checks and the available
+`PYTHONPATH=scripts:dev python -m tests.run_portable` data/publication subset are
+portability evidence, not current continuous Linux CI or macOS workflow coverage.
+Standalone TotalMarker usage and the portable runner remain available.
 
 `earth` uses a directory lock to serialize monthly map selection. Normal signals
 clean it up; a crash or SIGKILL can leave it behind. If the command reports an

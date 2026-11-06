@@ -40,6 +40,11 @@
 !/config/earth.example
 !/config/xp.conf.example
 !/config/xp.def.example
+# Scene-studio configurator and its focused documentation.
+!/scripts/run-configurator
+!/scripts/configurator/
+!/scripts/configurator/**
+
 **/__pycache__/
 *.py[cod]
 *.ini
@@ -49,3 +54,11 @@
 **/*.log
 /dev/tests/.tmp/
 /dev/tests/.tmp/**
+
+!/docs/configurator/
+!/docs/configurator/*.md
+!/docs/configurator.md
+!/docs/configurator-user-guide.md
+
+/dev/tests/**/.tmp/
+/dev/tests/**/.tmp/**

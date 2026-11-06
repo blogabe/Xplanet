@@ -22,6 +22,17 @@ OUTPUT = STAGING / "candidate-next"
 CLUTTER = {".DS_Store", "Thumbs.db", "desktop.ini", "__MACOSX",
            ".git", ".state", "__pycache__"}
 PRIVATE_SUFFIXES = {".ini", ".toml", ".plist", ".log", ".key", ".pem"}
+SOURCE_PRIVATE_SUFFIXES = {".ini", ".log", ".key", ".pem", ".pyc", ".pyo", ".pyd"}
+SOURCE_PRIVATE_COMPONENTS = {name.casefold() for name in CLUTTER} | {".tmp", ".cache"}
+
+
+def private_source_path(name):
+    """Reject known private/runtime names, not arbitrary fixture contents."""
+    parts = PurePosixPath(name).parts
+    return (any(part.casefold() in SOURCE_PRIVATE_COMPONENTS or
+                part.casefold().startswith(".env") or part.startswith("._")
+                for part in parts) or
+            PurePosixPath(name).suffix.lower() in SOURCE_PRIVATE_SUFFIXES)
 
 
 def git(*args, cwd=None, **kwargs):
@@ -130,7 +141,8 @@ def check_source_paths(entries):
     runtime = ("images/", "markers/", "arcs/", "satellites/", "logs/", ".state/")
     allowed_dev = ("dev/tests/", "dev/examples/", "dev/release/")
     for name, metadata in entries.items():
-        if (metadata.startswith("120000 ") or name.startswith(runtime) or
+        if (private_source_path(name) or metadata.startswith("120000 ") or
+                name.startswith(runtime) or
                 (name.startswith("assets/") and
                  (not metadata.startswith(("100644 ", "100755 ")) or
                   any(excluded_name(part) for part in PurePosixPath(name).parts[1:]))) or

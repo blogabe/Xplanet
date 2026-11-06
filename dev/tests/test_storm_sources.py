@@ -579,6 +579,43 @@ class StormSourcesTests(Sandbox):
         with self.assertRaisesRegex(FeedError, "subject disagrees with region"):
             parse_advisory(raw, "abpw")
 
+    def test_authentic_slash_reissue_keeps_date_region_and_freshness_guards(self):
+        captured = FIXTURES / "live-20261105-slash-reissue"
+        record = json.loads((captured / "manifest.json").read_text())["records"][0]
+        raw = (captured / record["path"]).read_bytes()
+        self.assertEqual((len(raw), hashlib.sha256(raw).hexdigest()),
+                         (record["bytes"], record["sha256"]))
+        self.assertIn(b"INDIAN \r\nOCEAN/REISSUED/051800Z-061800ZNOV2026//", raw)
+        issued = datetime(2026, 11, 5, 18, tzinfo=timezone.utc).timestamp()
+        until = datetime(2026, 11, 6, 18, tzinfo=timezone.utc).timestamp()
+        for separator in (b"/", b" ", b" \r\n"):
+            with self.subTest(separator=separator):
+                body = raw.replace(b"OCEAN/REISSUED/", b"OCEAN" + separator + b"REISSUED/")
+                advisory = parse_advisory(body, "abio")
+                self.assertEqual((advisory.issue_at, advisory.issued_at,
+                                  advisory.valid_until_at, advisory.reissued),
+                                 (issued, issued, until, True))
+                self.assertEqual([storm.id for storm in advisory.invests], ["SH942027"])
+                _fresh_advisory(advisory, until, "abio")
+                with self.assertRaisesRegex(FeedError, "advisory is stale"):
+                    _fresh_advisory(advisory, until + 1, "abio")
+                with self.assertRaisesRegex(FeedError, "future-dated"):
+                    _fresh_advisory(advisory, issued - 3601, "abio")
+        malformed = (
+            raw.replace(b"OCEAN/REISSUED/", b"OCEAN//REISSUED/"),
+            raw.replace(b"051800Z-061800ZNOV2026//", b"051800Z-061800ZNOV2026/"),
+            raw.replace(b"061800ZNOV2026", b"061800Z"),
+            raw.replace(b"ABIO10 PGTW 051800", b"ABIO10 PGTW 071800"),
+            raw.replace(b"RMKS/", b"ISSUED/051800Z-061800ZNOV2026//\r\nRMKS/", 1),
+            raw.replace(b"RMKS/", b"SUBJ/BROKEN\r\nRMKS/", 1),
+        )
+        for body in malformed:
+            with self.subTest(body=hashlib.sha256(body).hexdigest()):
+                with self.assertRaises(FeedError):
+                    parse_advisory(body, "abio")
+        with self.assertRaisesRegex(FeedError, "subject disagrees with region"):
+            parse_advisory(raw, "abpw")
+
     def test_advisory_month_year_rollover_and_invalid_intervals(self):
         rollover = empty_advisory("abpw")
         for header, interval, issue, until in (

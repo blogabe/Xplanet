@@ -2,7 +2,7 @@
 
 Run `scripts/xplanet.sh` without arguments in a terminal to open management.
 Opening, leaving or cancelling the menu changes nothing. `q` or EOF exits;
-Ctrl-C interrupts. In capable terminals, Up/Down moves the highlight, digits 1–8
+Ctrl-C interrupts. In capable terminals, Up/Down moves the highlight, digits 1–9 or h
 highlight an option, and Enter activates it; q exits immediately. Limited terminals
 use numbered line input. With redirected input or output, no arguments prints usage instead. `--help` and named commands retain their direct behavior.
 
@@ -25,16 +25,19 @@ and the optional start offer, new/partial flows acknowledge the summary and exit
 return to management. macOS may require approval for an installed renderer;
 review such prompts yourself.
 
-`config` is deliberately a placeholder. Setup also shows this handoff before
-manual configuration review. It saves and applies nothing and reports
-`configuration_result=deferred` to its caller. Setup preparation can still finish;
-that does not mean the future configurator has completed. Continue using the
-existing configuration files and setup prompts.
+`config` opens the [scene configurator](configurator/reference.md). It previews temporarily
+and saves new native scenes. Explicit reviewed Apply can select an immutable
+revision separately from saving and restart; it never changes the running display
+or schedules. Completed saves/selections persist when the editor closes. Its
+Textual dependencies require explicit isolated preparation. Deliberate configurator
+interruptions are reported as interruptions, preserving completed saves/selections;
+they are not presented as rollback or command failure. See the [studio exit and
+recovery contract](configurator/recovery.md). Missing prerequisites
+leave management usable.
 
-The future configurator can navigate settings nonlinearly, validate/preview and
-save or cancel proposed settings. Management will own applying settings, generating
-and registering plists, and lifecycle. There is no additional configuration store,
-provider framework or dashboard in this groundwork.
+Management retains installation, plist generation/registration and lifecycle.
+Configurator selection uses the [guarded scene handoff](configurator/apply-design.md);
+it is not another installer.
 
 Setup's apply-mode exit status is explicit: **0 completed**, **3 cancelled or
 stopped**, **1 failed core steps**, **2 invalid setup or ended input**. Exit 3 is
@@ -59,16 +62,29 @@ commands. It confirms lifecycle/update actions; stop still stops **all** the
 current user's Xplanet processes, and restart performs that same stop first.
 The foreground launchd renderer has no automatic respawn after intentional stop.
 
-The screen separates desktop status, data health and active configuration. It
+The screen separates desktop process/job status, next-start selection and saved data health. It
 refreshes status after actions and terminal resizing; there is no polling dashboard.
 Navigation repaints only the old and new selected rows. Narrow terminals or missing
 cursor capabilities use a full redraw with cached status. Geometry is checked on
 the next key after a resize, before repainting; that key is retained across the
 full refresh. There is no idle input/status polling. The data-health
-area is explicitly a placeholder, with saved health available through option 7.
+area starts **not checked in this session**. Option 7 explicitly inspects saved
+TotalMarker state and caches a dated per-product snapshot in memory. It shows
+current, failed/stale, uncertain and disabled sources using the same semantics as
+normal health. This is saved evidence, never a live access check or automatic
+refresh; select 7 again to refresh. Inspection failure clears the cached snapshot.
+Ordinary `health`, `--verbose`, `--json` and explicit `--live` remain available as
+direct commands; the compact `health --dashboard` records are a presentation format,
+not a replacement for detailed diagnostics.
 Opening management never starts Python, fetches feeds or executes configuration.
-Configuration status counts files; it does not validate or display active settings.
-The configurator remains a separate, unimplemented editing flow.
+Legacy setup status counts files; it does not validate settings. Next-start scene
+metadata is hash-checked and labeled separately; assets and the executable are
+revalidated only by the start path. Invalid/unavailable selectors are shown as
+such, without claiming a legacy fallback. **Running scene: not identified** remains
+explicit: a registered job or normal Xplanet process cannot establish which scene
+is actually displaying. The menu does not execute `xp.def` to guess.
+The separate configurator opens chosen samples/saved scenes; opening management
+does not automatically discover or import the selected desktop scene.
 
 Desktop facts are read-only: normal `xplanet` process-name detection for the current
 user, and registration of `local.xplanet.desktop`. Registration does not establish
@@ -111,14 +127,23 @@ and setup retain their documented exit statuses.
 
 ## Desktop commands
 
-`start` uses `XPLANET_GEOMETRY` from `xp.def` when nonempty; otherwise Xplanet
-sizes the desktop automatically. `render` saves a frame at the configured
-dimensions, while `preview` uses a fixed 1920×1080 size. `stop` signals
+`setup --help` lists setup modes without inspecting configuration or prerequisites.
+
+
+With no scene selector, `start` uses `XPLANET_GEOMETRY` from `xp.def` when nonempty;
+otherwise Xplanet sizes the desktop automatically. A selected revision uses its
+reviewed explicit geometry and scene arguments; invalid selection fails clearly.
+The legacy `render` command saves a frame at the configured
+dimensions, while `preview` uses a fixed 1920×1080 size. Both render the legacy
+Earth configuration, not a selected studio revision or unsaved draft. Use Preview
+in the configurator for a studio scene. `stop` signals
 ALL of this user's Xplanet processes, including finite renders and other checkouts,
 and succeeds when none is running. It first removes the managed desktop job.
-`restart` performs that same broad stop, then starts one display. `start` catches up
-a configured monthly map and asks launchd to run one foreground desktop, without
-`KeepAlive` or automatic respawn after stop. Python is used only for TotalMarker.
+`restart` performs that same broad stop, then starts one display. Legacy `start`
+catches up a configured monthly map; selected scenes retain their reviewed map.
+Start asks launchd to run one foreground desktop, without
+`KeepAlive` or automatic respawn after stop. Python runs TotalMarker and the
+isolated configurator; lifecycle remains zsh.
 
 On the first start after upgrading from the old `-fork` launcher, an existing
 unmanaged Xplanet process produces a request to use `restart`; setup never kills
@@ -130,3 +155,46 @@ names (including a resolved symlink target) are included in broad stop. Desktop
 launch resolves executable symlinks. macOS name lookup cannot reliably discover
 unmanaged, physically renamed binaries with names longer than 19 characters; use
 the normal Xplanet binary name for those older manual launches.
+
+## Renderer troubleshooting
+
+For suspected build/support problems, use `scripts/xplanet.sh diagnostics` explicitly;
+`diagnostics --show` reads the last evidence without running Xplanet. Before setup,
+`diagnostics --renderer /absolute/path/to/xplanet` inspects a deliberate local choice.
+See [renderer support evidence and limits](configurator/diagnostics.md#renderer-support-outside-the-studio).
+Management's binary line is historical evidence, not a current/running build check.
+Setup and normal start do not automatically run this diagnostic. Saved TotalMarker
+health describes data sources, not compiled renderer capabilities.
+
+## Help and explicit diagnostics in management
+
+**9) Diagnostics** offers confirmation before running the existing selected-renderer
+version/support capture. It records private evidence without starting the desktop,
+refreshing providers or changing services. A completed but unrecognized/failed probe
+reports unknown support; execution/storage problems remain failures. Cancelling the
+confirmation runs nothing and returns directly to the menu.
+
+**h) Help** displays the same intent-grouped usage as `xplanet.sh --help`: scene
+exploration, installation/maintenance, desktop control, data refresh, diagnostics,
+housekeeping/development, and unavailable commands. Detailed switches and the
+studio guide remain in the linked subcommand help. Both long
+reports use the existing any-key continuation; Ctrl-D exits and Ctrl-C interrupts
+with terminal restoration. Arrows reach both entries; 1–9 and h highlight, Enter
+activates. q remains the immediate exit shortcut. Limited terminals accept a numbered
+line or h followed by Enter. Merely opening/highlighting entries performs no probe.
+
+## Concurrent desktop commands
+
+Start, Stop and Restart serialize through a native zsh advisory file lock in the
+current user's macOS local runtime directory. The lock is shared across checkouts;
+Restart holds it across both broad Stop and Start, so another cooperating command
+cannot remove the job between registration and kickstart. Lock acquisition waits
+up to ten seconds, then reports busy without changing the job. The kernel releases
+the lock when its owning shell exits; the private empty lock file stays in place.
+Do not remove held lock files. No PID database, stale-lock deletion, new daemon,
+Python lifecycle dependency or automatic renderer respawn is introduced.
+
+This coordinates this version's commands, not arbitrary manual launchctl commands
+or older scripts. Concurrent requests execute serially rather than guaranteeing
+wall-clock invocation order. A later explicit Start can follow Stop. The separate
+original missing-job incident is not proven resolved by this overlap correction.

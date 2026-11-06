@@ -99,13 +99,11 @@ case "${1:-}" in
         ;;
     --test)
         [ "$#" -eq 1 ] || exit 2
-        mkdir -p "$project_root/dev/tests/.tmp/cache"
         cd "$project_root"
-        export TMPDIR="$project_root/dev/tests/.tmp"
-        export XDG_CACHE_HOME="$project_root/dev/tests/.tmp/cache"
         export PYTHONNOUSERSITE=1
         export TZ=UTC
-        exec "$python_bin" -B -m unittest discover -s dev/tests -t dev -v
+        export PYTHONPATH="$project_root/dev:$PYTHONPATH"
+        exec "$python_bin" -B -m tests.run_core
         ;;
 esac
 exec "$python_bin" -B -m totalmarker --root "$project_root" --config config/totalmarker.toml "$@"

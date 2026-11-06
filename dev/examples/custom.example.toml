@@ -1,3 +1,4 @@
+# Replace the .invalid URL in [cloud.custom] before requesting cloud data.
 # Change resolution once; URL and output filename templates follow it.
 [cloud]
 provider = "custom"

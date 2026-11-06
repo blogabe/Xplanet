@@ -125,12 +125,14 @@ manage_xplanet() {
     local management_alt_on management_alt_off management_clear management_reset
     local management_heading management_good management_attention management_problem management_screen_active
     local management_last_kind=info management_last_result=''
-    local management_process management_job
+    local management_process management_job management_selection
+    local management_health="[?] Not checked in this session; choose Saved health (7)" management_health_time=""
     local management_key management_pending_key='' management_selected=1
     local management_save management_restore management_erase_line management_partial=false management_size=''
     local -a management_row_up management_labels management_styles
     load_helpers management-view
     load_helpers management-input
+    load_helpers management-dashboard
     management_view_init
     trap 'management_screen_close' EXIT
     trap 'exit 130' INT
@@ -168,8 +170,23 @@ manage_xplanet() {
                fi ;;
             2) management_section "Configurator"
                load_helpers configurator
+               # Textual owns its own alternate screen; do not nest it inside
+               # management's screen and accidentally clear normal shell history.
+               management_screen_close
                configure_xplanet
-               management_set_result unavailable "Configurator pending; no settings saved or applied." ;;
+               result=$?
+               management_screen_open
+               case "$configuration_result" in
+                   saved) management_set_result success "Configurator closed; saved files and selection retained. Desktop not restarted." ;;
+                   uncertain) management_details=true
+                       management_set_result error "Selection outcome uncertain; inspect config/desktop.scene before retrying. No restart." ;;
+                   interrupted) management_set_result cancelled "Configurator interrupted; completed saves/selections remain. Desktop not restarted." ;;
+                   cancelled) management_set_result cancelled "Configurator cancelled; desktop settings unchanged." ;;
+                   unavailable) management_details=true
+                       management_set_result unavailable "Configurator unavailable; run scripts/xplanet.sh config --prepare." ;;
+                   *) management_details=true
+                       management_set_result error "Configurator exited $result." ;;
+               esac ;;
             3|4|5|6)
                 case "$management_reply" in
                     3) command=start ;;
@@ -206,7 +223,7 @@ manage_xplanet() {
             7) management_section "Saved health"
                if [[ -f "$project_root/config/totalmarker.toml" ]]; then
                    management_details=true
-                   "$script_dir/xplanet.sh" health
+                   management_saved_health
                    result=$?
                    if (( result == 0 )); then
                        management_set_result success "Saved health completed."
@@ -232,6 +249,30 @@ manage_xplanet() {
                       management_set_result cancelled "Python selection cancelled; prior choice retained." ;;
                    *) management_set_result error "Python selection failed; prior choice retained." ;;
                esac ;;
+            9) management_section "Renderer diagnostics"
+               print -- 'Explicitly run the selected renderer version probe and record private support evidence.'
+               print -- 'No provider refresh, desktop start or service changes. Use Help for diagnostic switches.'
+               if management_confirm "Capture renderer support now?"; then
+                   management_details=true
+                   "$script_dir/xplanet.sh" diagnostics
+                   result=$?
+                   case "$result" in
+                       0) management_set_result success "Renderer support captured; running process not identified." ;;
+                       1) management_set_result warning "Diagnostic completed; renderer support remains unknown." ;;
+                       *) management_set_result error "Renderer inspection failed (exit $result); review details above." ;;
+                   esac
+               else
+                   management_set_result cancelled "Renderer diagnostic was not run."
+               fi ;;
+            10) management_section "Help"
+                management_details=true
+                "$script_dir/xplanet.sh" --help
+                result=$?
+                if (( result == 0 )); then
+                    management_set_result info "Help displayed; no probe, setup or service action was run."
+                else
+                    management_set_result error "Help exited $result."
+                fi ;;
             *) management_set_result info "Choose a listed option or q to exit." ;;
         esac
         if [[ "$management_details" == true ]]; then

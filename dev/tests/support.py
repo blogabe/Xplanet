@@ -13,7 +13,6 @@ from totalmarker.http import Fetcher, Response
 from totalmarker.paths import RootFS
 
 PROJECT = Path(__file__).resolve().parents[2]
-TEMP = PROJECT / "dev" / "tests" / ".tmp"
 
 
 def copy_launcher(destination):
@@ -80,10 +79,9 @@ def image_response(comment=None, **headers):
 
 class Sandbox(unittest.TestCase):
     def setUp(self):
-        TEMP.mkdir(exist_ok=True)
-        self.directory = tempfile.TemporaryDirectory(dir=TEMP)
+        self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
-        self.base = Path(self.directory.name)
+        self.base = Path(self.directory.name).resolve()
         self.root = self.base / "sandbox"
         self.root.mkdir()
         self.fs = RootFS(self.root)
@@ -100,6 +98,8 @@ class Sandbox(unittest.TestCase):
 
 def stub_desktop_launchctl(scripts, binaries):
     """A fixture launchd owns only fixture processes; never invokes host launchctl."""
+    runtime=binaries/'lifecycle-runtime';runtime.mkdir(mode=0o700,exist_ok=True)
+    getconf=binaries/'getconf';getconf.write_text('#!/bin/sh\nprintf "%s\\n" '+__import__('shlex').quote(str(runtime.resolve()))+'\n');getconf.chmod(0o700)
     path = binaries / 'launchctl'
     path.write_text('#!' + sys.executable + '\n' + r'''import json, os, plistlib, subprocess, sys
 from pathlib import Path

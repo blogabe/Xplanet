@@ -1,0 +1,56 @@
+#!/bin/sh
+set -eu
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+project_root=$(CDPATH= cd -- "$script_dir/.." && pwd -P)
+export PYTHONPATH="$script_dir"
+export PYTHONDONTWRITEBYTECODE=1
+export PYTHONNOUSERSITE=1
+case "${1:-}" in
+    --help|-h)
+        printf '%s\n' 'Usage: scripts/xplanet.sh config [--view /absolute/scene.conf-or-directory] [--renderer /absolute/path/to/xplanet]' \
+            '       scripts/xplanet.sh config --prepare' \
+            '       scripts/xplanet.sh config --export-handoff NEW_DIRECTORY --view SCENE.conf --renderer BINARY --geometry WIDTHxHEIGHT' \
+            '       scripts/xplanet.sh setup --check-handoff DIRECTORY' \
+            '       scripts/xplanet.sh config --apply-handoff DIRECTORY --expect-selected legacy_OR_REVISION_ID' \
+            '       scripts/xplanet.sh config --select-revision REVISION_ID --expect-selected CURRENT_ID' \
+            '       scripts/xplanet.sh config --use-legacy --expect-selected CURRENT_ID' \
+            '       scripts/xplanet.sh config --show-selection' \
+            'Export/check are review-only; explicit selection never starts/restarts the desktop or changes jobs.' \
+            'Prepare explicitly downloads pinned Textual dependencies into an isolated project venv.' \
+            'Open a stock/saved scene; preview, save a new copy, or keep a private recovery draft.' \
+            'In the editor: Help / F1. Full manual: scripts/xplanet.sh config --guide' \
+            'Guide: docs/configurator/user-guide.md; detailed reference: docs/configurator/reference.md' \
+            'Ctrl-C cancels active work first; Ctrl-D/Ctrl-Q requests a protected exit.'
+        exit 0 ;;
+    --guide)
+        [ "$#" -eq 1 ] || { printf '%s\n' '--guide takes no other options' >&2; exit 2; }
+        guide="$project_root/docs/configurator/user-guide.md"
+        if [ -L "$project_root/docs" ] || [ -L "$project_root/docs/configurator" ] || [ -L "$guide" ] || [ ! -f "$guide" ]; then
+            printf '%s\n' 'Scene studio guide unavailable; restore docs/configurator/user-guide.md from the complete checkout.' >&2
+            exit 2
+        fi
+        /bin/cat "$guide"
+        exit 0 ;;
+    --export-handoff|--check-handoff|--apply-handoff|--select-revision|--use-legacy|--show-selection)
+        python_bin=$("$script_dir/run-totalmarker" --python-path)
+        exec "$python_bin" -P -s -B -m configurator.handoff_cli --root "$project_root" "$@" ;;
+    --prepare)
+        [ "$#" -eq 1 ] || { printf '%s\n' '--prepare takes no other options' >&2; exit 2; }
+        python_bin=$("$script_dir/run-totalmarker" --python-path)
+        exec "$python_bin" -P -s -B -m configurator.runtime --prepare "$project_root" ;;
+esac
+if [ ! -t 0 ] || [ ! -t 1 ]; then
+    printf '%s\n' 'Configurator requires an interactive terminal; use config --help.' >&2
+    exit 2
+fi
+runtime_safe=true
+for runtime_dir in "$project_root/.state" "$project_root/.state/configurator" "$project_root/.state/configurator/venv"; do
+    if [ -L "$runtime_dir" ] || [ ! -d "$runtime_dir" ]; then runtime_safe=false; break; fi
+done
+python_bin="$project_root/.state/configurator/venv/bin/python"
+if [ "$runtime_safe" != true ] || [ ! -x "$python_bin" ] || ! "$python_bin" -P -s -B -m configurator.runtime --check "$project_root"; then
+    printf '%s\n' 'Configurator runtime is not ready. No dependencies were installed.' \
+        'To explicitly prepare its isolated Textual environment: scripts/xplanet.sh config --prepare' >&2
+    exit 4
+fi
+exec "$python_bin" -P -s -B -m configurator --root "$project_root" "$@"

@@ -1,8 +1,8 @@
 # Private presentation only: no config execution, Python, network or lifecycle actions.
 management_view_init() {
     local cursor_home erase_from_cursor offset movement
-    # Distances from the prompt to rows 1..8 in the grouped menu below.
-    local -a offsets=(14 13 10 9 8 5 4 3)
+    # Distances from the prompt to rows 1..10 in the grouped menu below.
+    local -a offsets=(16 15 12 11 10 7 6 5 4 3)
     management_alt_on='' management_alt_off='' management_clear=''
     management_reset='' management_heading='' management_good='' management_attention='' management_problem=''
     management_screen_active=false
@@ -50,8 +50,8 @@ management_screen_open() {
         management_size=$(stty size < /dev/tty 2>/dev/null)
         read -r rows cols <<< "$management_size"
         management_partial=false
-        if [[ "$rows" == <-> && "$cols" == <-> ]] && (( rows >= 24 && cols >= 60 )) &&
-            [[ -n "$management_save" && -n "$management_restore" && -n "$management_erase_line" && ${#management_row_up} == 8 ]]; then
+        if [[ "$rows" == <-> && "$cols" == <-> ]] && (( rows >= 31 && cols >= 100 )) &&
+            [[ -n "$management_save" && -n "$management_restore" && -n "$management_erase_line" && ${#management_row_up} == 10 ]]; then
             management_partial=true
         fi
     fi
@@ -129,14 +129,15 @@ management_set_result() {
 }
 
 management_item() {
-    local marker=' ' style=${3:-}
+    local marker=' ' style=${3:-} number=$1
+    [[ "$number" == 10 ]] && number=h
     management_labels[$1]=$2
     management_styles[$1]=$style
     if [[ -n "$management_alt_on" && "$management_selected" == "$1" ]]; then
         marker='>'
         style=$management_heading
     fi
-    print -r -- "$marker ${style}$1) $2${management_reset}"
+    print -r -- "$marker ${style}$number) $2${management_reset}"
 }
 
 management_rehighlight() {
@@ -158,7 +159,11 @@ management_rehighlight() {
 
 management_draw() {
     local state="$1" process_icon='[-]' process_style='' setup_style='' recommendation=''
-    [[ "${2:-}" == cached ]] || management_desktop_facts
+    if [[ "${2:-}" != cached ]]; then
+        management_desktop_facts
+        management_selection_facts
+        management_binary_facts
+    fi
     case "$management_process" in
         running) process_icon='[+]' process_style=$management_good ;;
         unknown) process_icon='[?]' process_style=$management_attention ;;
@@ -167,17 +172,28 @@ management_draw() {
         setup_style=$management_attention
         recommendation=' [recommended]'
     fi
+    local rows cols
+    read -r rows cols <<< "$management_size"
+    # Width includes plain text only conservatively: ANSI length overestimates.
+    if (( ${#management_binary} + 17 > ${cols:-0} || ${#management_selection} + 12 > ${cols:-0} || ${#management_health} + 12 > ${cols:-0} || ${#management_last_result} + 40 > ${cols:-0} )); then management_partial=false; fi
     print -r -- "${management_heading}Xplanet management${management_reset}"
     print -r -- "Desktop  $process_style$process_icon xplanet: $management_process$management_reset | Job: $management_job"
-    print -r -- "Data health  [?] Dashboard pending; saved health (7)"
-    print -r -- "Config  [i] $state configuration; editor placeholder (2)"
+    print -r -- "Next start  $management_selection"
+    print -r -- "Running scene  [?] Not identified; process/job presence does not verify a scene"
+    print -r -- "Binary evidence  $management_binary"
+    print -r -- "Saved data  $management_health"
+    if [[ -n "$management_health_time" ]]; then
+        print -r -- "Snapshot  $management_health_time (saved evidence, not a live access check; 7 refreshes)"
+        print -r -- "Key  [+] current  [!] stale/unverified  [x] failed  [?] unassessed  [-] disabled"
+    fi
+    print -r -- "Legacy setup  $state; scene studio (2)"
     if [[ -n "$management_last_result" ]]; then
         management_result_line
     fi
     print -r -- "
 ${management_heading}Setup${management_reset}"
     management_item 1 "Guided setup$recommendation" "$setup_style"
-    management_item 2 "Configurator (placeholder)"
+    management_item 2 "Configurator"
     print -r -- "
 ${management_heading}Desktop${management_reset}"
     management_item 3 "Start"
@@ -188,6 +204,8 @@ ${management_heading}Maintenance${management_reset}"
     management_item 6 "Update"
     management_item 7 "Saved health"
     management_item 8 "Advanced Python"
+    management_item 9 "Diagnostics"
+    management_item 10 "Help"
     print -r -- "  q) Exit"
     print
 }
