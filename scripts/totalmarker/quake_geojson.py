@@ -6,7 +6,7 @@ import math
 
 from .errors import FeedError
 from .labels import legacy_time
-from .marker_text import quoted_label
+from .marker_text import encode_marker_lines, quoted_label, transparency_option
 
 
 @dataclass(frozen=True)
@@ -132,7 +132,7 @@ def render_body(events, options):
         if options.image:
             line = f'{coord} "" image={options.image} color={circle}'
             if options.image_transparent:
-                line += f" transparent={options.image_transparent}"
+                line += transparency_option(options.image_transparent)
         else:
             line = f'{coord} "" color={circle} symbolsize={_size(mag, options):g}'
         lines.append(line)
@@ -158,7 +158,7 @@ def render_body(events, options):
                 (float("inf"), "White")])
             lines.append(f"{coord} {_quoted(detail)} color={text_color} "
                          f"align={options.detail_align}")
-    body = ("\n".join(lines) + "\n").encode("utf-8")
+    body = encode_marker_lines(lines)
     if len(body) > 32 * 1024 * 1024:
         raise FeedError("Quake marker output exceeds the size limit")
     return body

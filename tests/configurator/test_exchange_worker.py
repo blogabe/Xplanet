@@ -32,20 +32,20 @@ class ExchangeWorkerTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse((self.workspace.root/'not-durable').exists())
 
     def slow_worker(self):
-        path=self.root/'slow exchange';marker=self.root/'worker.pid';later=self.root/'late-write'
-        path.write_text('#!'+sys.executable+'\nimport os,time\nfrom pathlib import Path\nPath('+repr(str(marker))+').write_text(str(os.getpid()))\ntime.sleep(30)\nPath('+repr(str(later))+').write_text("late")\n');path.chmod(0o700)
-        return path,marker,later
+        path=self.root/'slow exchange';marker=self.root/'worker.pid'
+        path.write_text('#!'+sys.executable+'\nimport os,time\nfrom pathlib import Path\nPath('+repr(str(marker))+').write_text(str(os.getpid()))\ntime.sleep(30)\n');path.chmod(0o700)
+        return path,marker
 
     async def test_timeout_reaps_owned_worker_and_reports_destination_uncertainty(self):
-        binary,marker,later=self.slow_worker()
+        binary,marker=self.slow_worker()
         with patch('configurator.workspace.sys.executable',str(binary)),self.assertRaisesRegex(ValueError,'partial or complete'):
             await self.workspace.exchange_scene('export',self.source,self.root/'timed',timeout=.3)
         pid=int(marker.read_text())
         with self.assertRaises(ProcessLookupError):os.kill(pid,0)
-        self.assertFalse(later.exists());self.assertFalse(self.workspace.busy);self.assertIsNone(self.workspace.process)
+        self.assertFalse(self.workspace.busy);self.assertIsNone(self.workspace.process)
 
     async def test_cancel_reaps_owned_worker_and_never_discards_prior_preview(self):
-        binary,marker,later=self.slow_worker();prior=object();self.workspace.latest=prior
+        binary,marker=self.slow_worker();prior=object();self.workspace.latest=prior
         with patch('configurator.workspace.sys.executable',str(binary)):
             task=asyncio.create_task(self.workspace.exchange_scene('export',self.source,self.root/'cancelled'))
             async def started():
@@ -53,7 +53,7 @@ class ExchangeWorkerTests(unittest.IsolatedAsyncioTestCase):
             await asyncio.wait_for(started(),3);pid=int(marker.read_text());task.cancel()
             with self.assertRaises(asyncio.CancelledError):await task
         with self.assertRaises(ProcessLookupError):os.kill(pid,0)
-        self.assertFalse(later.exists());self.assertIs(self.workspace.latest,prior);self.assertFalse(self.workspace.busy)
+        self.assertIs(self.workspace.latest,prior);self.assertFalse(self.workspace.busy);self.assertIsNone(self.workspace.process)
 
     async def test_missing_or_invalid_inputs_fail_without_background_work(self):
         for mode,source,destination,options in (('unknown',self.source,self.root/'new',{}),('export',Path('relative'),self.root/'new',{}),('import',self.root/'none',self.root/'new',{'renderer':''}),('import',self.root/'none',self.root/'new',{'renderer':sys.executable,'preview':self.root/'x.png'})):

@@ -31,7 +31,8 @@ def _source_key(fs, options):
     for name in ["journal", "interval", "timeout", "max_bytes", "warning"]:
         style.pop(name)
     style["marker"] = str(fs.resolve(options.marker, write=True).relative_to(fs.root))
-    style["parser_version"] = 1
+    # Revalidate engine-safe literal labels, line bounds and RGB color keys.
+    style["parser_version"] = 2
     return hashlib.sha256(json.dumps(style, sort_keys=True).encode()).hexdigest()
 
 

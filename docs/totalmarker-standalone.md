@@ -11,8 +11,8 @@ cp config/totalmarker.example.toml config/totalmarker.toml
 
 Edit `config/totalmarker.toml` to choose your sources before refreshing them.
 The example cloud and volcano CAP URLs use `.invalid` placeholders; configure
-a real cloud source and CAP URL, or select `provider = "weekly_html"` for
-volcanoes. Quakes use USGS and storms use NHC/JTWC. NORAD and eclipse stay
+a real cloud source and the [official CAP URL](technical-notes.md#volcano-sources),
+or select `provider = "weekly_html"` for volcanoes. Quakes use USGS and storms use NHC/JTWC. NORAD and eclipse stay
 disabled until deliberately configured.
 
 ```sh

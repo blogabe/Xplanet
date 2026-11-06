@@ -263,12 +263,17 @@ class FetchTests(Sandbox):
         worker = threading.Thread(target=server.serve_forever, daemon=True)
         worker.start()
         try:
-            transport = HTTPTransport()
             base = 'http://127.0.0.1:' + str(server.server_port)
-            # Plain loopback HTTP exercises urllib's opener only; Fetcher still
-            # rejects HTTP sources and production requests retain verified TLS.
-            for path, code in (('/redirect', 302), ('/not-modified', 304)):
-                self.assertEqual(transport.request(base + path, {}, 2, 1024).status, code)
+            # NO_PROXY must not bypass the hostile proxy in a broken opener.
+            proxies={name:'http://127.0.0.1:1' for name in
+                     ('HTTP_PROXY','HTTPS_PROXY','ALL_PROXY','http_proxy','https_proxy','all_proxy')}
+            proxies.update(NO_PROXY='',no_proxy='')
+            with patch.dict(os.environ,proxies):
+                transport = HTTPTransport()
+                # Plain loopback HTTP exercises urllib's opener only; Fetcher
+                # still rejects HTTP sources and retains verified production TLS.
+                for path, code in (('/redirect', 302), ('/not-modified', 304)):
+                    self.assertEqual(transport.request(base + path, {}, 2, 1024).status, code)
             self.assertEqual(calls, ['/redirect', '/not-modified'])
         finally:
             server.shutdown()

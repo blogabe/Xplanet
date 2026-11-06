@@ -82,14 +82,34 @@ class StormModelTests(Sandbox):
                         kind="DEP", forecast_base=None, forecast=(),
                         forecast_status="not_issued", wind_kt=None)
         style = replace(StormStyle(), name_enabled=False, detail="<type> <speed>",
-                        image="icons/storm.png", image_transparent="50",
+                        image="icons/storm.png", image_transparent="{50,100,150}",
                         track_forecast_color="Cyan")
         marker, arc = render_bodies(snapshot(storm), style, required_groups=REQUIRED)
         self.assertIn(b'"DEP UNKNOWN"', marker)
-        self.assertIn(b'image=icons/storm.png transparent=50', marker)
+        self.assertIn(b'image=icons/storm.png transparent={50,100,150}', marker)
         self.assertNotIn(b'color=Cyan', arc)
         self.assertNotIn(b'Invest 29W', marker)
         self.assertEqual(len(arc.splitlines()), 2)
+
+    def test_oversized_detail_failure_preserves_entire_last_good_pair(self):
+        from totalmarker.features.storm import run
+        from .test_storm_sources import MappedFetcher, NOW
+        settings = self.config("StormCheckIntervalSeconds=0\n")
+        good = run(self.fs, settings, fetcher=MappedFetcher(), now=NOW)
+        self.assertEqual(good.outcome, "changed")
+        before = (self.fs.read(settings.storm.marker), self.fs.read(settings.storm.arc))
+        long_detail = self.config("StormCheckIntervalSeconds=0\nStormDetailList=" + "X" * 600 + "\n")
+        failed = run(self.fs, long_detail, fetcher=MappedFetcher(), now=NOW + 60)
+        self.assertEqual(failed.outcome, "failed")
+        self.assertIn("510-byte limit", failed.message)
+        self.assertEqual(failed.successful_at, NOW)
+        self.assertEqual((self.fs.read(settings.storm.marker), self.fs.read(settings.storm.arc)), before)
+
+    def test_expanded_detail_must_fit_full_engine_line(self):
+        storm = replace(sample_storm(), name="界" * 64)
+        style = replace(StormStyle(), detail="<name> <name> <name>")
+        with self.assertRaisesRegex(FeedError, "510-byte limit"):
+            render_bodies(snapshot(storm), style, required_groups=REQUIRED)
 
     def test_older_source_time_does_not_age_new_marker_label(self):
         old = '-53 -12 "Cloud Map Last Updated UNKNOWN" color=Red image=none position=pixel\n'

@@ -167,20 +167,8 @@ if args[:2] == ['load', '-w']:
 if args[0] in ('list', 'print'):
     label = args[1].rsplit('/', 1)[-1]
     if label == os.environ.get('TM_LIST_FAIL_LABEL') or label not in state: raise SystemExit(3)
-    doc = state[label]
-    # launchctl list LABEL emits an OpenStep-style dictionary, not XML/JSON.
-    q = json.dumps
-    values = ['"Label" = ' + q(doc['Label']) + ';',
-              '"Program" = ' + q(doc['ProgramArguments'][0]) + ';',
-              '"ProgramArguments" = (' + '; '.join(q(v) for v in doc['ProgramArguments']) + ';);',
-              '"WorkingDirectory" = ' + q(doc['WorkingDirectory']) + ';',
-              '"PID" = 123;', '"LastExitStatus" = 0;']
-    env = doc.get('EnvironmentVariables', {})
-    if env:
-        values.append('"EnvironmentVariables" = {' + ''.join(q(k) + ' = ' + q(v) + ';' for k, v in env.items()) + '};')
-    if os.environ.get('TM_LIST_OMIT_SETTINGS') == '1':
-        values = [value for value in values if not value.startswith(('"WorkingDirectory"', '"EnvironmentVariables"'))]
-    print('{' + ''.join(values) + '};')
+    if args[0] == 'list':raise SystemExit('setup must inspect explicit GUI-domain status')
+    print('service = ' + label)
     raise SystemExit(0)
 raise SystemExit(4)
 ''')

@@ -18,10 +18,20 @@ from .support import Sandbox, ScriptedTransport, image_response
 def server(mode):
     observed = {name: threading.Event() for name in
                 ('request', 'headers_complete', 'body', 'body_complete')}
+    observed['paths']=[]
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
             try:
                 observed['request'].set()
+                observed['paths'].append(self.path)
+                if mode == 'redirect':
+                    redirect=self.path=='/data'
+                    body=b'' if redirect else b'complete'
+                    self.send_response(302 if redirect else 200)
+                    if redirect:self.send_header('Location','https://fixture.invalid/final')
+                    self.send_header('Content-Length',str(len(body)))
+                    self.end_headers();self.wfile.write(body)
+                    return
                 if mode == 'headers':
                     # No socket inactivity occurs during DNS or header parsing
                     # that the normal body-read test could otherwise cover.
@@ -103,6 +113,43 @@ class DeadlineTests(Sandbox):
             with self.assertRaisesRegex(DownloadError, 'total network time budget'):
                 fetcher.fetch('https://example.invalid/third')
         self.assertEqual(len(transport.calls), 3)
+
+    def test_real_worker_redirect_hops_share_one_absolute_deadline(self):
+        from urllib.parse import urlsplit
+        deadlines=[]
+        with server('redirect') as (local,observed),self.workers():
+            base=local.removesuffix('/data')
+            class LoopbackTransport(http.HTTPTransport):
+                def request(self,url,headers,timeout,max_bytes,*,deadline=None):
+                    deadlines.append(deadline)
+                    # Fetcher's public URLs stay HTTPS. This fixture alone maps
+                    # them to HTTP loopback to test real worker IPC/deadlines.
+                    return super().request(base+urlsplit(url).path,headers,timeout,max_bytes,deadline=deadline)
+            fetcher=http.Fetcher(LoopbackTransport())
+            result=fetcher.fetch('https://fixture.invalid/data',timeout=2)
+            self.assertEqual(result.body,b'complete')
+            self.assertEqual(observed['paths'],['/data','/final'])
+            self.assertEqual(len(deadlines),2)
+            self.assertIsNotNone(deadlines[0]);self.assertEqual(deadlines[0],deadlines[1])
+
+    def test_redirect_hop_keeps_original_deadline_when_only_two_seconds_remain(self):
+        clock=[0.0];deadlines=[]
+        class BoundaryTransport(http.HTTPTransport):
+            def request(self,url,headers,timeout,max_bytes,*,deadline=None):
+                deadlines.append(deadline)
+                if len(deadlines)==1:
+                    clock[0]=8.0
+                    return http.Response(302,{'location':'/next'})
+                clock[0]=10.0
+                return http.Response(200,{},b'must not be accepted')
+        with patch('totalmarker.http.time.monotonic',side_effect=lambda:clock[0]),patch('totalmarker.http.refresh_budget',return_value=10):
+            fetcher=http.Fetcher(BoundaryTransport())
+            with self.assertRaisesRegex(DownloadError,'total network time budget'):
+                fetcher.fetch('https://example.invalid/first',timeout=300)
+            self.assertEqual(deadlines,[10.0,10.0])
+            with self.assertRaisesRegex(DownloadError,'total network time budget'):
+                fetcher.fetch('https://example.invalid/later')
+            self.assertEqual(deadlines,[10.0,10.0])
 
     def test_worker_deadline_covers_trickling_body_and_slow_headers(self):
         for mode in ('body', 'headers'):

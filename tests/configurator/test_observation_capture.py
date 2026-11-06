@@ -74,10 +74,14 @@ class ObservationCaptureTests(ObservationCaptureFixture, unittest.TestCase):
         normalized,_=native(quake_marker(b'1 2 "Quote \\" and slash \\\\" color=Red\n',1700000000),'quake',source=True)
         self.assertEqual(native(normalized,'quake')[0],normalized)
         self.assertNotIn(b'\\',normalized)
-        with self.assertRaisesRegex(CaptureError,'Unsafe legacy'):
+        with self.assertRaisesRegex(CaptureError,'Unsafe older'):
             native(b'# Frozen TotalMarker quake markers v1\n1 2 "Quote \\" text" color=Red\n','quake')
-        transparent,_=native(quake_marker(b'1 2 "X" color=Red image=icon.png transparent=30\n',1700000000),'quake',source=True,icon='icon.png')
-        self.assertIn(b'transparent=30',transparent)
+        transparent,_=native(quake_marker(b'1 2 "X" color=Red image=icon.png transparent={0,30,255}\n',1700000000),'quake',source=True,icon='icon.png')
+        self.assertIn(b'transparent={0,30,255}',transparent)
+        self.assertEqual(native(transparent,'quake')[0],transparent)
+        for value in ('30','0,30,255','{256,0,0}','{-1,0,0}','{0,0}'):
+            with self.subTest(value=value),self.assertRaisesRegex(CaptureError,'RGB color key'):
+                native(quake_marker(f'1 2 \"X\" color=Red transparent={value}\n'.encode(),1700000000),'quake',source=True)
         self.assertEqual(native(transparent,'quake')[0],transparent)
 
 

@@ -29,29 +29,11 @@ class ReleaseContentTests(unittest.TestCase):
                 yield metadata.split(b" ", 1)[0].decode(), name.decode()
 
     def test_index_excludes_personal_runtime_and_recovery_content(self):
-        names = []
         from . import release_policy as release
-        for mode, name in self.tracked():
-            names.append(name)
-            self.assertFalse(release.private_source_path(name), name)
-            self.assertNotEqual(mode, "120000", f"tracked symlink: {name}")
-            parts = name.split("/")
-            self.assertFalse({".git", ".state", "__pycache__"} & set(parts), name)
-            self.assertNotIn(".DS_Store", parts, name)
-            if name.startswith("config/"):
-                self.assertIn(name, {"config/earth.example",
-                                     "config/totalmarker.example.toml",
-                                     "config/xp.conf.example", "config/xp.def.example"})
-            if name.startswith("scripts/launchd/"):
-                self.assertTrue(name.endswith(".plist.example"), name)
-            if name.startswith("dev/"):
-                self.fail("dev must remain local-only: " + name)
-            if name.startswith(("maps/", "assets/")):
-                self.assertFalse(any(part in {".DS_Store", "__MACOSX", "Thumbs.db",
-                                              "desktop.ini"} or part.startswith("._")
-                                     for part in parts), name)
-            self.assertFalse(name.startswith(("images/", "markers/",
-                                              "arcs/", "satellites/", "logs/")), name)
+        entries = list(self.tracked())
+        release.check_source_paths({name: mode + " blob " + "0" * 40
+                                    for mode, name in entries})
+        names = [name for _, name in entries]
         self.assertIn("scripts/xplanet.sh", names)
         self.assertIn("config/totalmarker.example.toml", names)
         self.assertIn("config/xp.conf.example", names)
@@ -197,3 +179,47 @@ class IndexedPrivacyTests(unittest.TestCase):
             subprocess.run(['git','add','dev/private.bin'],cwd=root,check=True)
             with self.assertRaisesRegex(RuntimeError,'unsafe source entry: dev/private.bin'):
                 index_text(root)
+
+
+    def test_provider_text_fixture_suffixes_are_scanned_from_index_bytes(self):
+        from .release_policy import index_text
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);subprocess.run(['git','init','-q'],cwd=root,check=True)
+            fixtures={'tests/fixtures/feed.dat':b'indexed storm text',
+                      'tests/fixtures/feed.geojson':b'{"fixture":"indexed"}'}
+            for name,data in fixtures.items():
+                path=root/name;path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(data)
+                subprocess.run(['git','add','-f','--',name],cwd=root,check=True)
+                path.write_bytes(b'changed working bytes')
+            self.assertEqual(dict(index_text(root)),fixtures)
+
+    def test_new_text_fixture_suffix_obeys_indexed_text_budget(self):
+        from . import release_policy as release
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);subprocess.run(['git','init','-q'],cwd=root,check=True)
+            path=root/'feed.geojson';path.write_bytes(b'x'*9)
+            subprocess.run(['git','add','feed.geojson'],cwd=root,check=True)
+            with patch.object(release,'TEXT_LIMIT',8),self.assertRaisesRegex(RuntimeError,'Indexed text exceeds'):
+                release.index_text(root)
+
+    def test_binary_fixture_size_and_total_budgets_fail_closed(self):
+        from . import release_policy as release
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);subprocess.run(['git','init','-q'],cwd=root,check=True)
+            path=root/'fixture.kmz';path.write_bytes(b'x'*9)
+            subprocess.run(['git','add','fixture.kmz'],cwd=root,check=True)
+            with patch.object(release,'BINARY_LIMIT',8),self.assertRaisesRegex(RuntimeError,'Indexed binary'):
+                release.index_text(root)
+            path.write_bytes(b'x'*6);(root/'second.kmz').write_bytes(b'y'*6)
+            subprocess.run(['git','add','fixture.kmz','second.kmz'],cwd=root,check=True)
+            with patch.object(release,'BINARY_LIMIT',16),patch.object(release,'BINARY_TOTAL_LIMIT',10),self.assertRaisesRegex(RuntimeError,'Indexed binary'):
+                release.index_text(root)
+
+    def test_binary_size_guard_does_not_replace_shipped_map_asset_policy(self):
+        from . import release_policy as release
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);subprocess.run(['git','init','-q'],cwd=root,check=True)
+            path=root/'maps/family/map.png';path.parent.mkdir(parents=True);path.write_bytes(b'x'*20)
+            subprocess.run(['git','add','-f','--','maps/family/map.png'],cwd=root,check=True)
+            with patch.object(release,'BINARY_LIMIT',8),patch.object(release,'BINARY_TOTAL_LIMIT',10):
+                self.assertEqual(release.index_text(root),[])

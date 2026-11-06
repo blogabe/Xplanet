@@ -99,6 +99,16 @@ class ManagementTests(Sandbox):
                 self.assertTrue(Path(str(self.trace)+'.child').exists())
                 os.write(master,b'\x03')
             elif interrupt:
+                if termios.tcgetattr(slave)[3] & termios.ICANON:
+                    # Prompt bytes precede zsh's blocking canonical read. Wait
+                    # for this owned shell to sleep there, not a timing margin.
+                    state=''
+                    while proc.poll() is None and time.monotonic()<deadline:
+                        observed=subprocess.run(['/bin/ps','-o','state=','-p',str(proc.pid)],
+                                                capture_output=True,text=True,timeout=1)
+                        state=observed.stdout.strip()
+                        if state.startswith('S'):break
+                    self.assertTrue(state.startswith('S'),(state,output))
                 os.write(master,b'\x03')
             elif termination:
                 os.kill(proc.pid,termination)

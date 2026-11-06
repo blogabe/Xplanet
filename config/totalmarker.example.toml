@@ -70,6 +70,7 @@ pixel_max = ""
 pixel_min = ""
 pixel_factor = 1.0
 image = ""
+# image_transparent options use an RGB color key, e.g. "{0,0,0}"; not opacity.
 image_transparent = ""
 detail = "<mag>"
 detail_color = "Multi"

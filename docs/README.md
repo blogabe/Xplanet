@@ -2,12 +2,12 @@
 
 ## Use Xplanet
 
-- [Install and quick start](../README.md#install-on-macos)
+- [Install](../README.md#install-on-macos) and [first-run sequence](management.md#quick-start)
 - [Terminal management](management.md): setup, updates, desktop control and saved health
 - [Python runtime](python-runtime.md): explicit Homebrew/uv interpreter selection
 - [Configuration examples](../examples/README.md): recipes and native templates
 - [TotalMarker independently](totalmarker-standalone.md): data generation without desktop setup
-- [Operations and troubleshooting](technical-notes.md)
+- [Data operations](technical-notes.md) and [desktop troubleshooting](management.md#troubleshooting)
 
 ## Build and revise scenes
 

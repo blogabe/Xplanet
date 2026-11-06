@@ -143,7 +143,8 @@ def native(data,product,arcs=False,*,source=False,icon=None):
                 if not re.fullmatch(r'[A-Za-z]{1,20}',value) or value[0].lower() not in 'rlabc':raise CaptureError('Invalid observation alignment.')
                 value={'r':'Right','l':'Left','a':'Above','b':'Below','c':'Center'}[value[0].lower()]
             elif key=='transparent':
-                if not re.fullmatch(r'[0-9]{1,9}',value):raise CaptureError('Invalid observation transparency digits.')
+                if not re.fullmatch(r'\{[0-9]{1,3},[0-9]{1,3},[0-9]{1,3}\}',value) or any(int(part)>255 for part in value[1:-1].split(',')):
+                    raise CaptureError('Observation transparency must be an RGB color key {R,G,B}; scalar opacity is not supported. Create a new draft and recapture corrected producer output.')
             elif not TOKEN.fullmatch(value) or (',' in value and any(int(part)>255 for part in value.split(','))):raise CaptureError('Invalid observation color/transparency.')
             options[key]=value
         if 'color' not in options:raise CaptureError('Observation row lacks its producer color.')
@@ -151,7 +152,7 @@ def native(data,product,arcs=False,*,source=False,icon=None):
         if label is not None:
             quoted=quoted_label(label)
             if not source and quoted != '"'+label+'"':
-                raise CaptureError('Unsafe legacy observation label; capture it again from the producer.')
+                raise CaptureError('Unsafe older observation label; create a new draft and recapture it from the producer.')
             row+=' '+quoted
         row+=''.join(' '+key+'='+value for key,value in sorted(options.items()))
         output.append(row)

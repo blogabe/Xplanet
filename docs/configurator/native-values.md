@@ -14,7 +14,7 @@ is not night-map brightness; bump scale needs an existing bump map to have an ef
 For an active grid, `grid1` is the number of major divisions per 90° and `grid2`
 is the number of subdivisions per major interval. The editor does not enable a
 grid implicitly, infer inherited state or validate a whole arbitrary configuration. An explicit
-`grid=true` or `grid=false` edit is now supported. Native
+`grid=true` or `grid=false` edit is supported. Native
 zero/out-of-tool-range values remain read-only and are preserved, not repaired.
 
 Cloud gamma/threshold do not enable a cloud map or establish whether one exists.

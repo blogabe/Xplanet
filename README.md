@@ -27,7 +27,7 @@ See the [documentation index](docs/README.md) and [configuration examples](examp
 
 Requires [Homebrew](https://brew.sh/) with `trust` support, Git, curl and zsh.
 The bundled maps are large; allow several gigabytes for the checkout, history and
-private runtimes. See [installation details](docs/management.md#checkout-size).
+private runtimes. A shallow manual clone is available; see [installation details](docs/management.md#checkout-size).
 
 ```sh
 /bin/zsh -c 's=$(curl -fsSL https://raw.githubusercontent.com/blogabe/Xplanet/main/scripts/xplanet.sh) && eval "$s"' -- bootstrap
@@ -47,7 +47,10 @@ cd ~/.xplanet
 
 Use a destination that does not already exist; open an existing checkout in place.
 Direct `install` provisions dependencies and continues into setup; `setup` reuses
-installed prerequisites. See [management](docs/management.md).
+installed prerequisites. After setup, run `./scripts/xplanet.sh start` if you skipped
+its start offer, then `./scripts/xplanet.sh health` to inspect saved source status.
+Start acceptance is asynchronous; see the [first-run sequence](docs/management.md#quick-start)
+for what to expect and how to diagnose missing wallpaper.
 
 For TotalMarker-only use, including Linux, see
 [Running TotalMarker independently](docs/totalmarker-standalone.md).
@@ -109,8 +112,10 @@ with uv-managed Python available as an explicit choice.
 
 `start` catches up the monthly map on the custom configuration path and runs one
 launchd-owned foreground desktop, without automatic respawn after stop. A selected
-studio scene keeps its reviewed map/time choices. `stop` stops **all** your Xplanet processes,
-including finite renders; `restart` performs that stop before starting a display.
+studio scene keeps its reviewed map/time choices. `stop` removes the managed job
+and stops current-user processes named `xplanet` or by the trusted configured
+renderer, including finite renders; it does not discover arbitrary historical
+renderer names. `restart` performs that stop before starting a display.
 See [desktop behavior and upgrade details](docs/management.md#desktop-commands)
 for geometry, previews, process names and the old-launcher transition.
 
@@ -150,10 +155,17 @@ tracking.
 
 ## Limitations and troubleshooting
 
-Provider access and source coverage are checked separately. A failed or stale
-refresh retains last-good output; green labels alone do not prove current access.
-The example volcano URL requires an explicit source choice; use the
-[documented official CAP URL or weekly HTML](docs/technical-notes.md#volcano-sources).
+Provider access and source coverage are separate; green labels alone do not prove
+current access. Known limits include:
+
+- Volcano reports through 2026-11-04 included rejected stale CAP coverage and HTTP
+  403 from weekly HTML. A fresh install has no volcano markers until retrieval
+  succeeds. Choose a source explicitly; see [volcano sources](docs/technical-notes.md#volcano-sources).
+- Storm refreshes fail closed on incomplete coverage or unsupported provider-format
+  changes, retaining the last-good marker/track pair.
+- NORAD currently accepts one-to-five-digit catalogue IDs; six-digit IDs are unsupported.
+- An intermittent missing-desktop-job restart was reported; later restarts were
+  reported working, without a reproduced cause. See [troubleshooting](docs/management.md#troubleshooting).
 
 Scene previews and reviewed selection do not verify desktop permissions or every
 renderer build/asset. See [configuration health](docs/configurator/diagnostics.md),

@@ -118,10 +118,13 @@ clean it up; a crash or SIGKILL can leave it behind. If the command reports an
 existing lock, first ensure no map selection is running, then inspect/remove only
 the reported lock directory before retrying. No automatic lock stealing occurs.
 Desktop lifecycle uses zsh and macOS launchd; it does not require Python.
-Start selects the current monthly map and runs one managed foreground renderer,
-without automatic respawn after stop. An existing unmanaged renderer prompts for
-restart rather than being adopted. Stop stops all current-user Xplanet processes;
-restart performs that same stop before starting a display. Custom manual-map
+Start selects the monthly map on the custom configuration path and runs one
+managed foreground renderer without automatic respawn after stop. A selected
+scene retains its reviewed map. An existing unmanaged renderer prompts for
+restart rather than being adopted. Stop removes the managed job and stops current-user
+processes named `xplanet` or by the trusted configured renderer, including finite
+renders. Arbitrary historical renderer names are not discovered.
+Restart performs that same stop before starting a display. Custom manual-map
 configs without `EARTH_MAP_PRE` stay manual.
 To disable future scheduled runs, unload the relevant personal LaunchAgent with
 `launchctl unload "$HOME/Library/LaunchAgents/<job>.plist"`; stopping Xplanet alone
@@ -193,13 +196,18 @@ excluded. Writers outside this protocol cannot be coordinated by a stat check;
 launchd stdout/stderr `.log` files are therefore reported as skipped and preserved.
 No trim has run merely because this command is installed.
 
+## Provider parsing and live-health failures
+
 Provider marker labels use Xplanet's literal quoted-label grammar, which has no
 backslash escaping: embedded double quotes become apostrophes, backslashes become
 slashes, and non-printable characters become spaces. This prevents provider text
 from becoming marker options. Frozen observation capture applies the same rule;
-unsafe older escaped labels are refused with recapture guidance rather than
-silently rewriting a hash-bound saved scene. Numeric transparency values retain
-the producer's digit syntax.
+unsafe older escaped labels are refused rather than silently rewriting a hash-bound
+scene. Such a scene cannot be opened to recapture in place: start a new draft,
+recapture from the producer explicitly and save a new scene. Image transparency
+uses Xplanet's RGB color-key syntax, `transparent={R,G,B}`, with each channel
+0–255. This selects a transparent color; it is not numeric opacity. Bare digits
+such as `transparent=30` are unsupported because the renderer drops those markers.
 
 Provider XML refuses document type declarations, including encoded XML. KMZ
 members are bounded while decompressed, not solely by archive metadata. Failed
@@ -216,7 +224,10 @@ or choose `provider = "weekly_html"` to use the fixed official weekly page.
 Access restrictions and stale weekly coverage remain failures; neither endpoint
 is guaranteed available. Do not bypass access controls or substitute download
 success for coverage validation. No configuration or provider is changed by
-reading these instructions.
+reading these instructions. Historical reports through 2026-11-04 included CAP
+access with stale weekly coverage rejected, and HTTP 403 from the weekly HTML
+source. They do not establish today's access or reporting period; use an explicit
+live check for current evidence.
 
 
 Unexpected TotalMarker failures retain the generic JSON error and exit status 2.

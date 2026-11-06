@@ -128,8 +128,9 @@ restoration, concurrent edits, symlinks, corrupted files, pending material, lock
 write/interrupt boundaries and uncertain outcomes. Native zsh tests construct args
 without Python or live services; finite isolated renders exercise those arguments.
 UI/PTY tests cover confirmation/cancellation and terminal restoration. These are
-not host deployment, visible UTM, actual launchd activation, login/reboot or a fresh
-installation test of this new selected-scene path.
+not host deployment or proof of actual selected-scene launchd activation,
+login/reboot or a fresh installation. Earlier isolated UTM smoke tests covered
+specific revisions/workflows; they do not validate every subsequent branch change.
 
 ## Inspect the next selected scene
 

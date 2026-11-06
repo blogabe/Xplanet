@@ -39,15 +39,17 @@ def check_source_paths(entries):
             raise RuntimeError(f"unsafe source entry: {name}")
 
 
-TEXT_SUFFIXES={'.py','.zsh','.sh','.md','.txt','.toml','.xml','.conf','.def','.example','.json','.yml','.yaml','.tsv','.html','.origin'}
+TEXT_SUFFIXES={'.py','.zsh','.sh','.md','.txt','.toml','.xml','.conf','.def','.example','.json','.yml','.yaml','.tsv','.html','.origin','.dat','.geojson'}
 TEXT_LIMIT=5*1024*1024
 TEXT_TOTAL_LIMIT=64*1024*1024
+BINARY_LIMIT=5*1024*1024
+BINARY_TOTAL_LIMIT=64*1024*1024
 
 def index_text(root):
     """Read bounded text blobs by immutable index identities, with no filters."""
     import subprocess
     raw=subprocess.check_output(['git','ls-files','--stage','-z'],cwd=root)
-    rows={};text=[]
+    rows={};text=[];binary=[]
     for row in raw.split(b'\0'):
         if not row:continue
         metadata,name=row.split(b'\t',1);name=name.decode();mode,identity,stage=metadata.decode().split()
@@ -55,7 +57,16 @@ def index_text(root):
         rows[name]=metadata.decode()
         path=PurePosixPath(name)
         if path.suffix.lower() in TEXT_SUFFIXES or path.name in {'LICENSE','.gitignore','.gitattributes','run-totalmarker','run-configurator'}:text.append((name,identity))
+        elif not name.startswith(('maps/','assets/')):binary.append((name,identity))
     check_source_paths(rows)
+    # Binary fixtures are not decoded by the identifier scan. Bound their indexed
+    # sizes separately; shipped imagery has its own regular-file/asset checks.
+    if binary:
+        request=''.join(identity+'\n' for _,identity in binary).encode()
+        checked=subprocess.check_output(['git','cat-file','--batch-check'],cwd=root,input=request).splitlines()
+        sizes=[int(line.split()[2]) for line in checked]
+        if any(size>BINARY_LIMIT for size in sizes) or sum(sizes)>BINARY_TOTAL_LIMIT:
+            raise RuntimeError('Indexed binary source/fixtures exceed the reviewed size budget')
     if not text:return []
     request=''.join(identity+'\n' for _,identity in text).encode()
     checked=subprocess.check_output(['git','cat-file','--batch-check'],cwd=root,input=request).splitlines()

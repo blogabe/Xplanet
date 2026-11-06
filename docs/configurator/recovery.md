@@ -9,7 +9,8 @@ can create a private session. Native `.def`/`.conf` files are never autosaved.
 
 - **Ctrl-C during a preview, capture or framing set** cancels that owned operation
   and keeps the editor, draft and previous successful output. Another Ctrl-C
-  during cancellation escalates to emergency exit.
+  during cancellation requests emergency exit; owned filesystem writers/cleanup
+  are still awaited rather than detached or killed mid-write.
 - **Ctrl-C while idle** exits promptly using whatever checkpoint already completed.
   It does not wait for a fresh capture-sized checkpoint or save native files.
 - **Ctrl-D / Ctrl-Q**, main **Escape**, or **Cancel** requests exit. For a dirty
@@ -99,13 +100,26 @@ Opening, saving, handoff verification/selection and recovery inspection use one
 owned filesystem worker per operation. The editor stays responsive and prevents
 conflicting edits while a captured save or open is reconciled. Cancellation is
 cooperative at bounded read/write boundaries; the editor waits for its worker,
-including cleanup, rather than leaving a writer running after exit. Slow storage
-can still delay completion. A selector already published is verified and reported
+including cleanup, rather than leaving a writer running after exit. A repeated
+Ctrl-C requests exit but cannot abandon that writer; slow storage can still delay
+completion. Bounded native inspection/copy, library summaries and final publication
+checks are not all asynchronous; they can delay signal dispatch. A completed native
+copy is not removed merely because later checkpoint cleanup was cancelled. A selector already published is verified and reported
 as completed or uncertain; an interrupt never silently rolls it back.
 
-Finder metadata in the private recovery root counts against the quota but does
-not block checkpoints. Explicit discard may remove hash-verified orphan blobs
-inside that session. Unknown files, changed blobs and corrupt checkpoints remain
-for inspection; permissions are never normalized automatically. Source hints are
-non-executable display text and are bounded and sanitized independently of draft
-fields.
+A regular `.DS_Store` owned by this user is tolerated in the recovery root and
+directly inside a session; its bytes count against the quota and checkpoints
+preserve it. Explicit verified session discard may remove that session's stable
+Finder metadata and hash-verified orphan blobs; root metadata remains. Linked,
+foreign, nonregular or unknown material is refused with its exact path.
+
+If that refusal blocks checkpoints, close the editors and inspect the named path.
+Move unexpected material to a separate local backup, or remove it only if you
+know it is unwanted, before retrying. Do not delete unverified checkpoints or
+change permissions merely to bypass validation. Changed blobs and corrupt
+checkpoints remain for inspection; no automatic permission repair or blanket purge
+is performed. Source hints are bounded non-executable display text.
+
+Session discard verification uses the owned worker. Cancellation before deletion
+retains the session; once verified deletion begins, cleanup finishes before the
+editor returns. A stalled filesystem can still delay stop/exit.

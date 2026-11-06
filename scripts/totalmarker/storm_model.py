@@ -9,7 +9,7 @@ import re
 
 from .errors import FeedError
 from .labels import legacy_time
-from .marker_text import quoted_label
+from .marker_text import encode_marker_lines, quoted_label, transparency_option
 
 IDENTITY = re.compile(r"^(?:AL|EP|CP|WP|NI|IO|SI|SP|SH|SA)[0-9]{2}(?:19|20)[0-9]{2}$")
 TIMESTAMP_LIMIT = 32503680000
@@ -156,7 +156,7 @@ def render_bodies(snapshot, style, *, required_groups):
         coord = _coord(storm.current)
         image = f" image={style.image}" if style.image else ""
         if style.image_transparent and style.image:
-            image += f" transparent={style.image_transparent}"
+            image += transparency_option(style.image_transparent)
         if style.name_enabled:
             markers.append(f"{coord} {_quote(storm.name)} align={style.name_align} "
                            f"color={style.name_color}{image}")
@@ -188,8 +188,7 @@ def render_bodies(snapshot, style, *, required_groups):
                 if start.lat != end.lat or start.lon != end.lon:
                     arcs.append(f"{_coord(start)} {_coord(end)} "
                                 f"color={style.track_forecast_color}")
-    return (("\n".join(markers) + "\n").encode("utf-8"),
-            ("\n".join(arcs) + "\n").encode("utf-8"))
+    return encode_marker_lines(markers), encode_marker_lines(arcs)
 
 
 def render_marker(body, installed_at):

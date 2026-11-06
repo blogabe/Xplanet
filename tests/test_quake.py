@@ -1,5 +1,5 @@
 """Offline USGS GeoJSON and quake publication contracts."""
-from dataclasses import replace
+from dataclasses import asdict, replace
 import hashlib
 import json
 from pathlib import Path
@@ -97,13 +97,43 @@ class QuakeTests(Sandbox):
         self.assertIn('"6.0" color=Yellow align=Above',
                       render_body(events, QuakeOptions()).decode())
 
+    def test_oversized_provider_label_keeps_last_good_and_success_time(self):
+        settings = self.config("QuakeCheckIntervalSeconds=0\nQuakeDetailList=<location>\n")
+        self.run_with(settings, response(feed(feature())))
+        before = self.fs.read(settings.quake.marker)
+        result, _ = self.run_with(settings, response(feed(feature(place="界" * 200), feature("later"))),
+                                  now=NOW + 1)
+        self.assertEqual(result.outcome, "failed")
+        self.assertIn("510-byte limit", result.message)
+        self.assertEqual(self.fs.read(settings.quake.marker), before)
+        self.assertEqual(result.successful_at, NOW)
+        self.assertIn("510-byte limit", self.read_state(settings)["products"]["quake"]["last_error"]["message"])
+
+    def test_previous_parser_identity_forces_unconditional_revalidation(self):
+        settings = self.config("QuakeCheckIntervalSeconds=3600\n")
+        self.run_with(settings, response(feed(feature()), etag='"old"'))
+        state = self.read_state(settings)
+        style = asdict(settings.quake)
+        for name in ("journal", "interval", "timeout", "max_bytes", "warning"):
+            style.pop(name)
+        style["marker"] = str(self.fs.resolve(settings.quake.marker, write=True).relative_to(self.fs.root))
+        style["parser_version"] = 1
+        old_key = hashlib.sha256(json.dumps(style, sort_keys=True).encode()).hexdigest()
+        state["products"]["quake"]["source_key"] = old_key
+        self.fs.write(settings.state, json_bytes(state))
+        result, transport = self.run_with(settings, response(feed(feature())), now=NOW + 1)
+        self.assertEqual(result.outcome, "unchanged")
+        self.assertEqual(len(transport.calls), 1)
+        self.assertNotIn("If-None-Match", transport.calls[0][1])
+        self.assertNotEqual(self.read_state(settings)["products"]["quake"]["source_key"], old_key)
+
     def test_visible_marker_styling_and_origin_detail(self):
         options = replace(QuakeOptions(), detail="<date> <time> <location> <depth>",
                           pixel_min=4, pixel_max=20, detail_color="Blue",
-                          image="icons/quake.png", image_transparent="30")
+                          image="icons/quake.png", image_transparent="{30,60,90}")
         event = parse_geojson(feed(feature()), 6)[0][0]
         text = render_body([event], options).decode()
-        self.assertIn('image=icons/quake.png color=Salmon transparent=30', text)
+        self.assertIn('image=icons/quake.png color=Salmon transparent={30,60,90}', text)
         self.assertIn('2023-11-14 19:26:40 Hawaiʻi   12.5', text)
         self.assertIn('color=Blue align=Above', text)
         self.assertIn('symbolsize=13.6',

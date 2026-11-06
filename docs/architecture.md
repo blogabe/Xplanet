@@ -9,6 +9,8 @@ requested workflow:
 - `lib/xplanet/update.zsh`: Git fast-forward and formula comparison/rebuild.
 - `lib/xplanet/display.zsh`: render, process lifecycle and monthly map selection.
 - `lib/xplanet/desktop.zsh`: private foreground renderer entrypoint for launchd.
+- `lib/xplanet/lifecycle.zsh`: per-user native lock and lifecycle serialization.
+- `lib/xplanet/configurator.zsh`: shell handoff and result presentation for the studio.
 - `xp-setup.sh`: preserve/prepare personal configuration and launchd jobs.
 - `lib/xplanet/management*.zsh`: interactive input, presentation and action orchestration.
 - `lib/xplanet/scene.zsh`: validate and resolve the immutable selected revision.
@@ -76,7 +78,16 @@ must supply the documented map months. Standalone repository tests check tracked
 source privacy and regular asset bytes/modes directly against the Git index; no
 release builder or fresh-history export is required. Unknown local asset files
 stay ignored; adding a shipped asset requires deliberate `git add -f` and
-provenance review.
+provenance review. A map-family rename also needs explicit staging: a plain `mv`
+followed by `git add -A` can stage deletions while the new ignored path remains
+untracked. Review `git status --short --ignored maps/` and the staged file list.
+
+The indexed privacy scan covers known identifiers in bounded text, including
+provider `.dat` and `.geojson` fixtures. It reads index blobs, not replacement
+working-tree bytes. Text and non-map binary source/fixtures each have 5 MiB
+per-file and 64 MiB aggregate budgets. Binary content is not decoded or searched
+for arbitrary secrets; shipped imagery has separate asset checks. These are
+release review guards, not an exhaustive credential or rights audit.
 
 ## Verification boundaries
 
@@ -91,8 +102,9 @@ The desktop is a foreground process owned by `local.xplanet.desktop`; the separa
 existing login trigger calls public start. There is no KeepAlive. Public start
 selects the current map on the custom configuration path even when the job is already running;
 a selected studio revision retains its reviewed seasonal map. Stop first removes
-the desktop job, then stops all current-user Xplanet processes; restart uses the
-same broad stop before start. Start/restart success confirms launchd accepted
+the desktop job, then stops current-user processes named `xplanet` or by the
+trusted configured renderer; restart uses that same stop before start. Historical
+scene revisions do not authorize arbitrary process names. Start/restart success confirms launchd accepted
 the request; rendering and wallpaper updates happen asynchronously. No
 process-identity database or native ABI is used.
 

@@ -2,3 +2,7 @@ tests/fixtures/storm/jtwc-abpw-20261026-2230.txt -text
 tests/fixtures/storm/live-20261105-slash-reissue/jtwc-abio-advisory.txt -text
 
 tests/fixtures/gvp_weekly_20261019_structural.html -text
+
+# Byte-pinned provider fixtures: preserve the indexed response bytes.
+tests/fixtures/usgs_quake_selected_20261019.geojson -text
+tests/fixtures/storm/jtwc-rss-20261027-reissue.xml -text

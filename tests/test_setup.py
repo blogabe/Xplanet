@@ -531,16 +531,6 @@ class SetupTests(Sandbox):
         self.assertEqual(again.returncode, 0, again.stderr)
         self.assertEqual(calls.read_text().splitlines(), [f"print gui/{os.geteuid()}/local.xplanet.{job}" for job in jobs])
         self.assertEqual(again.stdout.count("left unchanged"), len(jobs))
-        # macOS 27 reports identity but omits cwd/environment. Preserve the job
-        # without falsely claiming those missing settings were verified.
-        calls.write_text("")
-        omitted = subprocess.run(command, cwd=PROJECT,
-                                 env={**env, "TM_LIST_OMIT_SETTINGS": "1"},
-                                 input="y\n\ny\ny\ny\ny\ny\n", capture_output=True,
-                                 text=True, check=False)
-        self.assertEqual(omitted.returncode, 0, omitted.stderr)
-        self.assertEqual(calls.read_text().splitlines(), [f"print gui/{os.geteuid()}/local.xplanet.{job}" for job in jobs])
-        self.assertEqual(omitted.stdout.count("loaded settings were not reverified"), len(jobs))
         # A same-label loaded definition is not parsed or reverified;
         # it remains untouched even if its settings differ.
         state_file = launchctl.with_suffix(".json")

@@ -87,6 +87,26 @@ class MonthlyMapTests(Sandbox):
         self.assertEqual(self.chosen.read_bytes(), before)
         self.assertIn("Earth map unchanged", self.run_earth().stdout)
 
+    def test_preflight_unchanged_map_needs_no_write_permission(self):
+        self.link.unlink()
+        self.link.symlink_to('../maps/world/' + self.filename)
+        images = self.root / 'images'
+        command = ('project_root=' + shlex.quote(str(self.root)) +
+                   '; script_dir=' + shlex.quote(str(self.root / 'scripts')) +
+                   '; fail() { print -u2 -- "$*"; exit 2; }; ' +
+                   'source "$script_dir/lib/xplanet/display.zsh"; select_earth_map --check')
+        images.chmod(0o500)
+        try:
+            result = subprocess.run(['/bin/zsh', '-f', '-c', command],
+                                    env={'PATH': f'{self.bin}:/usr/bin:/bin',
+                                         'TEST_MONTH': f'{self.current:02d}'},
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('Earth map unchanged', result.stdout)
+            self.assertFalse((self.root / '.state').exists())
+        finally:
+            images.chmod(0o700)
+
     def test_all_calendar_months_select_their_own_map(self):
         for month in range(1, 13):
             with self.subTest(month=month):

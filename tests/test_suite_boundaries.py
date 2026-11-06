@@ -51,3 +51,18 @@ class SuiteBoundaryTests(unittest.TestCase):
             relative=path.relative_to(run_core.TEST_ROOT)
             if relative.parts[:2]==('configurator','ui') or any(part.startswith('.') or part=='__pycache__' for part in relative.parts):continue
             self.assertIn('tests.'+'.'.join(relative.with_suffix('').parts),actual,str(relative))
+
+    def test_portable_missing_zsh_allows_only_named_shell_boundaries(self):
+        class Case:
+            def __init__(self,name):self.name=name
+            def id(self):return self.name
+        result=unittest.TestResult()
+        for name in run_core.ZSH_BOUNDARY_SKIPS:result.addSkip(Case(name),'zsh is unavailable')
+        with patch('tests.run_core.Path.exists',return_value=False),patch('tests.run_core.shutil.which',return_value=None):
+            self.assertEqual(run_core.unexpected_skips(result,portable=True),[])
+            self.assertEqual(len(run_core.unexpected_skips(result)),len(run_core.ZSH_BOUNDARY_SKIPS))
+            result.addSkip(Case('setUpClass (tests.test_release_content.ReleaseContentTests)'),'zsh is unavailable')
+            self.assertEqual(run_core.unexpected_skips(result,portable=True)[0][0],
+                             'setUpClass (tests.test_release_content.ReleaseContentTests)')
+        with patch('tests.run_core.Path.exists',return_value=True),patch('tests.run_core.shutil.which',return_value='/bin/zsh'):
+            self.assertEqual(len(run_core.unexpected_skips(result,portable=True)),len(run_core.ZSH_BOUNDARY_SKIPS)+1)

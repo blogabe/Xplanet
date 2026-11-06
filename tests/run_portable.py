@@ -26,4 +26,4 @@ def suite():
     return core_suite(exclude=MACOS_MODULES)
 
 if __name__ == '__main__':
-    raise SystemExit(not run(suite))
+    raise SystemExit(not run(suite,portable=True))

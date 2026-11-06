@@ -1,6 +1,6 @@
 """Offline volcano contract checks; no live CAP requests or working-root outputs."""
 from contextlib import redirect_stdout
-from dataclasses import replace
+from dataclasses import asdict, replace
 import hashlib
 import io
 import json
@@ -74,13 +74,13 @@ class VolcanoParserTests(Sandbox):
         event = parse_cap(synthetic_info())[0]
         self.assertEqual((event.name, event.location), ("Kīlauea & Pele's", "Hawaiʻi"))
         options = replace(VolcanoOptions(), image="volcano.png",
-                          image_transparent="42",
+                          image_transparent="{42,84,126}",
                           name_color="Gold", name_align="Above",
                           detail="<name> in <location>; <elev> at <lat>,<long>",
                           detail_color="Blue", detail_align="Below")
         lines = render_body([event], options).decode().splitlines()
         self.assertEqual(len(lines), 4)
-        self.assertIn('"Kīlauea & Pele\'s" align=Above color=Gold image=volcano.png transparent=42',
+        self.assertIn('"Kīlauea & Pele\'s" align=Above color=Gold image=volcano.png transparent={42,84,126}',
                       lines[2])
         self.assertIn('"Kīlauea & Pele\'s in Hawaiʻi; UNKNOWN at', lines[3])
         self.assertIn("color=Blue align=Below image=none", lines[3])
@@ -123,6 +123,15 @@ class VolcanoParserTests(Sandbox):
         self.assertNotIn(b"\x7f", body)
         self.assertIn(b'"Am brym "', body)
 
+    def test_combined_detail_and_style_are_checked_against_full_line_limit(self):
+        events = parse_cap(synthetic_info(name="N" * 256, location="L" * 256))
+        options = replace(VolcanoOptions(), name_enabled=False, detail="<name> <location>")
+        with self.assertRaisesRegex(FeedError, "510-byte limit"):
+            render_body(events, options)
+        with self.assertRaisesRegex(FeedError, "510-byte limit"):
+            render_body(parse_cap(synthetic_info(name="Normal")),
+                        replace(VolcanoOptions(), image="icons/" + "x" * 510 + ".png"))
+
     def test_foreign_namespace_cannot_masquerade_as_cap_info(self):
         raw = (b'<alert xmlns="urn:oasis:names:tc:emergency:cap:1.2" '
                b'xmlns:x="urn:wrong"><x:info><x:eventCode><x:valueName>Volcano Name'
@@ -145,6 +154,34 @@ class VolcanoProviderTests(Sandbox):
         transport = ScriptedTransport(*responses)
         result = run(self.fs, settings, fetcher=Fetcher(transport), now=now)
         return result, transport
+
+    def test_oversized_cap_name_preserves_last_good_markers_and_success_time(self):
+        settings = self.config("VolcanoCheckIntervalSeconds=0\n")
+        self.run_with(settings, cap_response())
+        before = self.fs.read(settings.volcano.marker)
+        result, _ = self.run_with(settings, cap_response(synthetic_info(name="界" * 200)), now=NOW + 1)
+        self.assertEqual(result.outcome, "failed")
+        self.assertIn("510-byte limit", result.message)
+        self.assertEqual(self.fs.read(settings.volcano.marker), before)
+        self.assertEqual(result.successful_at, NOW)
+
+    def test_previous_parser_identity_forces_unconditional_revalidation(self):
+        settings = self.config("VolcanoCheckIntervalSeconds=3600\n")
+        self.run_with(settings, cap_response(ETag='"old"'))
+        state = self.read_state(settings)
+        style = asdict(settings.volcano)
+        for name in ("journal", "interval", "timeout", "max_bytes", "warning"):
+            style.pop(name)
+        style["marker"] = str(self.fs.resolve(settings.volcano.marker, write=True).relative_to(self.fs.root))
+        style["parser_version"] = 3
+        old_key = hashlib.sha256(json.dumps(style, sort_keys=True).encode()).hexdigest()
+        state["products"]["volcano"]["source_key"] = old_key
+        self.fs.write(settings.state, json_bytes(state))
+        result, transport = self.run_with(settings, cap_response(), now=NOW + 1)
+        self.assertEqual(result.outcome, "unchanged")
+        self.assertEqual(len(transport.calls), 1)
+        self.assertNotIn("If-None-Match", transport.calls[0][1])
+        self.assertNotEqual(self.read_state(settings)["products"]["volcano"]["source_key"], old_key)
 
     def test_first_publish_preserves_other_label_rows_and_originals(self):
         settings = self.config("VolcanoCheckIntervalSeconds=0\n")

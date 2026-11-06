@@ -7,6 +7,7 @@ import re
 from urllib.parse import urlsplit, urlunsplit
 
 from .errors import ConfigError, DownloadError
+from .marker_text import rgb_color_key
 
 
 def https_url(value, *, allow_query=False):
@@ -678,12 +679,18 @@ def load_bytes(fs, raw, path):
             raise ConfigError(key + " has an invalid Xplanet option")
         return value
 
+    def transparency(key):
+        try:
+            return rgb_color_key(get(key))
+        except ValueError:
+            raise ConfigError(key + " requires an RGB color key such as {0,0,0} "
+                              "(components 0..255); scalar opacity values are unsupported. "
+                              "Choose the image color to hide, or leave this setting empty.") from None
+
     name_on = get("VolcanoNameOnOff", "On").lower()
     if name_on not in {"on", "off"}:
         raise ConfigError("VolcanoNameOnOff must be On or Off")
-    transparency = get("VolcanoImageTransparent").strip()
-    if transparency and not re.fullmatch(r"[0-9]{1,9}", transparency):
-        raise ConfigError("VolcanoImageTransparent must contain digits")
+    vtrans = transparency("VolcanoImageTransparent")
     image_name = get("VolcanoImageList").strip()
     image_parts = Path(image_name).parts
     if image_name and (image_name in {".", ".."} or Path(image_name).is_absolute() or
@@ -716,7 +723,7 @@ def load_bytes(fs, raw, path):
                                                ("Middle", "Red"), ("Outer", "Brown")]),
         name_enabled=name_on == "on", name_color=token("VolcanoNameColor", "Brown"),
         name_align=token("VolcanoNameAlign", "Below"), image=image_name,
-        image_transparent=transparency, detail=detail,
+        image_transparent=vtrans, detail=detail,
         detail_align=token("VolcanoDetailAlign", "Below"),
         detail_color=token("VolcanoDetailColor", "Brown"))
     duration = get("QuakeReportingDuration", "Week").title()
@@ -728,9 +735,7 @@ def load_bytes(fs, raw, path):
     if qimage and (Path(qimage).is_absolute() or any(part in {".", ".."} or not
             re.fullmatch(r"[A-Za-z0-9_.-]+", part) for part in Path(qimage).parts)):
         raise ConfigError("QuakeImageList must be a safe relative image path")
-    qtrans = get("QuakeImageTransparent").strip()
-    if qtrans and not re.fullmatch(r"[0-9]{1,9}", qtrans):
-        raise ConfigError("QuakeImageTransparent must contain digits")
+    qtrans = transparency("QuakeImageTransparent")
     qdetail = get("QuakeDetailList", "<mag>")
     if any(c in qdetail for c in '\r\n"\\') or len(qdetail) > 1024 or re.search(
             r"<[^>]*>", re.sub(r"<(?:date|time|lat|long|depth|mag|quality|location)>",
@@ -763,9 +768,7 @@ def load_bytes(fs, raw, path):
     if simage and (Path(simage).is_absolute() or any(part in {".", ".."} or not
             re.fullmatch(r"[A-Za-z0-9_.-]+", part) for part in Path(simage).parts)):
         raise ConfigError("StormImageList must be a safe relative image path")
-    strans = get("StormImageTransparent").strip()
-    if strans and not re.fullmatch(r"[0-9]{1,9}", strans):
-        raise ConfigError("StormImageTransparent must contain digits")
+    strans = transparency("StormImageTransparent")
     sdetail = get("StormDetailList", "<type>")
     if any(c in sdetail for c in '\r\n"\\') or len(sdetail) > 1024 or re.search(
             r"<[^>]*>", re.sub(r"<(?:lat|long|type|name|speed)>", "", sdetail)):

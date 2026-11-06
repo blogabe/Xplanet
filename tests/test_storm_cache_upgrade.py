@@ -86,6 +86,9 @@ class StormCacheUpgradeTests(Sandbox):
     def test_v6_cache_revalidates_before_kmz_identity_rule(self):
         self.exercise_upgrade((), version=6)
 
+    def test_v8_cache_revalidates_before_marker_syntax_and_line_bound_rules(self):
+        self.exercise_upgrade((), version=8)
+
     def test_v7_cache_revalidates_before_reissue_rule(self):
         self.exercise_upgrade((), version=7)
 
