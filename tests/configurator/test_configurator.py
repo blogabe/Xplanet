@@ -587,7 +587,7 @@ class AppearanceTests(unittest.TestCase):
         view = View(map_family='world', month='07', grid='30')
         definition = view.definition('/trusted/xplanet').encode()
         for body in (view.body()+b'prev_command=bad\n', view.body().replace(b'grid1=3',b'grid1=0'),
-                     view.body().replace(b'200407',b'200408'), view.body().replace(b'map=assets/',b'map=/outside/')):
+                     view.body().replace(b'200407',b'200408'), view.body().replace(b'map=maps/',b'map=/outside/')):
             with self.subTest(body=body), self.assertRaises(ValueError):
                 parse_saved_view(definition,body)
         self.assertFalse(recognized_body(view.body()+b'# altered\n'))
@@ -855,7 +855,7 @@ class EarthLayerTests(unittest.TestCase):
         view=View(clouds='snapshot2011')
         with tempfile.TemporaryDirectory() as temporary,patch('configurator.workspace.ROOT',Path(temporary)):
             self.assertTrue(any(i.severity=='blocking' and 'Missing bundled' in i.message for i in configuration_issues(view,sys.executable)))
-        wrong=view.body().replace(b'cloud_map=assets/maps/clouds/clouds_26Aug2011_2048.jpeg',b'cloud_map=/outside/not-read')
+        wrong=view.body().replace(b'cloud_map=maps/clouds/clouds_26Aug2011_2048.jpeg',b'cloud_map=/outside/not-read')
         self.assertFalse(recognized_body(wrong))
         with self.assertRaises(ValueError):parse_saved_view(view.definition('/trusted/xplanet').encode(),wrong)
 
@@ -878,7 +878,7 @@ class CloudCaptureTests(unittest.TestCase):
         for name in ('config','images','.state/totalmarker'):(self.root/name).mkdir(parents=True)
         config=(ROOT/'config/totalmarker.example.toml').read_text().replace('resolution = 4096','resolution = 2048').replace('auth_mode = "none"','auth_mode = "basic"').replace('username = ""','username = "PrivateUser"').replace('password = ""','password = "PrivatePassword"')
         (self.root/'config/totalmarker.toml').write_text(config)
-        self.image=(ROOT/'assets/maps/clouds/clouds_26Aug2011_2048.jpeg').read_bytes()
+        self.image=(ROOT/'maps/clouds/clouds_26Aug2011_2048.jpeg').read_bytes()
         self.image_path=self.root/'images/clouds-2048.jpg';self.image_path.write_bytes(self.image)
         self.state_path=self.root/'.state/totalmarker/state.json'
         self.record={'image_sha256':hashlib.sha256(self.image).hexdigest(),'source_image_sha256':hashlib.sha256(self.image).hexdigest(),
@@ -1017,7 +1017,7 @@ class CloudCaptureWorkerTests(unittest.IsolatedAsyncioTestCase):
         from configurator.cloud_capture import FrozenCloud,json_bytes
         from configurator.model import ROOT
         import hashlib
-        data=(ROOT/'assets/maps/clouds/clouds_26Aug2011_2048.jpeg').read_bytes()
+        data=(ROOT/'maps/clouds/clouds_26Aug2011_2048.jpeg').read_bytes()
         meta={'schema':1,'product':'clouds','image_sha256':hashlib.sha256(data).hexdigest(),'width':2048,'height':1024,
               'source_time_origin':'unavailable','warning_seconds':100,'last_outcome':None,
               'captured_at':1700000000,'source_created_at':None,'last_check_at':None,'last_attempt_at':None,
@@ -1155,7 +1155,7 @@ class PriorVersionAssetTests(unittest.TestCase):
         from configurator.cloud_capture import FrozenCloud,json_bytes
         from configurator.model import ROOT
         import hashlib
-        data=(ROOT/'assets/maps/clouds/clouds_26Aug2011_2048.jpeg').read_bytes()
+        data=(ROOT/'maps/clouds/clouds_26Aug2011_2048.jpeg').read_bytes()
         meta={'schema':1,'product':'clouds','image_sha256':hashlib.sha256(data).hexdigest(),'width':2048,'height':1024,
               'source_time_origin':'unavailable','warning_seconds':100,'last_outcome':None,
               'captured_at':1700000000,'source_created_at':None,'last_check_at':None,'last_attempt_at':None,

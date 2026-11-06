@@ -54,9 +54,9 @@ Redirected input or output prints usage instead.
 
 Explore and configure
   config       Open the scene studio; save and selection are separate
-  preview      Render one legacy Earth frame at 1920x1080
+  preview      Render one custom Earth frame at 1920x1080
                Output: dev/preview/earth-manual.png
-  render       Render one legacy Earth frame at the configured size
+  render       Render one custom Earth frame at the configured size
                Output: dev/preview/earth-render.png
 
 Install and maintain
@@ -112,7 +112,7 @@ Workflow notes (macOS)
   formula reinstall restarts the display only if Xplanet was already
   running.
 
-  Without a selector, start uses legacy settings. An invalid selected
+  Without a selector, start uses custom configuration. An invalid selected
   revision fails instead of falling back. Apply never restarts; start uses
   one job with no automatic respawn. Stop removes it and stops ALL this
   user's Xplanet processes. Restart waits for exit before starting one

@@ -1,6 +1,6 @@
 # Read-only metadata and bounded saved-health snapshots; no live refresh.
 management_selection_facts() {
-    management_selection='legacy configuration (no selector)'
+    management_selection='custom configuration (xp.def / xp.conf)'
     local selector="$project_root/config/desktop.scene" description
     [[ -e "$selector" || -L "$selector" ]] || return 0
     # Lifecycle validation stays authoritative. Inspect only bounded, hash-bound
@@ -117,10 +117,10 @@ management_saved_health() {
     return "$result"
 }
 
-# Binary evidence is historical: this reader does not probe an executable or
+# Xplanet build is historical: this reader does not probe an executable or
 # execute definitions. The explicit diagnostic validates current identity.
 management_binary_facts() {
-    management_binary='not checked; run diagnostics explicitly'
+    management_binary='Build features not checked; choose Diagnostics (9)'
     local evidence="$project_root/.state/configurator/binary-evidence.json" folder size stamp outcome schema
     for folder in "$project_root/.state" "$project_root/.state/configurator"; do
         [[ -d "$folder" && ! -L "$folder" && "${folder:A}" == "$folder" ]] || return 0
@@ -134,5 +134,5 @@ management_binary_facts() {
     [[ "$stamp" =~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\+00:00$' ]] || return 0
     outcome=$(/usr/bin/plutil -extract report.status raw -expect string -o - "$evidence" 2>/dev/null) || return 0
     [[ "$outcome" == reported ]] || outcome=unknown
-    management_binary="$outcome ${stamp[1,19]}Z; not revalidated for next start/running"
+    management_binary="Features $outcome ${stamp[1,19]}Z; not rechecked"
 }

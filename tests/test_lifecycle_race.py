@@ -16,7 +16,7 @@ args=sys.argv[1:];jobs=Path(os.environ['JOBS']);trace=Path(os.environ['TRACE']);
 def log(step):
  with trace.open('a') as out:out.write(json.dumps([actor,args[0],step])+'\\n')
 log('begin')
-if args[0]=='list':raise SystemExit(0 if jobs.exists() else 3)
+if args[0] in ('list','print'):raise SystemExit(0 if jobs.exists() else 3)
 if args[0]=='bootout':
  if not jobs.exists():raise SystemExit(3)
  jobs.unlink()
@@ -92,3 +92,73 @@ log('end')
             self.assertEqual(child.returncode,2,(out,err));self.assertIn('busy',err);self.assertFalse(self.trace.exists())
         child=self.invoke(self.entry,'stop','A');out,err=child.communicate(timeout=5)
         self.assertEqual(child.returncode,0,(out,err));self.assertTrue(self.trace.exists());self.assertTrue(lock.exists())
+
+    def removal_fixture(self, *, stuck=False, wrong_domain=False):
+        code = r"""import json,os,sys
+from pathlib import Path
+args=sys.argv[1:]; job=Path(os.environ['JOBS']); trace=Path(os.environ['TRACE'])
+with trace.open('a') as out:out.write(json.dumps(args)+'\n')
+pending=job.with_suffix('.pending')
+if args[0]=='list':raise SystemExit(0 if os.environ.get('WRONG_DOMAIN') or job.exists() else 3)
+if args[0]=='print':
+ if pending.exists() and not os.environ.get('STUCK_REMOVAL'):
+  remaining=int(pending.read_text())
+  if remaining:pending.write_text(str(remaining-1))
+  else:job.unlink(missing_ok=True);pending.unlink()
+ raise SystemExit(0 if job.exists() else 3)
+if args[0]=='bootout':pending.write_text('2');raise SystemExit(0)
+if args[0]=='bootstrap':
+ if job.exists():raise SystemExit(5)
+ job.write_text('{}');raise SystemExit(0)
+if args[0]=='kickstart':
+ if pending.exists():job.unlink(missing_ok=True)
+ raise SystemExit(0 if job.exists() else 3)
+raise SystemExit(4)
+"""
+        self.script(self.bin/'launchctl',code,python=True)
+        if wrong_domain:self.jobs.unlink()
+        self.env.update({'STUCK_REMOVAL':'1' if stuck else '', 'WRONG_DOMAIN':'1' if wrong_domain else ''})
+
+    def test_restart_waits_for_delayed_service_removal_before_registration(self):
+        self.removal_fixture()
+        child=self.invoke(self.entry,'restart','A');out,err=child.communicate(timeout=10)
+        self.assertEqual(child.returncode,0,(out,err))
+        calls=[json.loads(line) for line in self.trace.read_text().splitlines()]
+        self.assertEqual(sum(c[0]=='bootstrap' for c in calls),1)
+        self.assertEqual(sum(c[0]=='kickstart' for c in calls),1)
+        self.assertTrue(self.jobs.exists())
+
+    def test_start_uses_target_gui_domain_not_contextual_list(self):
+        self.removal_fixture(wrong_domain=True)
+        child=self.invoke(self.entry,'start','A');out,err=child.communicate(timeout=10)
+        self.assertEqual(child.returncode,0,(out,err))
+        calls=[json.loads(line) for line in self.trace.read_text().splitlines()]
+        self.assertFalse(any(c[0]=='list' for c in calls))
+        self.assertIn(['print',f'gui/{os.geteuid()}/local.xplanet.desktop'],calls)
+
+    def test_stuck_removal_fails_without_bootstrap_or_kickstart(self):
+        self.removal_fixture(stuck=True)
+        child=self.invoke(self.entry,'restart','A');out,err=child.communicate(timeout=10)
+        self.assertEqual(child.returncode,2,(out,err))
+        self.assertIn('desktop job removal',err)
+        calls=[json.loads(line) for line in self.trace.read_text().splitlines()]
+        self.assertFalse(any(c[0] in ('bootstrap','kickstart') for c in calls))
+
+    def test_start_waits_for_registration_visibility_before_kickstart(self):
+        self.jobs.unlink()
+        code = r"""import os,sys
+from pathlib import Path
+args=sys.argv[1:]; job=Path(os.environ['JOBS']); pending=job.with_suffix('.pending')
+if args[0] in ('list','print'):
+ if pending.exists():
+  n=int(pending.read_text())
+  if n:pending.write_text(str(n-1))
+  else:job.write_text('{}');pending.unlink()
+ raise SystemExit(0 if job.exists() else 3)
+if args[0]=='bootstrap':pending.write_text('2');raise SystemExit(0)
+if args[0]=='kickstart':raise SystemExit(0 if job.exists() else 3)
+raise SystemExit(4)
+"""
+        self.script(self.bin/'launchctl',code,python=True)
+        child=self.invoke(self.entry,'start','A');out,err=child.communicate(timeout=10)
+        self.assertEqual(child.returncode,0,(out,err));self.assertTrue(self.jobs.exists())

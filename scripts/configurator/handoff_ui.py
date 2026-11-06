@@ -37,8 +37,8 @@ class HandoffScreen(ModalScreen[tuple]):
             yield Label('NEW export directory, or existing bundle directory to check')
             yield Input(str(self.root/'config/handoff-review'),id='handoff-destination')
             yield Static('Resource limits: selected assets are hash-bound references, not copied. Stock textures, incidental-body textures, fonts and compiled resources are not fully bound. These checks do not certify rendering, desktop capability or astronomical accuracy. No network or provider refresh occurs.')
-            yield Static('Apply selects an immutable revision for the NEXT explicit start/restart. It does not change the running desktop, legacy files or producer schedules. With no selector the legacy path remains the default. Invalid selections fail clearly; no silent legacy fallback.')
-            yield Static('Bundles contain local paths and possibly frozen observation metadata. Review before sharing. Legacy xp.def/xp.conf are hashed, never executed or included as content.')
+            yield Static('Apply selects an immutable revision for the NEXT explicit start/restart. It does not change the running desktop, custom configuration files or producer schedules. With no selector the custom configuration path remains the default. Invalid selections fail clearly; no silent custom configuration fallback.')
+            yield Static('Bundles contain local paths and possibly frozen observation metadata. Review before sharing. Custom xp.def/xp.conf are hashed, never executed or included as content.')
             yield Static('',id='handoff-review',markup=False)
             yield Static('',id='handoff-status',markup=False)
             with Horizontal():
@@ -127,7 +127,7 @@ class HandoffScreen(ModalScreen[tuple]):
                 if inspect_selection(self.root)!=self.receipt.after:raise ValueError('Selection changed; previous-selection restore would overwrite a newer choice.')
                 if self.receipt.before.revision:read_revision(self.root,self.receipt.before.revision)
                 self.selection_expected=self.receipt.after;self.restore_pending=True
-                self.query_one('#handoff-review',Static).update('Current selection: '+self.receipt.after.label+'\nRestore previous selection: '+self.receipt.before.label+'\nOnly the reference changes. Legacy files, producers and the running desktop remain untouched.')
+                self.query_one('#handoff-review',Static).update('Current selection: '+self.receipt.after.label+'\nRestore previous selection: '+self.receipt.before.label+'\nOnly the reference changes. Custom configuration files, producers and the running desktop remain untouched.')
                 self.query_one('#handoff-restore-confirm',Button).display=True
                 self.status('Confirm restoration explicitly; no change has occurred.')
             elif action=='handoff-restore-confirm':
@@ -152,7 +152,8 @@ class HandoffScreen(ModalScreen[tuple]):
         self.invalidate();self.receipt=receipt;self.selection_label=receipt.after.label
         if self.on_selection:self.on_selection(self.selection_label)
         self.query_one('#handoff-restore',Button).disabled=receipt.before==receipt.after
-        self.result=message+': '+receipt.after.label+'. No restart, renderer, provider or job action. Legacy and source files unchanged.'
+        display_label=receipt.after.revision or 'custom configuration'
+        self.result=message+': '+display_label+'. No restart, renderer, provider or job action. Custom configuration and source files unchanged.'
         self.status(self.result)
 
     def action_cancel(self):self.dismiss((self.result,self.selection_label))

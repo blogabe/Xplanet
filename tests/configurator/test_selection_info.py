@@ -19,7 +19,7 @@ class SelectedInfoTests(unittest.TestCase):
         with patch.object(selection_info,'open_view',side_effect=AssertionError('must not load legacy')):
             info=inspect_selected(self.root)
         self.assertIsNone(info.native_path);self.assertIsNone(info.selection.revision)
-        self.assertIn('legacy default','\n'.join(info.sections()));self.preserved()
+        self.assertIn('custom configuration default','\n'.join(info.sections()));self.preserved()
 
     def test_selected_report_separates_native_and_deployment_geometry_and_is_readonly(self):
         receipt=self.apply();before=inspect_selection(self.root)

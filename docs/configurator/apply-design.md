@@ -36,7 +36,7 @@ The same operations work without Textual/TTY through the selected Python 3.11+:
 
 For an existing selection, use the exact current revision ID instead of `legacy`.
 A wrong/missing expectation refuses the change. These commands install nothing;
-`setup --check-handoff` returns before normal setup or legacy execution. Restart is
+`setup --check-handoff` returns before normal setup or custom configuration execution. Restart is
 an independent management/CLI action, with its existing broad Stop contract.
 
 ## Ownership and defaults
@@ -49,7 +49,7 @@ Tool-managed revisions are never edited or overwritten; old revisions are retain
 They remain ordinary user-owned files, not filesystem-enforced immutable objects.
 No automatic retention cleanup, symlink selection or shell evaluation is used.
 
-No selector means the existing legacy desktop path, including monthly-map
+No selector means the existing custom desktop path, including monthly-map
 catch-up. An invalid selector or damaged selected revision fails clearly; it never
 silently falls back. The scene-aware desktop path remains zsh-only, using native
 `plutil`, `stat` and `shasum`. It passes literal argv and does not source generated
@@ -58,7 +58,7 @@ Selected rendering uses the revision as its working directory so checkout files
 cannot shadow frozen relative resources. The launcher adds a fixed private
 `-tmpdir` at `.state/xplanet/desktop-tmp`, outside the revision; linked scratch
 directories are refused. Operational temporary output is not scene configuration.
-Existing personal legacy definitions retain their intentional shell semantics,
+Existing personal custom definitions retain their intentional shell semantics,
 including existing Stop/process-name discovery; Apply itself never executes them.
 
 The reviewed local executable and explicit geometry belong to this deployment;
@@ -70,19 +70,19 @@ from the studio/selected desktop workflow.
 
 Library edits do not change a selected revision. Captured observations remain
 frozen; Now advances geometry, not the captured data. Fixed UTC uses `-timewarp 0`.
-Monthly jobs keep their existing legacy purpose and do not rotate a selected
+Monthly jobs keep their existing custom configuration purpose and do not rotate a selected
 seasonal map. Producer schedules/state are not changed or rolled back.
 
 ## Integrity and resource limits
 
 Export/check binds source identities, selected asset hashes, local renderer and
-opaque legacy baseline hashes, including absence. Definitions are known literal
+opaque custom configuration baseline hashes, including absence. Definitions are known literal
 data, never sourced by review. Changed source identity, even metadata-only changes,
 invalidates an unapplied review. Setup-created baselines require re-export afterward.
 
 Apply rechecks the review, freezes native/captured bytes and changes only the
 selector. Subsequent validation uses the frozen revision, not editable library
-sources or legacy baseline hashes. Selected bundled assets remain hash-bound
+sources or custom configuration baseline hashes. Selected bundled assets remain hash-bound
 references, avoiding another large copy. Startup verifies manifest/argument/native/
 asset/renderer bytes with bounded reads before constructing the command.
 
@@ -98,7 +98,7 @@ paths and frozen observation metadata; review before sharing. Nothing is uploade
 
 Within the dialog, **Review previous selection** then **Confirm previous selection**
 restores only the preceding reference, and only if the current selector still
-matches the completed change. It does not restore assets, legacy files, schedules
+matches the completed change. It does not restore assets, custom configuration files, schedules
 or producer state. A prior revision must still validate. This single undo receipt
 lasts for the dialog session; there is no automatic crash-replay journal.
 
@@ -118,7 +118,7 @@ automatic rollback can overwrite a newer choice. Invalid selector repair require
 manual inspection; no force/bypass option is provided.
 
 A failed later start/restart does not undo a selection automatically. Restore a
-known reference deliberately after diagnosis. Legacy files and last-good producer
+known reference deliberately after diagnosis. Custom configuration files and last-good producer
 outputs are never part of this recovery operation.
 
 ## Validation scope
@@ -136,11 +136,16 @@ installation test of this new selected-scene path.
 **Selected scene…** in the studio explicitly verifies the selector, immutable
 native snapshot and known resource hashes. It distinguishes reviewed desktop
 geometry from stored preview geometry and shows frozen input provenance. Refresh
-is manual. Invalid selection is an error, never an assumed legacy fallback.
+is manual. Invalid selection is an error, never an assumed custom configuration fallback.
 **Open native scene as draft** replaces the editor only when requested, retains
 the local renderer and saves future changes as a new library copy. It does not
 modify the revision or selector. With no selector, the inspector reports the
-legacy default without reading or executing personal definitions.
+custom configuration default without reading or executing personal definitions.
 
 The CLI equivalent is `xplanet.sh config --show-selection`. Both describe the
 next explicit start/restart; neither inspects the running desktop.
+
+The existing `--use-legacy` switch and `legacy` expected-selection token retain
+their compatibility spellings; they refer to the custom `xp.def`/`xp.conf`
+configuration, not an unsupported mode. Older directory-save formats are still
+described as legacy formats where that distinction is relevant.

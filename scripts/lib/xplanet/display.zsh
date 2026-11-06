@@ -20,9 +20,9 @@ select_earth_map() (
     local folder="$match[1]" stem="$match[2]" month source target previous='' lockdir temporary
     month=$(date +%m)
     [[ "$month" == <-> && "$month" -ge 1 && "$month" -le 12 ]] || fail "Cannot determine Earth map month"
-    source="assets/maps/$folder/$stem.2004${month}.3x5400x2700.png"
+    source="maps/$folder/$stem.2004${month}.3x5400x2700.png"
     target="../$source"
-    for directory in assets assets/maps "assets/maps/$folder" images; do
+    for directory in maps "maps/$folder" images; do
         [[ -d "$project_root/$directory" && ! -L "$project_root/$directory" ]] ||
             fail "$directory must be a real directory"
     done
@@ -46,8 +46,16 @@ select_earth_map() (
     if [[ -e earth.png || -L earth.png ]]; then
         [[ -L earth.png ]] || fail "images/earth.png is not a symlink; refusing to replace it"
         previous=$(readlink earth.png) || fail "Cannot read images/earth.png"
-        [[ "$previous" =~ '^\.\./assets/maps/[A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9][A-Za-z0-9_.-]*\.png$' ]] ||
-            fail "images/earth.png is not an internal map link"
+        if [[ "$previous" == ../assets/maps/* ]]; then
+            local old_month managed=false
+            for old_month in {01..12}; do
+                [[ "$previous" == "../assets/maps/$folder/$stem.2004${old_month}.3x5400x2700.png" ]] && managed=true
+            done
+            [[ "$managed" == true ]] || fail "images/earth.png uses an unrecognized old map link; review it before starting"
+        else
+            [[ "$previous" =~ '^\.\./maps/[A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9][A-Za-z0-9_.-]*\.png$' ]] ||
+                fail "images/earth.png is not an internal map link"
+        fi
         if [[ "$previous" == "$target" ]]; then
             print -- "Earth map unchanged: $source"
             exit 0
@@ -132,13 +140,13 @@ desktop_domain="gui/$EUID"
 
 _start_xplanet() {
     local -a desktop_args
-    local map_note state temporary
+    local map_note state temporary attempt
     desktop_command
     if [[ -n "${EARTH_MAP_PRE:-}" ]]; then
         map_note=$(select_earth_map) || return $?
     fi
     command -v launchctl >/dev/null || fail "launchctl is required for the desktop"
-    if ! launchctl list "$desktop_label" >/dev/null 2>&1; then
+    if ! launchctl print "$desktop_domain/$desktop_label" >/dev/null 2>&1; then
         # Do not start a second desktop on top of the old -fork installation.
         # An explicit restart authorizes the same broad termination as stop.
         local existing
@@ -166,8 +174,14 @@ _start_xplanet() {
             mv -f -- "$temporary" "$state/desktop.plist"
         ) || fail "cannot prepare desktop plist"
         launchctl bootstrap "$desktop_domain" "$state/desktop.plist" || {
-            launchctl list "$desktop_label" >/dev/null 2>&1 || fail "could not register desktop job"
+            launchctl print "$desktop_domain/$desktop_label" >/dev/null 2>&1 || fail "could not register desktop job"
         }
+        for ((attempt = 0; attempt < 20; attempt++)); do
+            launchctl print "$desktop_domain/$desktop_label" >/dev/null 2>&1 && break
+            sleep 0.25
+        done
+        launchctl print "$desktop_domain/$desktop_label" >/dev/null 2>&1 ||
+            fail "desktop job registration is not visible in $desktop_domain; start was not requested"
     fi
     launchctl kickstart "$desktop_domain/$desktop_label" || fail "could not start desktop job"
     interactive_note "Xplanet desktop start requested; launchd accepted the request. Rendering is asynchronous."
@@ -225,8 +239,18 @@ _stop_xplanet() {
         fail "cannot use the PID-specific kill command"
     # Remove the managed job before broad termination so a queued start cannot
     # recreate it. No KeepAlive or background supervisor respawns the renderer.
-    if launchctl list "$desktop_label" >/dev/null 2>&1; then
-        launchctl bootout "$desktop_domain/$desktop_label" || job_error=1
+    if launchctl print "$desktop_domain/$desktop_label" >/dev/null 2>&1; then
+        if launchctl bootout "$desktop_domain/$desktop_label"; then
+            # Removal may still be visible after bootout returns. Observe the
+            # exact target before allowing restart to register a replacement.
+            for ((attempt = 0; attempt < 20; attempt++)); do
+                launchctl print "$desktop_domain/$desktop_label" >/dev/null 2>&1 || break
+                sleep 0.25
+            done
+            launchctl print "$desktop_domain/$desktop_label" >/dev/null 2>&1 && job_error=1
+        else
+            job_error=1
+        fi
     fi
     listing=$(xplanet_pids) || fail "could not inspect this user's Xplanet processes"
     if [[ -z "$listing" ]]; then

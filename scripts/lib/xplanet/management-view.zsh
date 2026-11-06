@@ -214,8 +214,8 @@ management_draw() {
     # by ownership: desktop, saved evidence, then setup and last action.
     (( ${rows:-0} >= 35 )) && print
     management_fact "Next start" "$management_selection"
-    management_fact "Running scene" "[?] Not identified; process/job presence does not verify a scene"
-    management_fact "Binary evidence" "$management_binary"
+    management_fact "Running scene" "[?] Not identified"
+    management_fact "Xplanet build" "$management_binary"
     print
     management_fact "Saved data" "$management_health"
     if [[ -n "$management_health_time" ]]; then
@@ -223,7 +223,7 @@ management_draw() {
         management_fact Key "[+] current  [!] stale/unverified  [x] failed  [?] unassessed  [-] disabled"
     fi
     (( ${rows:-0} >= 35 )) && print
-    management_fact "Legacy setup" "$state; scene studio (2)"
+    management_fact "Custom setup" "$state; Configurator: option 2"
     if [[ -n "$management_last_result" ]]; then
         management_result_line
     fi

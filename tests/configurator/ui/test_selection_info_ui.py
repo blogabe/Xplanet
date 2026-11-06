@@ -23,7 +23,7 @@ class SelectedInfoUITests(unittest.IsolatedAsyncioTestCase):
         async with self.app.run_test(size=(110,50)) as pilot:
             await click(pilot,'#selected-scene');await pilot.pause()
             text=str(self.app.screen.query_one('#selected-scene-info',Static).render())
-            self.assertIn('legacy default',text);self.assertIn('not a claim about the running renderer',text)
+            self.assertIn('custom configuration default',text);self.assertIn('not a claim about the running renderer',text)
             self.assertTrue(self.app.screen.query_one('#selected-scene-open',Button).disabled)
             await pilot.press('escape');await pilot.pause();self.assertFalse(self.app.leaving)
         self.assertEqual(list((self.root/'config').iterdir()),[])
@@ -63,5 +63,5 @@ class SelectedInfoUITests(unittest.IsolatedAsyncioTestCase):
             self.assertIn('Cannot open',str(self.app.screen.query_one('#selected-scene-info',Static).render()))
             self.assertTrue(self.app.screen.query_one('#selected-scene-open',Button).disabled)
             await click(pilot,'#selected-scene-refresh');await pilot.pause()
-            self.assertIn('No legacy fallback',str(self.app.screen.query_one('#selected-scene-info',Static).render()))
+            self.assertIn('No custom configuration fallback',str(self.app.screen.query_one('#selected-scene-info',Static).render()))
         self.assertEqual(path.read_bytes(),b'new invalid selector')

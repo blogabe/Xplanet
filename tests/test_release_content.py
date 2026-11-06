@@ -47,7 +47,7 @@ class ReleaseContentTests(unittest.TestCase):
             if name.startswith("dev/"):
                 self.fail("dev must remain local-only: " + name)
                 self.assertNotIn(".tmp", parts, name)
-            if name.startswith("assets/"):
+            if name.startswith(("maps/", "assets/")):
                 self.assertFalse(any(part in {".DS_Store", "__MACOSX", "Thumbs.db",
                                               "desktop.ini"} or part.startswith("._")
                                      for part in parts), name)
@@ -116,7 +116,7 @@ class ReleaseContentTests(unittest.TestCase):
             "dev/reference/private/file",
             "dev/recovery/archive", "dev/validation/frame.png",
             "dev/todel/snapshot", "dev/preview/earth-render.png",
-            "tests/.tmp/capture", "assets/maps/personal.png",
+            "tests/.tmp/capture", "maps/personal.png",
             ".state/totalmarker/state.json", "logs/totalmarker/events.jsonl",
         )
         for path in private:
@@ -138,8 +138,8 @@ class ReleaseContentTests(unittest.TestCase):
                 self.assertIsNone(forbidden.search(path.read_bytes()), name)
 
     def test_readme_monthly_map_example_has_all_shipped_months(self):
-        if (not (PROJECT / "assets/maps").exists()
-                and not any(name.startswith("assets/") for _, name in self.tracked())):
+        if (not (PROJECT / "maps").exists()
+                and not any(name.startswith(("maps/", "assets/")) for _, name in self.tracked())):
             self.skipTest("optional asset bundle absent from source checkout; validate it in the complete checkout")
         readme = (PROJECT / "README.md").read_text()
         match = re.search(r"`EARTH_MAP_PRE=([A-Za-z0-9.]+)/([A-Za-z0-9.]+)`", readme)
@@ -148,7 +148,7 @@ class ReleaseContentTests(unittest.TestCase):
         self.assertIn(f"{folder}/{stem}",
                       (PROJECT / "config/xp.def.example").read_text())
         for month in range(1, 13):
-            path = (PROJECT / "assets/maps" / folder /
+            path = (PROJECT / "maps" / folder /
                     f"{stem}.2004{month:02d}.3x5400x2700.png")
             self.assertTrue(path.is_file() and not path.is_symlink(), path)
 

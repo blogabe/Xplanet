@@ -3,6 +3,7 @@ from dataclasses import replace
 from datetime import datetime, timezone
 import hashlib
 import json
+import math
 from pathlib import Path
 import tempfile
 import time
@@ -98,7 +99,58 @@ def cloud_freshness(created, warning, now):
                                 ('current', 'aging', 'stale')) == 'stale' else 'current')
 
 
+
+def quake_feed_freshness(record, settings, now):
+    """Application tolerance for saved USGS generation age, not an event-age SLA."""
+    # Frozen scene captures do not retain the refresh policy; do not invent one.
+    if settings is None:
+        return 'unknown'
+    generated = record.get('feed_generated_at')
+    if type(generated) not in (int, float) or not math.isfinite(generated):
+        return 'unknown'
+    age = now - generated
+    if age < -60:
+        return 'unknown'
+    return 'current' if age <= max(2 * settings.quake.interval, 300) else 'stale'
+
+
+def saved_norad_freshness(fs, settings, record, output, now):
+    """Reuse the normal cached-TLE validator without fetching or recovering state."""
+    oldest = record.get('oldest_epoch_at')
+    if type(oldest) not in (int, float) or not math.isfinite(oldest):
+        return 'unknown'
+    age = now - oldest
+    if age > settings.norad.max_age:
+        return 'stale'
+    if age < -24 * 3600 or not output['verified']:
+        return 'unknown'
+    try:
+        selected = record.get('selected_ids', list(settings.norad.catalog_ids)
+                              if not settings.norad.groups else None)
+        if record.get('source_key') != norad._source_key(fs, settings.norad):
+            return 'unknown'
+        raw = fs.read(settings.norad.satellite + '.tle', 32 * 1024 * 1024)
+        valid = (raw is not None and hashlib.sha256(raw).hexdigest() == record.get('tle_sha256')
+                 and norad._icons_valid(fs, record.get('icons', []))
+                 and norad._cached_tles_valid(raw, settings.norad, now, oldest, selected))
+        return 'current' if valid else 'unknown'
+    except StorageError:
+        return 'unknown'
+
+
+def eclipse_relevance(record, now):
+    """Predictive paths have event relevance, not a generic feed-age expiry."""
+    start, end = record.get('start_at'), record.get('end_at')
+    valid = (type(start) in (int, float) and type(end) in (int, float)
+             and math.isfinite(start) and math.isfinite(end) and 0 <= start <= end)
+    phase = ('upcoming' if now < start else 'active' if now <= end else 'ended') if valid else 'unknown'
+    display = 'enabled' if record.get('active') is True else 'hidden' if record.get('active') is False else 'unknown'
+    return {'phase': phase, 'overlay': display, 'start_at': start, 'end_at': end}
+
+
 def _freshness(product, record, settings, now):
+    if product == 'quake':
+        return quake_feed_freshness(record, settings, now)
     if product == 'volcano':
         if record.get('coverage_end_at') is None:
             return 'unknown'
@@ -194,12 +246,14 @@ def _live(fs, settings, product, row, record, now, fetcher_factory):
             else:
                 checked = load_state(probe_fs, probe_settings.state)['products'].get(product, {})
                 row['freshness'] = _freshness(product, checked, settings, now)
+                if product == 'eclipse':
+                    row['event_relevance'] = eclipse_relevance(checked, now)
                 if product == 'norad' and checked.get('oldest_epoch_at') is not None:
                     row['freshness'] = 'current'  # The normal TLE validator checked its epoch.
                 row['count'] = getattr(result, 'count', None)
-                row['status'] = ('no_events' if row['count'] == 0 else
-                                 'healthy' if row['freshness'] == 'current' else
-                                 'stale' if row['freshness'] == 'stale' else 'unknown')
+                row['status'] = ('stale' if row['freshness'] == 'stale' else
+                                 'no_events' if row['count'] == 0 else
+                                 'healthy' if row['freshness'] == 'current' else 'unknown')
                 row['probe_source_at'] = checked.get('source_created_at', checked.get('source_report_at',
                     checked.get('source_at', checked.get('feed_generated_at', checked.get('oldest_epoch_at')))))
                 row['probe_coverage'] = {key: checked.get(key) for key in
@@ -230,6 +284,19 @@ def check(fs, settings, *, live=False, now=None, fetcher_factory=Fetcher):
                'output': _output_summary(fs, settings, product, record)}
         if enabled:
             row['freshness'] = _freshness(product, record, settings, now)
+            if product == 'quake':
+                row['freshness_tolerance_seconds'] = max(2 * settings.quake.interval, 300)
+                if not live and row['freshness'] == 'current':
+                    try:
+                        matches = record.get('source_key') == quake._source_key(fs, settings.quake)
+                    except StorageError:
+                        matches = False
+                    if not matches:
+                        row['freshness'] = 'unknown'
+            if product == 'norad' and not live:
+                row['freshness'] = saved_norad_freshness(fs, settings, record, row['output'], now)
+            if product == 'eclipse':
+                row['event_relevance'] = eclipse_relevance(record, now)
             if not live and row['last_outcome'] == 'failed':
                 row['status'] = 'refresh_failed'
             if row['freshness'] == 'stale':
@@ -335,6 +402,10 @@ def _summary(row, live):
             if row['product'] == 'volcano' and row['access'] == 'ok':
                 return 'reachable; report parsed; coverage stale', ''
             return 'stale data', _brief(row.get('message'))
+        if row['content'] == 'valid' and row['product'] == 'eclipse':
+            event = row.get('event_relevance', {})
+            return ('prediction validated; event ' + event.get('phase', 'unknown') +
+                    '; overlay ' + event.get('overlay', 'unknown')), ''
         if row['content'] == 'valid':
             detail = ('no events' if status == 'no_events' else
                       'current' if freshness == 'current' else 'freshness not assessed')
@@ -349,6 +420,10 @@ def _summary(row, live):
         return 'no saved output', ''
     if not row['output']['verified']:
         return 'saved output unverified', ''
+    if row['product'] == 'eclipse':
+        event = row.get('event_relevance', {})
+        return ('saved prediction; event ' + event.get('phase', 'unknown') +
+                '; overlay ' + event.get('overlay', 'unknown')), ''
     return ('saved output current' if freshness == 'current' else
             'saved output; freshness not assessed'), ''
 

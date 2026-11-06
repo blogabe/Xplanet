@@ -100,7 +100,7 @@ The default low-precision source (`EphemerisLow.cpp` in Xplanet 1.3.1) discusses
 that interval, but this project does not certify astronomical accuracy. No label,
 producer, schedule or lifecycle setting follows implicitly from scene time.
 
-V2 uses explicit studio assignments to native xp.def. The legacy desktop
+V2 uses explicit studio assignments to native xp.def. The custom desktop
 path does not interpret these richer assignments. Named-scene Apply produces
 literal reviewed deployment arguments for a separate zsh path, leaving legacy
 files/default behavior intact. Save remains no-overwrite scene publication;
@@ -109,7 +109,7 @@ selection and restart are distinct operations.
 ## Earth appearance
 
 The model whitelists three 12-month families and one bundled night image.
-Native body values use relative `assets/maps/...` names without spaces; preview
+Native body values use relative `maps/...` names without spaces; preview
 passes the current checkout through a separate argv `-searchdir`, so checkout
 paths with spaces do not require unsupported quoting in the engine’s body parser.
 Saved `XPLANET_ASSET_ROOT` is a quoted reference only: reopening reconstructs
@@ -508,7 +508,7 @@ reproduce the same effective native body. Date/guide policies stay unchanged.
 
 ## Review-only handoff export
 
-`handoff.py` builds an immutable plan from a recognized named scene, opaque legacy
+`handoff.py` builds an immutable plan from a recognized named scene, opaque custom configuration
 hashes, explicit local renderer/geometry and selected bundled resources. Rechecks
 rebuild the complete expected record rather than trusting imported manifest paths
 or arguments. Export writes a new private snapshot, manifest last, using owned-file
@@ -721,3 +721,13 @@ Static eclipse handoff uses the existing immutable snapshot and timewarp0. Weath
 Now-only policy stays intact. Framing sheets preserve captures in their owned child
 workspace and refuse conversions that would change eligibility. No zsh lifecycle,
 provider or deployment service code changes are required.
+
+### Bundled map path compatibility
+
+The bundled collection is top-level `maps/`, with padded solar-system body
+folders. Recognition accepts only the known previous map spellings within an
+otherwise exact generated body. It retains the input bytes; preview regenerates
+from the validated model using current paths. This is not a general path rewrite
+or support for arbitrary native imports. Saving a new studio copy emits current
+paths. A prior-layout immutable desktop revision requires a new reviewed copy;
+no running selection or source file is silently migrated.

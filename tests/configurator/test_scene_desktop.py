@@ -41,7 +41,7 @@ class SceneDesktopTests(unittest.TestCase):
         path=self.root/SELECTOR
         for raw in (b'corrupt\n',b'v1 '+b'a'*64+b'\n'):
             path.write_bytes(raw);result=self.shell('desktop_command')
-            self.assertEqual(result.returncode,2);self.assertIn(b'no legacy fallback',result.stderr)
+            self.assertEqual(result.returncode,2);self.assertIn(b'no custom configuration fallback',result.stderr)
         self.assertFalse((self.root/'forbidden').exists())
 
     def test_changed_snapshot_arguments_asset_or_manifest_fails_before_execution(self):

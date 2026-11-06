@@ -95,7 +95,7 @@ start (immutable scene selection wins, otherwise the trusted legacy xp.def):
 Without desktop configuration, the default command identifies its PATH choice
 explicitly. An invalid selector/configuration does not silently fall back. An
 explicit `--renderer` inspects that choice, not necessarily the desktop choice.
-Legacy resolution uses the same trusted shell definitions as start; this is not an
+Custom configuration resolution uses the same trusted shell definitions as start; this is not an
 arbitrary-config import tool. This diagnostic needs the existing compatible Python
 selection, but does not need Textual or its prepared environment. It installs nothing.
 

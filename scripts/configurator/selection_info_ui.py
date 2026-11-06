@@ -37,7 +37,7 @@ class SelectedSceneScreen(ModalScreen):
             self.query_one('#selected-scene-info',Static).update('\n\n'.join(safe(part) for part in info.sections()))
             self.query_one('#selected-scene-open',Button).disabled=info.native_path is None
         except (OSError,ValueError) as exc:
-            self.query_one('#selected-scene-info',Static).update('Selection unavailable or invalid: '+safe(exc)+'\nNo legacy fallback was assumed; files and draft remain unchanged.')
+            self.query_one('#selected-scene-info',Static).update('Selection unavailable or invalid: '+safe(exc)+'\nNo custom configuration fallback was assumed; files and draft remain unchanged.')
 
     def on_button_pressed(self,event):
         event.stop()

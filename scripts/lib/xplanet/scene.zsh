@@ -2,10 +2,10 @@
 scene_revision_id() {
     local selector="$project_root/config/desktop.scene" value
     [[ -e "$selector" || -L "$selector" ]] || return 1
-    [[ -f "$selector" && ! -L "$selector" && "${selector:A}" == "$selector" ]] || fail "invalid desktop scene selector; no legacy fallback"
-    [[ "$(/usr/bin/stat -f %z "$selector")" == 68 ]] || fail "invalid desktop scene selector size; no legacy fallback"
+    [[ -f "$selector" && ! -L "$selector" && "${selector:A}" == "$selector" ]] || fail "invalid desktop scene selector; no custom configuration fallback"
+    [[ "$(/usr/bin/stat -f %z "$selector")" == 68 ]] || fail "invalid desktop scene selector size; no custom configuration fallback"
     value=$(<"$selector")
-    [[ "$value" =~ '^v1 ([0-9a-f]{64})$' ]] || fail "invalid desktop scene selector; no legacy fallback"
+    [[ "$value" =~ '^v1 ([0-9a-f]{64})$' ]] || fail "invalid desktop scene selector; no custom configuration fallback"
     REPLY="$match[1]"
 }
 
@@ -25,7 +25,7 @@ selected_scene_command() {
     local -a values
     scene_revision_id || return 1
     identity="$REPLY";revision="$project_root/.state/xplanet/scenes/$identity";manifest="$revision/deployment.plist"
-    [[ -d "$revision" && "${revision:A}" == "$revision" ]] || fail "selected scene revision missing or linked; no legacy fallback"
+    [[ -d "$revision" && "${revision:A}" == "$revision" ]] || fail "selected scene revision missing or linked; no custom configuration fallback"
     scene_hash "$manifest" "$identity" 262144
     /usr/bin/plutil -lint "$manifest" >/dev/null || fail "invalid scene deployment manifest"
     [[ "$(/usr/bin/plutil -extract schema raw -expect integer -o - "$manifest")" == 1 ]] || fail "unsupported scene deployment schema"
@@ -43,7 +43,8 @@ selected_scene_command() {
         case "$kind" in
             N) [[ "$name" != */* && "$name" != . && "$name" != .. && -n "$name" ]] || fail "invalid native scene filename"
                scene_path="$revision/$name"; (( size <= 134217728 )) || fail "oversize native scene resource" ;;
-            P) [[ "$name" == assets/* && "$name" != *'/../'* && "$name" != *'/./'* ]] || fail "invalid project scene resource"
+            P) [[ "$name" != assets/maps/* ]] || fail "selected scene uses the previous map layout; reopen, save a new copy and review/select it before starting"
+               [[ "$name" == maps/* && "$name" != *'/../'* && "$name" != *'/./'* ]] || fail "invalid project scene resource"
                scene_path="$project_root/$name"; (( size <= 536870912 )) || fail "oversize project scene resource" ;;
             B) [[ "$name" == /* ]] || fail "invalid selected renderer path"
                scene_path="$name"; (( size <= 536870912 )) || fail "oversize selected renderer" ;;

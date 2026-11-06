@@ -22,7 +22,7 @@ class SelectedScene:
     def sections(self):
         lines=['Selected for the NEXT explicit start/restart — not a claim about the running renderer. No service or process inspection occurred.']
         if self.record is None:
-            return lines+['Selection: legacy default (no selector). The desktop path will use personal xp.def/xp.conf. This inspector does not read or execute them.']
+            return lines+['Selection: custom configuration default (no selector). The desktop path will use personal xp.def/xp.conf. This inspector does not read or execute them.']
         record=self.record;view=self.document.view
         lines += [safe('Revision: '+self.selection.revision+'\nOriginal library source: '+record['scene']+'\nImmutable native snapshot: '+str(self.native_path)),
                   safe('Selected local renderer: '+record['renderer']['path']+'\nReviewed desktop geometry: '+record['geometry']+'\nStored native preview geometry: '+view.geometry),

@@ -685,7 +685,7 @@ class EarthLayerAppTests(unittest.IsolatedAsyncioTestCase):
             await pilot.press('escape')
 
     async def test_finite_preview_contains_local_layers_and_annotations_without_provider_work(self):
-        binary=self.root/'renderer';binary.write_text('#!'+sys.executable+'\nimport pathlib,sys\na=sys.argv\nbody=pathlib.Path(a[a.index("-config")+1]).read_text()\nassert all(k in body for k in ("bump_map=assets/","specular_map=assets/","cloud_map=assets/","marker_file=places.markers"))\nassert "cloud_gamma=1.2" in body\nassert "Center" in pathlib.Path("places.markers").read_text()\npathlib.Path(a[a.index("-output")+1]).write_bytes(b"\\x89PNG\\r\\n\\x1a\\nfixture")\n');binary.chmod(0o700)
+        binary=self.root/'renderer';binary.write_text('#!'+sys.executable+'\nimport pathlib,sys\na=sys.argv\nbody=pathlib.Path(a[a.index("-config")+1]).read_text()\nassert all(k in body for k in ("bump_map=maps/","specular_map=maps/","cloud_map=maps/","marker_file=places.markers"))\nassert "cloud_gamma=1.2" in body\nassert "Center" in pathlib.Path("places.markers").read_text()\npathlib.Path(a[a.index("-output")+1]).write_bytes(b"\\x89PNG\\r\\n\\x1a\\nfixture")\n');binary.chmod(0o700)
         self.app.renderer=str(binary)
         async with self.app.run_test(size=(100,45)) as pilot:
             for field,value in (('relief','gebco'),('specular','bundled'),('clouds','snapshot2011'),('places','on')):
@@ -707,7 +707,7 @@ def capture_fixture(root):
     source=root/'producer';source.mkdir()
     for name in ('config','images','.state/totalmarker'):(source/name).mkdir(parents=True)
     (source/'config/totalmarker.toml').write_text((ROOT/'config/totalmarker.example.toml').read_text().replace('resolution = 4096','resolution = 2048'))
-    image=(ROOT/'assets/maps/clouds/clouds_26Aug2011_2048.jpeg').read_bytes()
+    image=(ROOT/'maps/clouds/clouds_26Aug2011_2048.jpeg').read_bytes()
     (source/'images/clouds-2048.jpg').write_bytes(image)
     (source/'.state/totalmarker/state.json').write_text(json.dumps({'schema':1,'products':{'clouds':{'image_sha256':hashlib.sha256(image).hexdigest(),'source_image_sha256':hashlib.sha256(image).hexdigest(),'installed_at':1700000000,'successful_at':1700000000,'last_outcome':'unchanged'}}}))
     return source

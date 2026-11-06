@@ -11,7 +11,7 @@ the Moon and these additional bundled targets/viewpoints:
 | Uranus | Miranda |
 | Pluto | Pluto and Charon |
 
-Each has an existing texture under `assets/maps/solarsystem`; no files are fetched.
+Each has an existing texture under `maps/solarsystem`; no files are fetched.
 Bodies lacking a bundled texture (such as Triton, Nereid and the other Uranian
 moons) are not offered. Resource presence is checked; this does not certify map
 orientation, coverage, epoch or scientific accuracy. Pluto/Charon maps and geometry

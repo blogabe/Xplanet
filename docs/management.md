@@ -91,10 +91,10 @@ a renderer, provider refresh or lifecycle command. Without a terminal, bare
 invocation still prints usage and does not run health. Wide dashboards align
 labels and values with horizontal spacing; narrow screens preserve the full text
 with compact spacing rather than truncation.
-Legacy setup status counts files; it does not validate settings. Next-start scene
+Custom setup status counts files; it does not validate settings. Next-start scene
 metadata is hash-checked and labeled separately; assets and the executable are
 revalidated only by the start path. Invalid/unavailable selectors are shown as
-such, without claiming a legacy fallback. **Running scene: not identified** remains
+such, without claiming a custom fallback. **Running scene: not identified** remains
 explicit: a registered job or normal Xplanet process cannot establish which scene
 is actually displaying. The menu does not execute `xp.def` to guess.
 The separate configurator opens chosen samples/saved scenes; opening management
@@ -147,13 +147,13 @@ and setup retain their documented exit statuses.
 With no scene selector, `start` uses `XPLANET_GEOMETRY` from `xp.def` when nonempty;
 otherwise Xplanet sizes the desktop automatically. A selected revision uses its
 reviewed explicit geometry and scene arguments; invalid selection fails clearly.
-The legacy `render` command saves a frame at the configured
-dimensions, while `preview` uses a fixed 1920×1080 size. Both render the legacy
+The `render` command saves a frame at the configured
+dimensions, while `preview` uses a fixed 1920×1080 size. Both render the custom
 Earth configuration, not a selected studio revision or unsaved draft. Use Preview
 in the configurator for a studio scene. `stop` signals
 ALL of this user's Xplanet processes, including finite renders and other checkouts,
 and succeeds when none is running. It first removes the managed desktop job.
-`restart` performs that same broad stop, then starts one display. Legacy `start`
+`restart` performs that same broad stop, then starts one display. Custom-configuration `start`
 catches up a configured monthly map; selected scenes retain their reviewed map.
 Start asks launchd to run one foreground desktop, without
 `KeepAlive` or automatic respawn after stop. Python runs TotalMarker and the
@@ -212,3 +212,62 @@ This coordinates this version's commands, not arbitrary manual launchctl command
 or older scripts. Concurrent requests execute serially rather than guaranteeing
 wall-clock invocation order. A later explicit Start can follow Stop. The separate
 original missing-job incident is not proven resolved by this overlap correction.
+
+**Xplanet build** summarizes the last recorded renderer diagnostic. Diagnostics (9)
+shows its reported compile-time features and raw `-version` output; it cannot
+recover the original compiler command. Menu entry does not probe the renderer.
+**Custom setup** only counts `xp.def`, `xp.conf`, `earth` and `totalmarker.toml`;
+“existing” means all four are present, not validated. “Configurator: option 2” points
+to the editor menu entry, not a scene count. The custom configuration is the default
+next-start choice when `config/desktop.scene` is absent.
+
+Restart checks registration in the same GUI domain used for start and stop.
+After job removal it waits up to five seconds for that service to disappear;
+a removal timeout stops the restart rather than starting against a retiring job.
+This is a condition-based wait, not a fixed startup delay.
+
+## Map layout upgrades
+
+After updating a checkout, inspect `scripts/xplanet.sh setup --dry-run`, then
+run `scripts/xplanet.sh setup` to review the link relocation. Git pull and the
+update command do not run setup automatically.
+
+Bundled maps now live in top-level `maps/`. Solar-system folders use
+`SS-BB-name`, for example `03-01-moon` and `06-09-phoebe`. Setup's dry run lists recognized
+old `images` links that it can relocate. It changes them only after preparation
+is confirmed, preserving their selected month. The normal monthly-map command
+can also replace its own exact old seasonal link with the current month in
+`maps/`; it refuses unknown old custom targets. Custom regular files and custom
+links are never silently replaced. An unsupported old custom link may need a
+manual path edit; setup refuses it before preparing files.
+
+Older studio scenes can reopen and preview without rewriting their source.
+Save a new copy to emit current `maps/` references, then review/select that copy.
+An already selected immutable revision using `assets/maps/` must be reviewed
+again from the new copy before starting; no selector or old revision is silently
+rewritten. Custom native configs with direct old paths need deliberate edits.
+
+## Saved-health freshness
+
+Health keeps provider access, successful refresh, output integrity and source age
+separate. No network request is made by saved health.
+
+- Clouds use source-image creation time and the cloud warning policy.
+- Earthquakes use [USGS feed generation time](https://earthquake.usgs.gov/earthquakes/feed/v1.0/geojson.php), not the newest event or last fetch.
+  The application tolerance is `max(2 × configured refresh interval, 5 minutes)`,
+  with at most 60 seconds of future clock skew. This is an application policy,
+  not a USGS guarantee. Missing/invalid generation stays unassessed; stale empty
+  feeds remain stale. Saved output must match the current quake settings.
+- Storms use the saved bulletin-validity endpoint; volcanoes use weekly coverage.
+- NORAD reuses the normal cached-TLE checksum, ID and epoch validator with the
+  configured maximum age, verified outputs, source settings and icon checks.
+  Missing or inconclusive evidence stays unassessed; expired epochs are stale.
+- Eclipse predictions show event phase (upcoming, active, ended or unknown) and
+  whether the producer's overlay is enabled or hidden. Their age is not treated
+  as generic observational freshness, and this does not verify desktop display.
+- Disabled sources remain disabled; Santa has no supported live provider.
+
+A recorded refresh failure remains a failure even while retained source data is
+recent. Cached success timestamps alone do not prove recent provider access.
+Frozen quake captures remain unassessed because their manifest does not retain
+the producer's refresh-interval policy; their source generation time is still shown.

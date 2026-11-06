@@ -144,7 +144,7 @@ class LauncherWiringTests(Sandbox):
         self.assertLessEqual(max(map(len, result.stdout.splitlines())), 78)
         self.assertIn("Stop ALL this user's Xplanet processes", result.stdout)
         self.assertIn("alias: labels", result.stdout)
-        self.assertIn("legacy Earth frame", result.stdout)
+        self.assertIn("custom Earth frame", result.stdout)
         for product in (*PRODUCTS, "start", "stop", "restart", "setup", "install", "update",
                         "--dry-run", "--check"):
             self.assertIn(product, result.stdout)

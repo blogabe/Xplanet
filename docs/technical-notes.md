@@ -121,7 +121,7 @@ Desktop lifecycle uses zsh and macOS launchd; it does not require Python.
 Start selects the current monthly map and runs one managed foreground renderer,
 without automatic respawn after stop. An existing unmanaged renderer prompts for
 restart rather than being adopted. Stop stops all current-user Xplanet processes;
-restart performs that same stop before starting a display. Legacy manual-map
+restart performs that same stop before starting a display. Custom manual-map
 configs without `EARTH_MAP_PRE` stay manual.
 To disable future scheduled runs, unload the relevant personal LaunchAgent with
 `launchctl unload "$HOME/Library/LaunchAgents/<job>.plist"`; stopping Xplanet alone
