@@ -10,6 +10,7 @@ from pathlib import Path
 import subprocess
 
 from textual import work
+from textual.worker import WorkerCancelled, WorkerFailed
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
@@ -22,6 +23,7 @@ from .geography import COLORS
 from .cloud_capture import describe_capture
 from .observation_capture import PRODUCTS as OBS_PRODUCTS,describe as describe_observations,describe_metadata as describe_observation_metadata
 from .astronomy_capture import FILES as ASTRONOMY_FILES,describe as describe_astronomy,describe_metadata as describe_astronomy_metadata
+from .fileio import native_error
 from .library import save_named
 from .history import DraftHistory
 from .native_inspection import inspect_native,copy_unchanged
@@ -84,7 +86,7 @@ class ConfirmDiscard(ModalScreen[bool|str]):
         with VerticalScroll():
             yield Static('Leave the scene editor?')
             yield Static('Source files and selected scene stay unchanged. Previously saved copies remain.' if self.saved else 'Only the current unsaved draft will be discarded. Source files and scene selection stay unchanged.')
-            yield Static('Keep a private recovery draft, explicitly discard it, or continue editing. Ctrl-C exits using the last complete checkpoint; Ctrl-D/Ctrl-Q request exit.')
+            yield Static('Keep a private recovery draft, explicitly discard it, or continue editing. Active work continues until you confirm exit. Ctrl-C cancels work first; an idle or repeated Ctrl-C exits using the last complete checkpoint.')
             if self.modal:yield Static('Open dialog fields are not included in scene recovery. Continue editing, or explicitly discard them on exit.')
             yield Button('Keep editing',id='keep-editing',variant='primary')
             yield Button('Keep recovery draft and exit',id='keep-draft',disabled=not self.recovery or self.modal)
@@ -123,12 +125,13 @@ class OpenView(ModalScreen[str | None]):
 class NativeReviewScreen(ModalScreen[str | None]):
     DEFAULT_CSS=ConfirmSave.DEFAULT_CSS.replace('ConfirmSave','NativeReviewScreen')
 
-    def __init__(self,review,destination):
+    def __init__(self,review,destination,sections=None):
         super().__init__();self.review,self.destination=review,destination
+        self.sections=sections
 
     def compose(self):
         with VerticalScroll():
-            for section in self.review.sections():yield Static(section,markup=False)
+            for section in (self.sections if self.sections is not None else self.review.sections()):yield Static(section,markup=False)
             if self.review.recognized:
                 yield Static('Optional: copy these exact snapshot bytes into a NEW private directory. Original filenames/version/assets are retained; no overwrite or Apply.')
                 yield Input(self.destination,id='native-destination')
@@ -243,6 +246,7 @@ class ConfiguratorApp(App):
         self.controls_ready = False
         self.leaving = False
         self.exit_prompting=False
+        self.exit_decision=asyncio.Event();self.exit_decision.set()
         self.cancelling_operation=False
         self.termination_signal=None
         self.recovery_origin=None
@@ -546,7 +550,7 @@ class ConfiguratorApp(App):
                 self.status('Open cancelled; current draft and source retained.')
                 return
             except (ValueError, OSError) as exc:
-                self.status(f'Cannot open view: {exc}')
+                self.status('Cannot open view: '+native_error(exc))
                 return
             if self.recovery:self.recovery.boundary()
             self.recovery_origin=None
@@ -567,11 +571,7 @@ class ConfiguratorApp(App):
         self.history = DraftHistory(self.raw_fields())
         self.controls_ready = True
         self.update_controls()
-        if self.recovery:
-            try:
-                rows=self.recovery.store.entries()
-                if rows:self.recovery_status(f'{len(rows)} recovery sessions available; choose Recovery drafts to inspect. Nothing restored automatically.')
-            except (OSError,ValueError) as exc:self.recovery_status('Recovery inspection unavailable: '+str(exc))
+        if self.recovery:self.recovery_status('Recovery drafts are inspected on demand; nothing is restored automatically.')
         if not self.is_headless:
             loop=asyncio.get_running_loop()
             for sig in (signal.SIGINT,signal.SIGTERM,signal.SIGHUP):
@@ -972,31 +972,46 @@ class ConfiguratorApp(App):
         if label is not None:self.selection_label=label
         self.status(message or 'Handoff review closed. Source and draft unchanged; nothing activated.')
 
+    def native_request(self,function,success,label):
+        if self.workspace.busy:
+            self.status('Wait for the current operation or cancel it first.');return
+        self.query_one('#content').disabled=True
+        self.run_worker(self.native_operation(function,success,label))
+
+    async def native_operation(self,function,success,label):
+        try:
+            result=await self.workspace.file_operation(function)
+            await self.exit_decision.wait()
+            if not self.leaving:success(result)
+        except asyncio.CancelledError:
+            if not self.leaving:self.status(label+' cancelled; source and draft retained. Inspect a copy destination before retrying.')
+        except (ValueError,OSError) as exc:
+            if not self.leaving:self.status(label+': '+native_error(exc))
+        finally:self.query_one('#content').disabled=False
+
     def open_native_values(self,source):
         if source is None:self.status('Native editing cancelled. Source and draft unchanged.');return
-        try:
-            document=NativePatch.load(source)
-            self.push_screen(NativePatchScreen(document),self.native_values_finished)
-        except (ValueError,OSError) as exc:self.status('Native editing unavailable: '+str(exc)+' Source and draft unchanged.')
+        self.native_request(lambda:NativePatch.load(source),
+                            lambda document:self.push_screen(NativePatchScreen(document),self.native_values_finished),
+                            'Native editing unavailable')
 
     def native_values_finished(self,target):
         self.status('Native edit cancelled. Source and draft unchanged.' if target is None else f'Native .conf copy saved to {target}. Source, companion definitions and current draft unchanged; no preview or Apply.')
 
     def inspect_source(self,source):
-        if source is None:
-            self.status('Inspection cancelled. Source and draft unchanged.');return
-        try:
+        if source is None:self.status('Inspection cancelled. Source and draft unchanged.');return
+        def inspect():
             review=inspect_native(source)
-            self.push_screen(NativeReviewScreen(review,str(self.root/'config/native-snapshot')),lambda destination:self.copy_native_snapshot(review,destination))
-        except (ValueError,OSError) as exc:self.status('Cannot inspect native files: '+str(exc))
+            return review,review.sections()
+        self.native_request(inspect,
+                            lambda result:self.push_screen(NativeReviewScreen(result[0],str(self.root/'config/native-snapshot'),result[1]),lambda destination:self.copy_native_snapshot(result[0],destination)),
+                            'Cannot inspect native files')
 
     def copy_native_snapshot(self,review,destination):
-        if destination is None:
-            self.status('Inspection closed. Source and draft unchanged.');return
-        try:
-            target=copy_unchanged(review,destination)
-            self.status(f'Original snapshot bytes copied to {target}. Open its copied .conf file if needed. Current draft/source unchanged; no Apply.')
-        except (ValueError,OSError) as exc:self.status('Snapshot not copied: '+str(exc))
+        if destination is None:self.status('Inspection closed. Source and draft unchanged.');return
+        self.native_request(lambda:copy_unchanged(review,destination),
+                            lambda target:self.status(f'Original snapshot bytes copied to {target}. Current draft/source unchanged; no Apply.'),
+                            'Snapshot not copied')
 
     def start_capture(self,confirmed,source,config):
         if not confirmed:
@@ -1066,7 +1081,9 @@ class ConfiguratorApp(App):
             self.status(str(exc))
         finally:
             if diagnostic and self.workspace.capabilities is not None:
-                try:store_binary_evidence(self.root,self.workspace.capabilities)
+                try:await self.workspace.file_operation(store_binary_evidence,self.root,self.workspace.capabilities)
+                except asyncio.CancelledError:
+                    if not self.leaving:self.status('Diagnostic cache write cancelled; session evidence remains available.')
                 except (OSError,ValueError) as exc:self.status('Diagnostic evidence remains in this session; could not save support cache: '+str(exc))
             if not self.leaving:
                 for field in ('preview', 'resources', 'save', 'save-continue', 'recovery', 'framing-sheet','month-sheet', 'open-sheet', 'load', 'library', 'stock', 'capture-cloud', 'capture-observations','capture-norad','capture-eclipse','import-eclipse', 'inspect-native','edit-native','handoff','selected-scene','moon-scales','exchange-export','exchange-import'):
@@ -1163,7 +1180,7 @@ class ConfiguratorApp(App):
         content=self.query_one('#content');content.disabled=True
         try:
             self.saved = await self.workspace.file_operation(save_named if Path(destination).suffix.lower()=='.conf' else save_view,destination,view,renderer,config_bytes=self.document.config,capture=self.workspace.capture_for(view),observations=self.workspace.observations_for(view),astronomy=self.workspace.astronomy_for(view))
-            if keep_open:
+            if keep_open or self.exit_prompting:
                 try:document=await self.workspace.file_operation(open_view,self.saved)
                 except (ValueError,OSError) as exc:
                     self.status(f'Copy saved to {self.saved}, but reopening it failed: {exc}. Draft and undo retained; inspect the copy before continuing.')
@@ -1197,26 +1214,34 @@ class ConfiguratorApp(App):
             editable_modal=any(isinstance(screen,ModalScreen) and bool(list(screen.query(Input))+list(screen.query(TextArea))) for screen in self.screen_stack)
             if self.history.dirty or editable_modal:
                 self.exit_prompting=True
-                if self.preview_job is not None:self.preview_job.cancel()
-                await self.workspace.stop()
+                self.exit_decision.clear()
                 self.push_screen(ConfirmDiscard(self.saved is not None,self.recovery is not None,editable_modal),self.discard_finished)
                 return
-        if self.recovery:await self.recovery.discard_current()
-        await self.finish_exit()
+        await self.discard_exit()
 
     def discard_finished(self,discard):
-        self.exit_prompting=False
+        if discard:self.leaving=True
+        self.exit_decision.set()
         if discard=='keep':self.run_worker(self.keep_recovery_exit())
         elif discard:self.run_worker(self.discard_exit())
-        else:self.status('Continue editing. Unsaved draft and saved copies retained.')
+        else:
+            self.exit_prompting=False
+            self.status('Continue editing. Active work, unsaved draft and saved copies retained.')
 
     async def keep_recovery_exit(self):
-        if self.recovery is None:return
+        if self.recovery is None:
+            self.exit_prompting=False
+            return
+        await self.stop_for_exit()
         if not await self.recovery.flush():
+            self.leaving=False;self.exit_prompting=False
+            for button in self.query('#content Button'):button.disabled=False
+            self.update_controls();self.update_preview_state()
             self.status('Latest draft could not be checkpointed. Continue editing or save a new native copy; earlier recovery retained.');return
         await self.finish_exit('draft')
 
     async def discard_exit(self):
+        await self.stop_for_exit()
         if self.recovery:await self.recovery.discard_current()
         await self.finish_exit()
 
@@ -1263,9 +1288,17 @@ class ConfiguratorApp(App):
         if self.saved is not None:return ('kept',str(self.saved),self.selection_label) if self.selection_label is not None else ('kept',str(self.saved))
         return ('selected',self.selection_label) if self.selection_label is not None else ('cancelled',None)
 
-    async def finish_exit(self,kind=None,emergency=False):
+    async def stop_for_exit(self):
         self.leaving=True
-        if self.preview_job is not None:self.preview_job.cancel()
+        worker=self.preview_job
+        if worker is not None:worker.cancel()
+        await self.workspace.stop()
+        if worker is not None:
+            try:await worker.wait()
+            except (WorkerCancelled,WorkerFailed):pass
+
+    async def finish_exit(self,kind=None,emergency=False):
+        await self.stop_for_exit()
         if self.recovery:
             if emergency:
                 self.recovery_notice=('Completed recovery checkpoints retained; latest edits may be absent. Inspect Recovery drafts on next entry.' if self.recovery.last_complete else 'No completed checkpoint known for this draft; recent unsaved edits may be lost.')

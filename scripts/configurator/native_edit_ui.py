@@ -1,9 +1,11 @@
 """Separate native literal-copy UI; never loads opaque content into scene preview."""
+import asyncio
 from pathlib import Path
 from textual.containers import Horizontal,VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Button,Input,Label,Select,Static
 from .native_patch import FIELDS
+from .fileio import native_error
 from .native_inspection import display
 
 CSS='''
@@ -41,7 +43,7 @@ class NativePatchScreen(ModalScreen[Path|None]):
 
     def __init__(self,document):
         super().__init__();self.document=document;self.edits=document.initial_values();self.current=document.sections[0]
-        self.ready=False;self.proposal=None;self.reviewed_destination=None
+        self.ready=False;self.proposal=None;self.reviewed_destination=None;self.busy=False
 
     def compose(self):
         with VerticalScroll():
@@ -93,6 +95,7 @@ class NativePatchScreen(ModalScreen[Path|None]):
             self.remember();self.invalidate_review()
 
     def on_button_pressed(self,event):
+        if self.busy:return
         action=event.button.id
         if action=='native-patch-cancel':self.dismiss(None);return
         try:
@@ -110,9 +113,24 @@ class NativePatchScreen(ModalScreen[Path|None]):
                 current=self.document.prepare(self.edits)
                 if self.proposal is None or current.data!=self.proposal.data or destination!=self.reviewed_destination:
                     self.invalidate_review();raise ValueError('Values or destination changed; review the copy again.')
-                result=self.document.save_copy(destination,self.proposal)
-                self.dismiss(result)
+                self.busy=True
+                self.query_one(VerticalScroll).disabled=True
+                self.run_worker(self.save_copy(destination,self.proposal))
         except (ValueError,OSError) as exc:
-            self.query_one('#native-patch-status',Static).update(str(exc))
+            self.query_one('#native-patch-status',Static).update(native_error(exc))
 
-    def action_cancel(self):self.dismiss(None)
+    async def save_copy(self,destination,proposal):
+        try:
+            result=await self.app.workspace.file_operation(self.document.save_copy,destination,proposal)
+            await self.app.exit_decision.wait()
+            if not self.app.leaving:self.dismiss(result)
+        except asyncio.CancelledError:
+            self.query_one('#native-patch-status',Static).update('Copy cancelled. Source retained; inspect the new destination before retrying.')
+        except (ValueError,OSError) as exc:self.query_one('#native-patch-status',Static).update(native_error(exc))
+        finally:
+            self.busy=False
+            if self.is_mounted:self.query_one(VerticalScroll).disabled=False
+
+    def action_cancel(self):
+        if self.busy:self.app.run_worker(self.app.workspace.stop())
+        else:self.dismiss(None)

@@ -1,21 +1,45 @@
 """Private draft storage never touches native scenes, providers or selectors."""
+from tests.support import prepare_fixture
 import asyncio,json,os,tempfile,unittest
+from contextlib import suppress
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from configurator.recovery import RecoveryStore,raw_fields,pack,head,digest,encoded,metadata,BUDGET
 from configurator.workspace import Workspace
 from configurator.model import SAMPLE
 
-class RecoveryTests(unittest.IsolatedAsyncioTestCase):
-    def setUp(self):
-        self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup);self.root=Path(self.temp.name).resolve()
-        self.store=RecoveryStore(self.root);self.w=Workspace();self.addCleanup(self.w.close)
-        self.baseline=raw_fields(renderer='/local/renderer');self.current={**self.baseline,'latitude':'-x','places_text':'invalid geographic text'}
-        self.sessions=[]
-        self.addCleanup(lambda:[session.close() for session in self.sessions])
-    def session(self):
-        session=self.store.new_session();self.sessions.append(session);return session
-    def proposal(self,**changes):return pack({**self.current,**changes},self.baseline,SAMPLE.read_bytes(),self.w,'source hint only.conf')
+from tests.configurator.support_recovery import RecoveryFixture
+
+async def cancel_at_blob_write(session, record, blobs, blob_name, external=None):
+    """Inject cancellation at an actual owned write, independent of await counts."""
+    target=session.store.path/session.identity/blob_name
+    original_write=os.write
+    observed=[]
+    task=None
+    def write(fd, data):
+        count=original_write(fd,data)
+        if not observed and target.exists():
+            opened=os.fstat(fd);named=target.stat()
+            if (opened.st_dev,opened.st_ino)==(named.st_dev,named.st_ino):
+                observed.append(count)
+                if external is not None:
+                    target.write_bytes(external);target.chmod(0o600)
+                task.cancel()
+        return count
+    with patch('configurator.recovery.os.write',side_effect=write):
+        task=asyncio.create_task(session.checkpoint(record,blobs))
+        try:
+            with suppress(asyncio.CancelledError):
+                await task
+        finally:
+            if not task.done():task.cancel()
+            await asyncio.gather(task,return_exceptions=True)
+    if not observed:raise AssertionError('Checkpoint never wrote the selected new blob')
+    if not task.cancelled():raise AssertionError('Checkpoint did not honor write-boundary cancellation')
+    return target,observed[0]
+
+
+class RecoveryTests(RecoveryFixture, unittest.IsolatedAsyncioTestCase):
 
     async def test_entry_is_readonly_and_invalid_draft_roundtrips_without_execution(self):
         self.assertEqual(self.store.entries(),[]);self.assertEqual(list(self.root.iterdir()),[])
@@ -102,10 +126,10 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(self.store.path.exists())
 
     async def test_frozen_cloud_and_observations_recover_after_sources_are_gone(self):
-        from tests.configurator.test_configurator import CloudCaptureTests
-        from tests.configurator.test_observation_capture import ObservationCaptureTests
-        cloud_fixture=CloudCaptureTests();cloud_fixture.setUp();self.addCleanup(cloud_fixture.doCleanups)
-        obs_fixture=ObservationCaptureTests();obs_fixture.setUp();self.addCleanup(obs_fixture.doCleanups)
+        from tests.configurator.support_cloud import CloudCaptureFixture
+        from tests.configurator.support_observations import ObservationCaptureFixture
+        cloud_fixture=prepare_fixture(self,CloudCaptureFixture)
+        obs_fixture=prepare_fixture(self,ObservationCaptureFixture)
         cloud=cloud_fixture.capture();observed=obs_fixture.capture();self.w.register_capture(cloud);self.w.register_observations(observed)
         session=self.session();record,blobs=self.proposal(capture_id=cloud.identity,clouds='captured',observations_id=observed.identity,storm_layer='captured')
         await session.checkpoint(record,blobs)
@@ -122,33 +146,25 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(str(cloud_fixture.root).encode(),stored);self.assertNotIn(str(obs_fixture.root).encode(),stored)
 
     async def test_cancelled_blob_write_preserves_old_head_and_external_material(self):
-        from tests.configurator.test_configurator import CloudCaptureTests
-        fixture=CloudCaptureTests();fixture.setUp();self.addCleanup(fixture.doCleanups)
+        from tests.configurator.support_cloud import CloudCaptureFixture
+        fixture=prepare_fixture(self,CloudCaptureFixture)
         frozen=fixture.capture();self.w.register_capture(frozen)
         session=self.session();old=await session.checkpoint(*self.proposal())
         record,blobs=self.proposal(capture_id=frozen.identity,clouds='captured')
-        old_names={p.name for p in (self.store.path/session.identity).iterdir()}
-        task=asyncio.create_task(session.checkpoint(record,blobs))
-        new=None
-        for _ in range(100):
-            await asyncio.sleep(0)
-            added=[p for p in (self.store.path/session.identity).iterdir() if p.name not in old_names and len(p.name)==64]
-            if added:new=added[0];break
-        self.assertIsNotNone(new);new.write_bytes(b'external edit');new.chmod(0o600)
-        task.cancel()
-        with self.assertRaises(asyncio.CancelledError):await task
+        new,written=await cancel_at_blob_write(session,record,blobs,digest(frozen.image),b'external edit')
+        self.assertGreater(written,0)
         self.assertEqual(new.read_bytes(),b'external edit')
         session.close();self.assertEqual(self.store.load(session.identity).revision,old)
 
     async def test_cancellation_before_commit_cleans_only_owned_partial_bytes(self):
-        from tests.configurator.test_configurator import CloudCaptureTests
-        fixture=CloudCaptureTests();fixture.setUp();self.addCleanup(fixture.doCleanups)
+        from tests.configurator.support_cloud import CloudCaptureFixture
+        fixture=prepare_fixture(self,CloudCaptureFixture)
         frozen=fixture.capture();self.w.register_capture(frozen)
         session=self.session();old=await session.checkpoint(*self.proposal())
         record,blobs=self.proposal(capture_id=frozen.identity,clouds='captured')
         original={p.name:p.read_bytes() for p in (self.store.path/session.identity).iterdir()}
-        task=asyncio.create_task(session.checkpoint(record,blobs));await asyncio.sleep(0);task.cancel()
-        with self.assertRaises(asyncio.CancelledError):await task
+        _,written=await cancel_at_blob_write(session,record,blobs,digest(frozen.image))
+        self.assertGreater(written,0)
         self.assertEqual(original,{p.name:p.read_bytes() for p in (self.store.path/session.identity).iterdir()})
         session.close();self.assertEqual(self.store.load(session.identity).revision,old)
 
@@ -160,14 +176,22 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(ValueError,'Unrecognized'):self.store.discard(session.identity)
 
 class DraftSessionTests(unittest.IsolatedAsyncioTestCase):
-    setUp=RecoveryTests.setUp
+    setUp=RecoveryFixture.setUp
     async def test_debounce_max_delay_flush_and_noop_do_not_rewrite_checkpoint(self):
         from configurator.draft_session import DraftSession
         notices=[];controller=DraftSession(self.root,lambda:(self.current,self.baseline,SAMPLE.read_bytes(),self.w,''),notices.append)
         self.addCleanup(controller.close)
-        controller.changed();first=controller.first_pending
-        controller.first_pending=first-4.7;controller.changed()
-        self.assertLessEqual(controller.timer.when()-asyncio.get_running_loop().time(),.31)
+        clock=Mock();clock.time.side_effect=[100.0,100.0,104.7]
+        first_timer,second_timer=Mock(),Mock()
+        clock.call_later.side_effect=[first_timer,second_timer]
+        with patch('configurator.draft_session.asyncio.get_running_loop',return_value=clock):
+            controller.changed();controller.changed()
+        self.assertEqual(controller.first_pending,100.0)
+        self.assertEqual(clock.call_later.call_count,2)
+        self.assertEqual(clock.call_later.call_args_list[0].args,(1,controller.start))
+        self.assertAlmostEqual(clock.call_later.call_args_list[1].args[0],.3)
+        self.assertEqual(clock.call_later.call_args_list[1].args[1],controller.start)
+        first_timer.cancel.assert_called_once_with()
         self.assertTrue(await controller.flush());identity=controller.last_complete
         self.assertTrue(await controller.flush());self.assertEqual(controller.last_complete,identity)
         await controller.discard_current();self.assertFalse((controller.store.path/identity[0]).exists())
@@ -184,9 +208,9 @@ class DraftSessionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(controller.store.load(new).record['current']['latitude'],'50')
 
 class RecoveryDirectoryTests(unittest.IsolatedAsyncioTestCase):
-    setUp=RecoveryTests.setUp
-    session=RecoveryTests.session
-    proposal=RecoveryTests.proposal
+    setUp=RecoveryFixture.setUp
+    session=RecoveryFixture.session
+    proposal=RecoveryFixture.proposal
 
     async def test_moved_recovery_root_never_writes_replacement_directory(self):
         session=self.session();old=await session.checkpoint(*self.proposal());moved=self.root/'moved-drafts';original=os.replace

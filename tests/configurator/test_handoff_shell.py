@@ -1,12 +1,12 @@
 """Native wrapper boundary; portable data tests remain in test_scene_handoff."""
 import os,shlex,shutil,subprocess,sys,unittest
-from tests.configurator import test_scene_handoff as fixtures
+from tests.configurator import support_handoff as fixtures
 from configurator.model import ROOT
 from configurator.handoff import create_plan,stage_plan,check_bundle
 
 class HandoffShellTests(unittest.TestCase):
-    setUp=fixtures.HandoffTests.setUp
-    plan=fixtures.HandoffTests.plan
+    setUp=fixtures.HandoffFixture.setUp
+    plan=fixtures.HandoffFixture.plan
 
     def stdlib_env(self):
         shim=self.root/'stdlib python'

@@ -40,10 +40,11 @@ def main():
     from .app import ConfiguratorApp
     from .display_geometry import detect
     from .workspace import Workspace, open_view
+    from .fileio import native_error
     try:
         document = open_view(args.view) if args.view is not None else None
     except (ValueError, OSError) as exc:
-        print(f'Cannot open view: {exc}', file=sys.stderr)
+        print('Cannot open view: '+native_error(exc), file=sys.stderr)
         return 2
     from .renderer_discovery import discover
     renderer, renderer_note = discover(args.root.resolve(), args.renderer)

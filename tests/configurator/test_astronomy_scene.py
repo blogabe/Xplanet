@@ -1,4 +1,5 @@
 """End-to-end frozen astronomy association without user or provider operations."""
+from tests.support import prepare_fixture
 import asyncio
 from dataclasses import replace
 from datetime import datetime,timezone
@@ -25,7 +26,7 @@ from configurator.recovery import pack,raw_fields,RecoveryStore,encoded,digest,L
 from totalmarker.features import norad,eclipse
 from totalmarker.http import Fetcher,Response
 from tests.support import Sandbox, ScriptedTransport
-from tests.configurator import test_astronomy_capture as capture_fixtures
+from tests.configurator import support_astronomy_capture as capture_fixtures
 from tests.test_norad import SAMPLE as TLE, EPOCH
 
 
@@ -39,25 +40,9 @@ def synthetic_current_tle():
     return ('\n'.join(lines)+'\n').encode()
 
 
-class AstronomySceneTests(Sandbox):
-    eclipse=capture_fixtures.AstronomyCaptureTests.eclipse
-    def setUp(self):
-        super().setUp();(self.root/'config').mkdir();self.workspace=Workspace();self.addCleanup(self.workspace.close)
-    def norad_capture(self):
-        settings=self.config('NoradEnabled=On\nNoradCatalogIds=25544\n')
-        now=datetime.now(timezone.utc).timestamp()
-        norad.run(self.fs,settings,fetcher=Fetcher(ScriptedTransport(Response(200,{},synthetic_current_tle()))),now=now)
-        return capture_existing(self.root.resolve(),'norad','config.ini',now=now)
-    def eclipse_capture(self):
-        _,path=self.eclipse()
-        return capture_existing(self.root.resolve(),'eclipse','config.ini',now=path.start_at-1800)
-    def scene(self):
-        first=self.norad_capture();second=self.eclipse_capture()
-        self.workspace.register_astronomy(first);self.workspace.register_astronomy(second)
-        view=View(projection='space',norad_layer='captured',norad_id=first.identity,eclipse_layer='captured',eclipse_id=second.identity,eclipse_window=second.window_token,time_mode='fixed',utc=second.window_token.split('/')[0])
-        return view,{'norad':first,'eclipse':second}
-    def save(self,view,astronomy,name='event.conf'):
-        return save_named(self.root/'config/scenes'/name,view,sys.executable,astronomy=astronomy)
+from tests.configurator.support_astronomy_scene import AstronomySceneFixture
+
+class AstronomySceneTests(AstronomySceneFixture, Sandbox):
 
     def test_both_captures_save_reopen_and_native_copy_preserve_inactive_bytes(self):
         view,data=self.scene();source=self.save(view,data);doc=open_view(source)
@@ -159,7 +144,7 @@ class AstronomySceneTests(Sandbox):
 class AstronomyRecoveryTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup);self.root=Path(self.temp.name).resolve();self.workspace=Workspace();self.addCleanup(self.workspace.close)
-        self.fixture=AstronomySceneTests();self.fixture.setUp();self.addCleanup(self.fixture.tearDown if hasattr(self.fixture,'tearDown') else lambda:None);self.addCleanup(self.fixture.doCleanups)
+        self.fixture=prepare_fixture(self,AstronomySceneFixture)
         self.view,self.data=self.fixture.scene()
         for frozen in self.data.values():self.workspace.register_astronomy(frozen)
         self.store=RecoveryStore(self.root);self.sessions=[];self.addCleanup(lambda:[s.close() for s in self.sessions])
@@ -217,7 +202,7 @@ class AstronomyRecoveryTests(unittest.IsolatedAsyncioTestCase):
 
 class AstronomyPreviewTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
-        self.fixture=AstronomySceneTests();self.fixture.setUp();self.addCleanup(self.fixture.doCleanups)
+        self.fixture=prepare_fixture(self,AstronomySceneFixture)
         self.view,self.data=self.fixture.scene();self.workspace=self.fixture.workspace
         self.root=self.fixture.root;self.binary=self.root/'finite fixture'
         self.binary.write_text('#!'+sys.executable+'\n'+"import pathlib,sys,struct\n"+"args=sys.argv[1:];config=pathlib.Path(args[args.index('-config')+1]);body=config.read_text()\n"+"assert '-fork' not in args and '-background' not in args and args[args.index('-num_times')+1]=='1'\n"+"for line in body.splitlines():\n if line.startswith(('satellite_file=','marker_file=frozen-eclipse.','arc_file=frozen-eclipse.')):\n  name=line.split('=',1)[1];assert (config.parent/name).is_file()\n  if line.startswith('satellite_file='):assert (config.parent/(name+'.tle')).is_file()\n"+"if pathlib.Path(__file__).with_suffix('.fail').exists(): print('fixture later failure',file=sys.stderr);sys.exit(1)\n"+"out=pathlib.Path(args[args.index('-output')+1]);width,height=map(int,args[args.index('-geometry')+1].split('x'));out.write_bytes(b'\\x89PNG\\r\\n\\x1a\\n'+b'\\0'*4+b'IHDR'+struct.pack('>II',width,height))\n")

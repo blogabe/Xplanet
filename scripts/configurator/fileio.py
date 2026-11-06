@@ -1,5 +1,5 @@
 """Exclusive scene writes and conservative cleanup of unchanged owned files."""
-import hashlib,os,stat
+import errno,hashlib,os,stat
 from .owned_io import checkpoint
 
 
@@ -107,3 +107,20 @@ def new_directory(destination,files):
     finally:
         if directory_fd is not None:os.close(directory_fd)
         os.close(parent_fd)
+
+
+def native_error(error):
+    """Actionable presentation without raw errno text or external path injection."""
+    if not isinstance(error,OSError):return str(error)
+    messages={
+        errno.ENOENT:'A required native file or directory is missing. Check the selected pair and its associated files.',
+        errno.EACCES:'Permission denied. Choose readable source files and a writable destination.',
+        errno.EPERM:'The operating system denied access. Check file permissions and choose an accessible directory.',
+        errno.ELOOP:'A symbolic link was refused. Choose original regular files in a directory without symlink components.',
+        errno.ENOTDIR:'A path component is not a directory. Check the selected source and destination.',
+        errno.EISDIR:'A directory was selected where a regular native file is required.',
+        errno.EEXIST:'The destination already exists. Choose a new name; existing files are not overwritten.',
+        errno.ENOSPC:'The destination has no free space. Free space or choose another destination before retrying.',
+        errno.EROFS:'The destination is read-only. Choose a writable directory.',
+    }
+    return messages.get(error.errno,'Native file access failed. Check file type, permissions and available space before retrying.')

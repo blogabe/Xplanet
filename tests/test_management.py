@@ -5,6 +5,8 @@ import fcntl
 import pty
 import select
 import signal
+import shlex
+import sys
 import subprocess
 import time
 import termios
@@ -68,7 +70,7 @@ class ManagementTests(Sandbox):
         return {str(p.relative_to(self.root)): p.read_bytes()
                 for p in self.root.rglob('*') if p.is_file()}
 
-    def terminal(self, answers=None, interrupt=False, eof=False, termination=None, pause_signal=None, pause_key=None, after_pause=None, menu_steps=(), resize=None, key_marker=None, startup_interrupt=False):
+    def terminal(self, answers=None, interrupt=False, eof=False, termination=None, pause_signal=None, pause_key=None, after_pause=None, menu_steps=(), resize=None, key_marker=None, startup_interrupt=False, confirm_interrupt=False):
         master, slave = pty.openpty()
         fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH',
                     int(self.env.get('TEST_ROWS', 30)), int(self.env.get('TEST_COLS', 100)), 0, 0))
@@ -103,10 +105,13 @@ class ManagementTests(Sandbox):
             else:
                 os.write(master, b'\x04' if eof else answers.encode())
             pause_signalled = False
+            confirmation_signalled = False
             next_choice_sent = False
             menu_steps = iter(menu_steps)
             next_step = next(menu_steps, None)
             while proc.poll() is None and time.monotonic() < deadline:
+                if confirm_interrupt and not confirmation_signalled and b'Run start? [y/N]' in output:
+                    os.write(master,b'\x03');confirmation_signalled=True
                 if key_marker and key_marker in output:
                     os.write(master, b'q')
                     key_marker = None
@@ -641,7 +646,9 @@ class ManagementTests(Sandbox):
         self.enhanced_terminal()
         # Acknowledge completed parsing; a wall-clock delay races on slow runners.
         helper = self.scripts / 'lib/xplanet/management-input.zsh'
-        helper.write_text(helper.read_text().replace(
+        original=helper.read_text()
+        self.assertEqual(original.count('        management_key_read || return 1'),1)
+        helper.write_text(original.replace(
             '        management_key_read || return 1',
             '        management_key_read || return 1\n'
             '        print -rn -- __fixture_key_read__'))
@@ -941,7 +948,8 @@ class ManagementTests(Sandbox):
     def test_initial_health_timeout_cleans_only_owned_worker_group(self):
         (self.root/'config').mkdir();(self.root/'config/totalmarker.toml').write_text('')
         helper=self.scripts/'lib/xplanet/management-dashboard.zsh'
-        helper.write_text(helper.read_text().replace('{1..50}','{1..3}'))
+        original=helper.read_text();self.assertEqual(original.count('{1..50}'),1)
+        helper.write_text(original.replace('{1..50}','{1..3}'))
         self.write_script(self.scripts/'run-totalmarker',
             'echo $$ > "$TRACE.worker"; sleep 20 & echo $! > "$TRACE.child"; wait\n')
         unrelated=subprocess.Popen(['/bin/sleep','20'])
@@ -1010,3 +1018,30 @@ class ManagementTests(Sandbox):
         self.assertEqual(code,0,output);self.assertEqual(self.calls(),['health --dashboard'])
         code,output=self.terminal('q\n')
         self.assertEqual(code,0,output);self.assertEqual(self.calls(),['health --dashboard','health --dashboard'])
+
+    def test_ctrl_c_at_actual_action_confirmation_restores_terminal_without_start(self):
+        self.enhanced_terminal()
+        code,output=self.terminal('3\n',confirm_interrupt=True)
+        self.assertIn('Run start? [y/N]',output)
+        self.assertEqual(code,130,output);self.assertEqual(self.calls(),[])
+        self.assertEqual(output.count('\x1b[?1049h'),1)
+        self.assertEqual(output.count('\x1b[?1049l'),1)
+
+    def test_actual_saved_health_cli_records_populate_shell_dashboard(self):
+        config=self.root/'config';config.mkdir()
+        (config/'totalmarker.toml').write_bytes((PROJECT/'config/totalmarker.example.toml').read_bytes())
+        self.env['PYTHONPATH']=str(PROJECT/'scripts')
+        self.env['PYTHONDONTWRITEBYTECODE']='1'
+        self.write_script(self.scripts/'run-totalmarker',
+                          'exec '+shlex.quote(sys.executable)+' -B -m totalmarker --root '+shlex.quote(str(self.root))+' "$@"\n')
+        raw=subprocess.run([str(self.scripts/'run-totalmarker'),'health','--dashboard'],env=self.env,text=True,capture_output=True,timeout=5)
+        self.assertIn(raw.returncode,(0,1),raw.stdout+raw.stderr)
+        rows=raw.stdout.splitlines();self.assertTrue(rows[0].startswith('snapshot\t'))
+        products=[line.split('\t') for line in rows[1:] if not line.startswith('note\t')]
+        self.assertEqual(len(products),7)
+        code,output=self.terminal('q\n')
+        self.assertEqual(code,0,output)
+        badges={'good':'[+]','warning':'[!]','error':'[x]','disabled':'[-]','unknown':'[?]'}
+        for kind,title,*_ in products:
+            with self.subTest(product=title):self.assertIn(badges[kind]+' '+title,output)
+        self.assertNotIn('Inspection failed; no verified snapshot',output)

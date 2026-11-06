@@ -6,10 +6,10 @@ from configurator.comparison import plan,render_set
 from configurator.model import View,SAMPLE
 from configurator.workspace import Workspace
 from configurator.render_export import export_snapshot
-from tests.configurator import test_comparison as fixtures
+from tests.configurator import support_comparison as fixtures
 
 class RenderExportTests(unittest.IsolatedAsyncioTestCase):
-    setUp=fixtures.ComparisonTests.setUp
+    setUp=fixtures.ComparisonFixture.setUp
     async def preview(self):
         await self.workspace.preview(self.view,str(self.binary));return self.workspace.latest
     async def test_preview_is_byte_identical_private_manifest_and_survives_workspace_close(self):

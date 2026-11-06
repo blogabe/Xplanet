@@ -16,8 +16,10 @@ can create a private session. Native `.def`/`.conf` files are never autosaved.
   studio draft, choose **Keep editing**, **Keep recovery draft and exit**, or
   **Discard draft and exit**. Keep editing has initial focus. Keeping recovery
   checkpoints the latest fields first; a failed checkpoint leaves the editor open.
-  An exit request cancels active work before presenting this choice. Keep editing
-  retains the draft and last successful output, but does not resume that operation.
+  Active work continues while this choice is open. Keep editing leaves the same
+  operation running or retains its completed result. Confirming exit cancels and
+  awaits owned work before keeping or discarding recovery, so a late capture cannot
+  arrive after the final checkpoint. A failed checkpoint leaves the editor usable.
 - Escape inside a dialog normally returns from that dialog. Open editable dialog
   fields are not included in studio recovery. An exit request from such a form
   requires explicit discard or continued editing; keeping a recovery draft is

@@ -32,6 +32,9 @@ zero skips is valid when that evidence is available. Any other skipped required
 check, including Git-index privacy checks, makes the supported run fail. Use a
 complete Git checkout for release verification. Running selected tests directly
 in a source-only copy is useful development evidence, not a verified release.
-UI fixtures are plain helpers; blocking PTY tests use the synchronous runner.
+UI fixtures are plain helpers; blocking PTY tests use synchronous runners with
+explicit geometry. File-identity tests use local `/tmp` storage with nanosecond
+ctime/mtime evidence; a filesystem without that evidence is outside those fixtures
+(the production safety checks are not weakened to make the tests pass).
 Hosted CI covers macOS Python 3.11/3.13 and the isolated Textual suite. Linux
 runtime support is unchanged; Ubuntu CI remains deliberately disabled.

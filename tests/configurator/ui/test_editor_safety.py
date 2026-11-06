@@ -60,3 +60,20 @@ class EditorSafetyTests(unittest.IsolatedAsyncioTestCase):
             self.app.check_terminal()
         self.assertEqual([call.args[0] for call in tty.call_args_list],[0,1])
         terminate.assert_not_called()
+
+    async def test_tampered_generated_pair_refuses_open_without_losing_dirty_draft(self):
+        from configurator.library import save_named
+        from tests.configurator.ui.fixtures import click
+        source=save_named(self.root.resolve()/'config/scenes/source.conf',self.app.document.view,self.app.renderer)
+        source.write_bytes(source.read_bytes()+b'\nunsupported=keep-this-byte-content\n')
+        before=source.read_bytes();definition=source.with_suffix('.def').read_bytes()
+        async with self.app.run_test(size=(110,50)) as pilot:
+            self.app.query_one('#latitude',Input).value='25';await pilot.pause()
+            original=self.app.raw_fields();document=self.app.document
+            await click(pilot,'#load')
+            self.app.screen.query_one('#source-directory',Input).value=str(source)
+            await click(pilot,'#confirm-open');await self.app.workers.wait_for_complete();await pilot.pause()
+            self.assertIs(self.app.document,document);self.assertEqual(self.app.raw_fields(),original)
+            self.assertTrue(self.app.history.dirty);self.assertIn('Cannot open view',str(self.app.query_one('#status',Static).content))
+            await pilot.press('ctrl+c')
+        self.assertEqual(source.read_bytes(),before);self.assertEqual(source.with_suffix('.def').read_bytes(),definition)

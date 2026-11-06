@@ -731,3 +731,22 @@ from the validated model using current paths. This is not a general path rewrite
 or support for arbitrary native imports. Saving a new studio copy emits current
 paths. A prior-layout immutable desktop revision requires a new reviewed copy;
 no running selection or source file is silently migrated.
+
+
+## Responsive local inspection and exit review
+
+Native inspection and exact snapshot copying, literal native-file load/save,
+scene-library enumeration/inspection, selected-revision verification and recovery
+listing use the existing owned filesystem worker. Filtering an already inspected
+library entry uses its cached snapshot; Open still revalidates. Results for an
+obsolete selection are discarded. Back or Ctrl-C requests cancellation and waits
+for that owned reader/writer, rather than detaching it. An individual operating-system
+call must return before cooperative cancellation can finish; this is not a claim
+that a hung filesystem can be forcibly recovered.
+
+Dirty exit review leaves an active operation running. Keep editing preserves that
+operation or its completed result. Confirming exit awaits cleanup before the final
+recovery decision. Inspection dialogs cannot appear above a pending exit question,
+and a completed save remains an explicit new copy. Native filesystem failures are
+translated into actionable missing-file, permission, symlink or destination advice;
+source files and refusal rules are unchanged.

@@ -1,5 +1,5 @@
 """Deterministic overlap with fake launchctl; never host services or renderer."""
-import json,os,shlex,subprocess,sys,time
+import fcntl,json,os,shlex,subprocess,sys,time
 from pathlib import Path
 from .support import Sandbox,copy_launcher
 
@@ -8,6 +8,7 @@ class LifecycleRaceTests(Sandbox):
         super().setUp();self.bin=self.base/'bin';self.bin.mkdir();self.runtime=self.base/'runtime';self.runtime.mkdir(mode=0o700)
         self.jobs=self.base/'job.json';self.jobs.write_text('{"root":"seed"}')
         self.marker=self.base/'kickstart-entered';self.trace=self.base/'calls.jsonl'
+        self.release=self.base/'release-kickstart'
         self.script(self.bin/'getconf','printf "%s\\n" '+shlex.quote(str(self.runtime))+'\n')
         self.script(self.bin/'pgrep','exit 1\n')
         code='''import json,os,sys,time
@@ -20,18 +21,22 @@ if args[0] in ('list','print'):raise SystemExit(0 if jobs.exists() else 3)
 if args[0]=='bootout':
  if not jobs.exists():raise SystemExit(3)
  jobs.unlink()
- if actor=='B':time.sleep(.4)
 if args[0]=='bootstrap':
  if jobs.exists():raise SystemExit(5)
  jobs.write_text(json.dumps({'root':actor}))
 if args[0]=='kickstart':
- if actor=='A':Path(os.environ['MARKER']).write_text('entered');time.sleep(.2)
+ if actor=='A' and os.environ.get('HOLD')=='1':
+  Path(os.environ['MARKER']).write_text('entered')
+  deadline=time.monotonic()+10
+  while not Path(os.environ['RELEASE']).exists():
+   if time.monotonic()>deadline:raise SystemExit('test did not release kickstart')
+   time.sleep(.005)
  if not jobs.exists():log('missing-job');raise SystemExit(3)
 log('end')
 '''
         self.script(self.bin/'launchctl',code,python=True)
         self.entry=self.checkout(self.root)
-        self.env={**os.environ,'PATH':str(self.bin)+':/usr/bin:/bin','JOBS':str(self.jobs),'TRACE':str(self.trace),'MARKER':str(self.marker),'PYTHONDONTWRITEBYTECODE':'1'}
+        self.env={**os.environ,'PATH':str(self.bin)+':/usr/bin:/bin','JOBS':str(self.jobs),'TRACE':str(self.trace),'MARKER':str(self.marker),'RELEASE':str(self.release),'PYTHONDONTWRITEBYTECODE':'1'}
     def script(self,path,body,python=False):path.write_text(('#!'+sys.executable if python else '#!/bin/sh')+'\n'+body);path.chmod(0o700)
     def checkout(self,root):
         scripts=root/'scripts';scripts.mkdir(parents=True);entry=scripts/'xplanet.sh';copy_launcher(entry)
@@ -40,12 +45,19 @@ log('end')
         return entry
     def invoke(self,entry,command,actor):return subprocess.Popen([str(entry),command],env={**self.env,'ACTOR':actor},stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
     def overlap(self,second_entry,second_command='restart'):
+        self.env['HOLD']='1'
         first=self.invoke(self.entry,'restart','A');second=None
         try:
             end=time.monotonic()+8
             while not self.marker.exists() and first.poll() is None and time.monotonic()<end:time.sleep(.005)
             self.assertTrue(self.marker.exists(),'first restart never reached isolated kickstart')
+            # zsh's native flock uses POSIX record locks, as does lockf.
+            # Verify ownership while A is held, independently of B's scheduling.
+            with (self.runtime/'local.xplanet.desktop.lock').open('r+') as lock:
+                with self.assertRaises(BlockingIOError):
+                    fcntl.lockf(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
             second=self.invoke(second_entry,second_command,'B')
+            self.release.write_text('continue')
             aout,aerr=first.communicate(timeout=15);bout,berr=second.communicate(timeout=15)
             self.assertEqual(first.returncode,0,(aout,aerr));self.assertEqual(second.returncode,0,(bout,berr))
             rows=[json.loads(line) for line in self.trace.read_text().splitlines()]
@@ -146,7 +158,9 @@ log('end')
         import fcntl
         lock=self.runtime/'local.xplanet.desktop.lock';lock.touch(mode=0o600)
         # Only shorten the test checkout's wait, not the production default.
-        helper=self.root/'scripts/lib/xplanet/lifecycle.zsh';helper.write_text(helper.read_text().replace('flock -t 10','flock -t 0.1'))
+        helper=self.root/'scripts/lib/xplanet/lifecycle.zsh';original=helper.read_text()
+        self.assertEqual(original.count('flock -t 10'),1)
+        helper.write_text(original.replace('flock -t 10','flock -t 0.1'))
         with lock.open('r+') as stream:
             fcntl.lockf(stream,fcntl.LOCK_EX)
             child=self.invoke(self.entry,'stop','A');out,err=child.communicate(timeout=5)

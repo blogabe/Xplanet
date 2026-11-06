@@ -1,4 +1,5 @@
 """Source preservation is an acceptance condition, not a conversion assumption."""
+from tests.support import prepare_fixture
 import os,sys,tempfile,unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -93,14 +94,14 @@ class NativeInspectionTests(unittest.TestCase):
 
 
     def test_all_captured_assets_are_byte_identical_in_unchanged_named_copy(self):
-        from tests.configurator.test_observation_capture import ObservationCaptureTests, icon, quake_marker
-        from tests.configurator.test_configurator import CloudCaptureTests
-        fixture=ObservationCaptureTests();fixture.setUp();self.addCleanup(fixture.doCleanups)
+        from tests.configurator.support_observations import ObservationCaptureFixture, icon, quake_marker
+        from tests.configurator.support_cloud import CloudCaptureFixture
+        fixture=prepare_fixture(self,ObservationCaptureFixture)
         fixture.config.write_text(fixture.config.read_text().replace('image = ""','image = "images/icon.png"'))
         (fixture.root/'images/icon.png').write_bytes(icon())
         fixture.install('quake',quake_marker(b'0 0 "Event" color=Red image=images/icon.png\n',1700000000));fixture.save_state()
         frozen=fixture.capture()
-        cloud_fixture=CloudCaptureTests();cloud_fixture.setUp();self.addCleanup(cloud_fixture.doCleanups);cloud=cloud_fixture.capture()
+        cloud_fixture=prepare_fixture(self,CloudCaptureFixture);cloud=cloud_fixture.capture()
         view=View(clouds='captured',capture_id=cloud.identity,observations_id=frozen.identity,quake_layer='captured',storm_layer='captured',volcano_layer='captured')
         path=save_named(self.root/'library'/'full.conf',view,sys.executable,capture=cloud,observations=frozen)
         before=self.inventory(path.parent);review=inspect_native(path);self.assertTrue(review.recognized)

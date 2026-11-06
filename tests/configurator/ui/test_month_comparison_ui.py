@@ -3,12 +3,12 @@ import unittest
 from unittest.mock import patch
 from textual.widgets import Select,Input,Button,Static
 from tests.configurator.ui import fixtures
-from tests.configurator.ui import test_comparison_ui as comparisons
+from tests.configurator.ui import support_comparison as comparisons
 click=fixtures.click
 
 class MonthComparisonUI(unittest.IsolatedAsyncioTestCase):
     asyncSetUp=fixtures.setup_editor
-    binary=comparisons.ComparisonUITests.binary
+    binary=comparisons.ComparisonUIFixture.binary
     async def test_disabled_stock_review_duplicate_and_cancel_have_no_render(self):
         async with self.app.run_test(size=(120,55)) as pilot:
             self.assertTrue(self.app.query_one('#month-sheet',Button).disabled)

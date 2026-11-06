@@ -32,3 +32,11 @@ async def enter_native(self,pilot,path):
 
 async def setup_editor(self):
     prepare_editor(self)
+
+
+async def wait_event(event,timeout=3):
+    """Bounded wait for a thread/async barrier without blocking the UI loop."""
+    import asyncio
+    async def wait():
+        while not event.is_set():await asyncio.sleep(.005)
+    await asyncio.wait_for(wait(),timeout)

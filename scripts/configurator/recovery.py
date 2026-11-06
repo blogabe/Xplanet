@@ -96,7 +96,10 @@ def read(fd,name,limit):
         before=os.fstat(child);private(before)
         if before.st_size>limit:raise ValueError('Recovery file exceeds its bound.')
         chunks=[];size=0
-        while chunk:=os.read(child,65536):
+        while True:
+            io_checkpoint()
+            chunk=os.read(child,65536)
+            if not chunk:break
             size+=len(chunk)
             if size>limit:raise ValueError('Recovery file grew beyond its bound.')
             chunks.append(chunk)
@@ -239,12 +242,19 @@ class RecoveryStore:
         if not self.path.exists() and not self.path.is_symlink():return []
         rows=[]
         with self.directory() as directory:
-            for item in os.scandir(directory):
-                if not SESSION.fullmatch(item.name):continue
+            with os.scandir(directory) as listing:
+                names=[]
+                for count,item in enumerate(listing,1):
+                    io_checkpoint()
+                    if count>ENTRY_LIMIT:raise ValueError('Recovery directory exceeds its entry bound; inspect retained material before retrying.')
+                    names.append(item.name)
+            for name in names:
+                io_checkpoint()
+                if not SESSION.fullmatch(name):continue
                 if len(rows)>=64:raise ValueError('More than 64 recovery sessions; inspect existing drafts before continuing.')
-                row={'id':item.name,'at':None,'active':False,'error':'','fallback':False}
+                row={'id':name,'at':None,'active':False,'error':'','fallback':False}
                 try:
-                    with self.session(item.name,directory) as fd:
+                    with self.session(name,directory) as fd:
                         active=os.open('active.lock',os.O_RDWR|os.O_NOFOLLOW,dir_fd=fd)
                         try:
                             private(os.fstat(active))

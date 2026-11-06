@@ -6,11 +6,11 @@ from unittest.mock import patch
 from configurator.comparison import plan,reason,render_set
 from configurator.model import View
 from configurator.render_export import export_snapshot
-from tests.configurator import test_comparison as fixtures
+from tests.configurator import support_comparison as fixtures
 
 class MonthComparisonTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
-        fixtures.ComparisonTests.setUp(self)
+        fixtures.ComparisonFixture.setUp(self)
         self.view=View(projection='orthographic',latitude=12,longitude=65,map_family='world',month='03')
     async def test_plan_changes_only_three_declared_imagery_months_and_freezes_now_once(self):
         review=plan(self.view,kind='months',months=('01','07','12'),now=datetime(2027,8,2,12,tzinfo=timezone.utc))

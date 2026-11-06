@@ -1,4 +1,5 @@
 """Recovery and interruption use disposable editor roots and owned children only."""
+from tests.configurator.ui.terminal_support import open_terminal
 import asyncio,os,signal,sys,unittest
 from pathlib import Path
 from textual.widgets import Input,Button,Static,Checkbox
@@ -97,16 +98,39 @@ class RecoveryUITests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(self.app.leaving);self.assertIsNotNone(process.returncode)
         self.assertEqual(self.app.return_value,('selected','uncertain'));self.assertIsNone(self.workspace.process)
 
-    async def test_real_terminal_signals_and_double_ctrl_c_reap_only_owned_renderer(self):
-        import fcntl,pty,select,subprocess,termios,time
+
+
+    async def test_recorded_renderer_requires_explicit_optin_and_never_executes_on_recover(self):
+        async with self.app.run_test(size=(110,50)) as pilot:
+            self.app.query_one('#renderer',Input).value='/missing/recorded-renderer';await pilot.pause()
+            await self.app.recovery.flush();await pilot.press('ctrl+c')
+        for optin in (False,True):
+            app=ConfiguratorApp(self.root,str(Path(sys.executable).resolve()),recovery=True)
+            try:
+                async with app.run_test(size=(110,50)) as pilot:
+                    await click(pilot,'#recovery');await click(pilot,'#recovery-inspect')
+                    app.screen.query_one('#recovery-renderer',Checkbox).value=optin
+                    await click(pilot,'#recovery-recover');await pilot.pause()
+                    expected='/missing/recorded-renderer' if optin else str(Path(sys.executable).resolve())
+                    self.assertEqual(app.query_one('#renderer',Input).value,expected);self.assertIsNone(app.workspace.process)
+                    await pilot.press('ctrl+c')
+            finally:app.workspace.close()
+
+
+class RecoveryTerminalTests(unittest.TestCase):
+    setUp=fixtures.prepare_editor
+
+    def test_real_terminal_signals_and_double_ctrl_c_reap_only_owned_renderer(self):
+        import select,subprocess,termios,time
         from configurator import __file__ as module
         control=subprocess.Popen([sys.executable,'-c','import time;time.sleep(60)'],start_new_session=True)
         try:
             for trigger,expected in ((signal.SIGTERM,143),(signal.SIGHUP,129),(signal.SIGINT,130),(None,130)):
-                root=self.root/('signal-'+str(trigger));root.mkdir();(root/'config').mkdir()
-                original=root/'config/xp.conf';original.write_bytes(b'personal source must not be inspected or replaced\n')
-                renderer=root/'renderer';renderer.write_text('#!'+sys.executable+'\nimport signal,time,pathlib,os\nsignal.signal(signal.SIGTERM,signal.SIG_IGN)\npathlib.Path('+repr(str(root/'child-ready'))+').write_text(str(os.getpid()))\ntime.sleep(30)\n');renderer.chmod(0o700)
-                driver=root/'driver.py';driver.write_text('''import asyncio,sys
+                with self.subTest(trigger=trigger, expected=expected):
+                    root=self.root/('signal-'+str(trigger));root.mkdir();(root/'config').mkdir()
+                    original=root/'config/xp.conf';original.write_bytes(b'personal source must not be inspected or replaced\n')
+                    renderer=root/'renderer';renderer.write_text('#!'+sys.executable+'\nimport signal,time,pathlib,os\nsignal.signal(signal.SIGTERM,signal.SIG_IGN)\npathlib.Path('+repr(str(root/'child-ready'))+').write_text(str(os.getpid()))\ntime.sleep(30)\n');renderer.chmod(0o700)
+                    driver=root/'driver.py';driver.write_text('''import asyncio,sys
 from pathlib import Path
 from textual.widgets import Input
 import configurator.__main__ as entry
@@ -137,51 +161,34 @@ import configurator.app as app_module
 app_module.ConfiguratorApp=TestApp
 sys.exit(entry.main())
 ''')
-                master,slave=pty.openpty();fcntl.ioctl(slave,termios.TIOCSWINSZ,__import__('struct').pack('HHHH',40,110,0,0));before=termios.tcgetattr(slave)
-                env={**os.environ,'TERM':'xterm-256color','HOME':str(root),'PYTHONPATH':str(Path(module).parent.parent),'PYTHONDONTWRITEBYTECODE':'1'}
-                process=subprocess.Popen([sys.executable,'-B',str(driver),'--root',str(root),'--renderer',str(renderer)],stdin=slave,stdout=slave,stderr=slave,env=env,start_new_session=True)
-                output=b''
-                try:
-                    deadline=time.monotonic()+12
-                    while not (root/'ready').exists() and not (root/'arm-error').exists() and process.poll() is None and time.monotonic()<deadline:
-                        if select.select([master],[],[],.1)[0]:output+=os.read(master,65536)
-                    self.assertTrue((root/'ready').exists(),(root/'arm-error').read_text() if (root/'arm-error').exists() else {'files':[str(p.relative_to(root)) for p in root.rglob('*')],'tail':output[-1000:]});owned_pid=int((root/'ready').read_text())
-                    if trigger is None:os.write(master,b'\x03\x03')
-                    else:os.kill(process.pid,trigger)
-                    deadline=time.monotonic()+8
-                    while process.poll() is None and time.monotonic()<deadline:
-                        if select.select([master],[],[],.1)[0]:output+=os.read(master,65536)
-                    self.assertEqual(process.wait(timeout=2),expected,output[-1500:])
-                    while select.select([master],[],[],0)[0]:
-                        chunk=os.read(master,65536)
-                        if not chunk:break
-                        output+=chunk
-                    if trigger is None:self.assertEqual((root/'escalated').read_text(),'owned group only')
-                    self.assertIn(b'\x1b[?1049h',output);self.assertIn(b'\x1b[?1049l',output);self.assertEqual(termios.tcgetattr(slave),before)
-                    with self.assertRaises(ProcessLookupError):os.kill(owned_pid,0)
-                    self.assertIsNone(control.poll());self.assertEqual(original.read_bytes(),b'personal source must not be inspected or replaced\n')
-                    store=__import__('configurator.recovery',fromlist=['RecoveryStore']).RecoveryStore(root)
-                    rows=store.entries();self.assertEqual(len(rows),1);self.assertFalse(rows[0]['active'])
-                    self.assertEqual(store.load(rows[0]['id']).record['current']['latitude'],'25')
-                    self.assertFalse((root/'config/desktop.scene').exists())
-                finally:
-                    if process.poll() is None:process.kill();process.wait()
-                    os.close(master);os.close(slave)
+                    master,slave,before=open_terminal()
+                    env={**os.environ,'TERM':'xterm-256color','HOME':str(root),'PYTHONPATH':str(Path(module).parent.parent),'PYTHONDONTWRITEBYTECODE':'1'}
+                    process=subprocess.Popen([sys.executable,'-B',str(driver),'--root',str(root),'--renderer',str(renderer)],stdin=slave,stdout=slave,stderr=slave,env=env,start_new_session=True)
+                    output=b''
+                    try:
+                        deadline=time.monotonic()+12
+                        while not (root/'ready').exists() and not (root/'arm-error').exists() and process.poll() is None and time.monotonic()<deadline:
+                            if select.select([master],[],[],.1)[0]:output+=os.read(master,65536)
+                        self.assertTrue((root/'ready').exists(),(root/'arm-error').read_text() if (root/'arm-error').exists() else {'files':[str(p.relative_to(root)) for p in root.rglob('*')],'tail':output[-1000:]});owned_pid=int((root/'ready').read_text())
+                        if trigger is None:os.write(master,b'\x03\x03')
+                        else:os.kill(process.pid,trigger)
+                        deadline=time.monotonic()+8
+                        while process.poll() is None and time.monotonic()<deadline:
+                            if select.select([master],[],[],.1)[0]:output+=os.read(master,65536)
+                        self.assertEqual(process.wait(timeout=2),expected,output[-1500:])
+                        while select.select([master],[],[],0)[0]:
+                            chunk=os.read(master,65536)
+                            if not chunk:break
+                            output+=chunk
+                        if trigger is None:self.assertEqual((root/'escalated').read_text(),'owned group only')
+                        self.assertIn(b'\x1b[?1049h',output);self.assertIn(b'\x1b[?1049l',output);self.assertEqual(termios.tcgetattr(slave),before)
+                        with self.assertRaises(ProcessLookupError):os.kill(owned_pid,0)
+                        self.assertIsNone(control.poll());self.assertEqual(original.read_bytes(),b'personal source must not be inspected or replaced\n')
+                        store=__import__('configurator.recovery',fromlist=['RecoveryStore']).RecoveryStore(root)
+                        rows=store.entries();self.assertEqual(len(rows),1);self.assertFalse(rows[0]['active'])
+                        self.assertEqual(store.load(rows[0]['id']).record['current']['latitude'],'25')
+                        self.assertFalse((root/'config/desktop.scene').exists())
+                    finally:
+                        if process.poll() is None:process.kill();process.wait()
+                        os.close(master);os.close(slave)
         finally:control.terminate();control.wait()
-
-
-    async def test_recorded_renderer_requires_explicit_optin_and_never_executes_on_recover(self):
-        async with self.app.run_test(size=(110,50)) as pilot:
-            self.app.query_one('#renderer',Input).value='/missing/recorded-renderer';await pilot.pause()
-            await self.app.recovery.flush();await pilot.press('ctrl+c')
-        for optin in (False,True):
-            app=ConfiguratorApp(self.root,str(Path(sys.executable).resolve()),recovery=True)
-            try:
-                async with app.run_test(size=(110,50)) as pilot:
-                    await click(pilot,'#recovery');await click(pilot,'#recovery-inspect')
-                    app.screen.query_one('#recovery-renderer',Checkbox).value=optin
-                    await click(pilot,'#recovery-recover');await pilot.pause()
-                    expected='/missing/recorded-renderer' if optin else str(Path(sys.executable).resolve())
-                    self.assertEqual(app.query_one('#renderer',Input).value,expected);self.assertIsNone(app.workspace.process)
-                    await pilot.press('ctrl+c')
-            finally:app.workspace.close()
