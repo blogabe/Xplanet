@@ -2,7 +2,7 @@
 from tests.configurator.ui.support_handoff import HandoffUIFixture, prepare_handoff
 from tests.configurator.ui.terminal_support import open_terminal
 from pathlib import Path
-import sys,tempfile,unittest,asyncio,threading
+import errno,sys,tempfile,unittest,asyncio,threading
 from unittest.mock import patch
 from textual.widgets import Button,Input,Static
 from configurator.app import ConfiguratorApp
@@ -75,11 +75,11 @@ class HandoffUITests(HandoffUIFixture, unittest.IsolatedAsyncioTestCase):
 
     async def test_failed_publication_cleans_owned_output_and_shows_error(self):
         write=OwnedFiles.write
-        def broken(owner,name,raw):write(owner,name,raw);raise OSError('injected disk failure')
+        def broken(owner,name,raw):write(owner,name,raw);raise OSError(errno.ENOSPC,'injected disk failure')
         async with self.app.run_test(size=(110,50)) as pilot:
             await self.enter(pilot);await click(pilot,'#handoff-review-button')
             with patch.object(OwnedFiles,'write',autospec=True,side_effect=broken):await click(pilot,'#handoff-confirm')
-            self.assertIn('injected disk failure',self.status());self.assertFalse(self.target.exists())
+            self.assertIn('no free space',self.status());self.assertNotIn('injected disk failure',self.status());self.assertFalse(self.target.exists())
             self.assertFalse(self.app.screen.query_one('#handoff-confirm',Button).display)
         self.unchanged()
 
