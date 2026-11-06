@@ -1,13 +1,22 @@
 """The existing command wrappers require a supported interpreter in sparse PATHs."""
 import subprocess
+import shutil
 import sys
 
 from .support import PROJECT, Sandbox
 
 
 class PythonRuntimeTests(Sandbox):
+    def setUp(self):
+        super().setUp()
+        scripts = self.root / 'scripts'
+        scripts.mkdir()
+        self.launcher = scripts / 'run-totalmarker'
+        shutil.copy2(PROJECT / 'scripts/run-totalmarker', self.launcher)
+        (scripts / 'totalmarker').symlink_to(PROJECT / 'scripts/totalmarker', target_is_directory=True)
+
     def run_selector(self, environment):
-        return subprocess.run([str(PROJECT / "scripts/run-totalmarker"), "--python-path"],
+        return subprocess.run([str(self.launcher), "--python-path"],
                               cwd=self.base, env=environment, capture_output=True,
                               text=True, check=False)
 
@@ -21,7 +30,7 @@ class PythonRuntimeTests(Sandbox):
                  'supported_python() { [ "$1" = "$TM_ACCEPT_PATH" ]; }\n'
                  'select_python\n')
         return subprocess.run(["/bin/sh", "-c", shell], cwd=self.base,
-                              env={"PATH": "", "HOME": str(home),
+                              env={"PATH": "", "HOME": str(home), "project_root": str(self.root),
                                    "TM_ACCEPT_PATH": str(accepted)},
                               capture_output=True, text=True, check=False)
 
@@ -63,7 +72,7 @@ class PythonRuntimeTests(Sandbox):
             result = self.run_selector(environment)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(result.stdout.strip(), str(selected_python))
-        help_result = subprocess.run([str(PROJECT / "scripts/run-totalmarker"), "--help"],
+        help_result = subprocess.run([str(self.launcher), "--help"],
                                      cwd=self.base, env=environment, capture_output=True,
                                      text=True, check=False)
         self.assertEqual(help_result.returncode, 0, help_result.stderr)
@@ -113,7 +122,7 @@ class PythonRuntimeTests(Sandbox):
                 self.assertIn("Python 3.11+", result.stderr)
 
     def test_marker_entrypoint_parses_with_sparse_path_and_selected_python(self):
-        result = subprocess.run([str(PROJECT / "scripts/run-totalmarker"), "--help"],
+        result = subprocess.run([str(self.launcher), "--help"],
                                 cwd=self.base,
                                 env={"PATH": "/usr/bin:/bin", "HOME": str(self.root),
                                      "TOTALMARKER_PYTHON": sys.executable,
@@ -123,7 +132,7 @@ class PythonRuntimeTests(Sandbox):
         self.assertIn("{clouds,labels,quake,storm,volcano,norad,eclipse,santa,health,log-trim}", result.stdout)
 
     def test_marker_launcher_reports_selected_interpreter_for_setup(self):
-        result = subprocess.run([str(PROJECT / "scripts/run-totalmarker"), "--python-path"],
+        result = subprocess.run([str(self.launcher), "--python-path"],
                                 cwd=self.base,
                                 env={"PATH": "/usr/bin:/bin", "HOME": str(self.root),
                                      "TOTALMARKER_PYTHON": sys.executable},
@@ -141,7 +150,7 @@ class PythonRuntimeTests(Sandbox):
         selected = self.run_selector(environment)
         self.assertEqual(selected.returncode, 0, selected.stderr)
         self.assertEqual(selected.stdout.strip(), str(binary_dir / "python3"))
-        help_result = subprocess.run([str(PROJECT / "scripts/run-totalmarker"), "--help"],
+        help_result = subprocess.run([str(self.launcher), "--help"],
                                      cwd=self.base, env=environment, capture_output=True,
                                      text=True, check=False)
         self.assertEqual(help_result.returncode, 0, help_result.stderr)

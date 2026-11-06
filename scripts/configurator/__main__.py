@@ -38,6 +38,7 @@ def main():
     if not sys.stdin.isatty() or not sys.stdout.isatty():
         parser.error('The configurator requires an interactive terminal.')
     from .app import ConfiguratorApp
+    from .display_geometry import detect
     from .workspace import Workspace, open_view
     try:
         document = open_view(args.view) if args.view is not None else None
@@ -47,7 +48,7 @@ def main():
     workspace = Workspace()
     app=None
     try:
-        app=ConfiguratorApp(args.root.resolve(),args.renderer,workspace,document=document)
+        app=ConfiguratorApp(args.root.resolve(),args.renderer,workspace,document=document,display=detect())
         result=app.run()
         code=report_result(result)
         if app.recovery_notice:print(app.recovery_notice)

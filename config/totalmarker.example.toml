@@ -81,10 +81,8 @@ detail_align = "Above"
 [volcano]
 # CAP is selected; this example URL is deliberately invalid. "weekly_html"
 # uses the fixed official GVP weekly page and ignores the retained CAP URL.
-# CAP access resumed in late October 2026 after HTTP 403 failures; ongoing
-# availability is not guaranteed. Setup warns on failed product
-# refreshes while preserving prior markers and the last successful refresh time.
-# Check source access before a deliberate live request.
+# Set a valid CAP URL or choose weekly_html before requesting volcano data.
+# Failed refreshes retain prior markers and the last successful refresh time.
 provider = "cap"
 url = "https://volcano.example.invalid/WeeklyVolcanoCAP.xml"
 output = "markers/volcano"
@@ -187,9 +185,7 @@ edge_color = "Grey"
 center_color = "Black"
 notice_color = "White"
 
-# Santa is a stub: intended as an on/off choice when Xplanet is invoked.
-# Invocation-time integration and a verified live provider are pending.
-# Keep the whole section commented until that workflow is defined.
+# Santa is an unsupported stub; keep this section commented.
 # [santa]
 # enabled = false
 # output = "markers/santa"

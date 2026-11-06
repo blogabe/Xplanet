@@ -57,6 +57,15 @@ unchanged. Save or explicitly keep a recovery draft first if necessary.
 
 ## 3. Move around and change settings
 
+A blank scene starts at the primary macOS display's current backing-pixel size.
+The geometry control shows both backing pixels and logical points (which differ
+on Retina/scaled displays), plus other displays. This is a read-only snapshot at
+launch; reopening the studio checks again. Saved and stock scenes keep their own
+dimensions, and editing the geometry stays explicit. If detection is unavailable
+or the primary size exceeds preview limits, the field uses 1920×1080 and explains
+why. This does not change macOS display settings or the installation's legacy
+geometry. Desktop geometry is still reviewed separately in Handoff review.
+
 Use the mouse, **Tab / Shift-Tab** to move focus, and **Enter** to activate buttons.
 For a focused selector, Enter/Space/Up/Down opens its choices; arrows and Enter
 choose an item. Scroll with the mouse wheel/scrollbar or Page Up/Down in the scroll

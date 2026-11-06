@@ -1,0 +1,20 @@
+{
+  "source": "Official public JTWC ABIO raw response",
+  "capture_purpose": "Slash-separated reissue subject regression",
+  "records": [
+    {
+      "url": "https://www.metoc.navy.mil/jtwc/products/abioweb.txt",
+      "retrieved_at": "2026-11-06T01:19:07.094274+00:00",
+      "status": 200,
+      "headers": {
+        "Content-Type": "text/plain",
+        "Last-Modified": "Thu, 05 Nov 2026 18:00:15 GMT",
+        "Date": "Fri, 06 Nov 2026 01:19:08 GMT",
+        "ETag": "\"56804b072caad3ccbdfff77898f31a33\""
+      },
+      "bytes": 1944,
+      "sha256": "27cbd8b03d138ac420a367a30d8b8f9277f784135f20c3543aff485a362ac17e",
+      "path": "jtwc-abio-advisory.txt"
+    }
+  ]
+}

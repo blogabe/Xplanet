@@ -1,9 +1,20 @@
 # TotalMarker interpreter choices only. Providers own installation and upgrades.
 python_brew() {
     local brew
-    brew=$(command -v brew 2>/dev/null) || return 1
-    [[ "$brew" == /* && -x "$brew" ]] || return 1
-    print -r -- "$brew"
+    brew=$(command -v brew 2>/dev/null)
+    if [[ -n "$brew" ]]; then
+        [[ "$brew" == /* && -x "$brew" ]] || return 1
+        print -r -- "$brew"
+        return 0
+    fi
+    # Fresh shells may not yet include an installed Homebrew in PATH.
+    for brew in /opt/homebrew/bin/brew /usr/local/bin/brew "$HOME/.homebrew/bin/brew"; do
+        if [[ -x "$brew" && -f "$brew" ]]; then
+            print -r -- "$brew"
+            return 0
+        fi
+    done
+    return 1
 }
 
 python_uv() {
@@ -90,7 +101,12 @@ python_choose_runtime() {
         return 2
     fi
     current=$("$script_dir/run-totalmarker" --python-path 2>/dev/null)
-    print -- "Current interpreter: ${current:-unavailable}"
+    if [[ -n "$current" ]]; then
+        print -r -- "Current compatible interpreter: $current"
+    else
+        print -- 'No compatible interpreter selected or found (Python 3.11+ required).'
+        print -- 'An installed older Python, including Apple Python 3.9, is not eligible.'
+    fi
     if [[ "${1:-}" == change ]]; then
         print -- 'Change this only when your runtime needs change. Normal updates preserve the selection.'
         read -r 'reply?Change the TotalMarker interpreter/provider? [y/N] ' || return 3

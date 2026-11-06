@@ -15,6 +15,7 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Button, Footer, Header, Input, Label, Select, Static, TextArea
 
+from .display_geometry import fallback
 from .model import PROJECTIONS, SAMPLE, View, ViewDocument, number, MONTHS, TARGETS, OBSERVERS, EAST_POSITIVE,MOON_PARENTS,SYSTEMS, NUMERIC_FIELDS
 from .geography import COLORS
 from .cloud_capture import describe_capture
@@ -227,9 +228,10 @@ class ConfiguratorApp(App):
     #status { padding: 1; border: round $accent; margin-top: 1; }
     '''
 
-    def __init__(self, root: Path, renderer: str, workspace=None, *, document=None,recovery=True):
+    def __init__(self, root: Path, renderer: str, workspace=None, *, document=None,recovery=True,display=None):
         super().__init__()
         self.root, self.renderer = root, renderer
+        self.display_geometry = display or fallback('not queried in this session')
         self.workspace = workspace or Workspace()
         if self.workspace.capabilities is None:self.workspace.capabilities=cached_binary_evidence(root)
         self.preview_job = None
@@ -246,7 +248,7 @@ class ConfiguratorApp(App):
         self.signal_handlers={}
         self.recovery=DraftSession(root,self.recovery_snapshot,self.recovery_status) if recovery else None
         self.history = None
-        self.document = document or ViewDocument(View(), renderer, SAMPLE.read_bytes())
+        self.document = document or ViewDocument(View(geometry=self.display_geometry.default), renderer, SAMPLE.read_bytes())
         self.capture_id=self.document.view.capture_id
         self.observations_id=self.document.view.observations_id
         for field in ('norad_id','eclipse_id','eclipse_window'):setattr(self,field,getattr(self.document.view,field))
@@ -480,7 +482,8 @@ class ConfiguratorApp(App):
             yield Static('Surface degrees only; static annotations, not provider data, pixel/sky coordinates, travel trajectories or eclipse predictions.')
             yield Static('Finite previews only; no provider requests or desktop changes.')
             with Vertical(id='control-geometry',classes='control'):
-                yield Label('Preview WIDTHxHEIGHT — 1920x1080 default; up to 16,777,216 pixels, independent of texture aspect')
+                yield Label('Preview WIDTHxHEIGHT — up to 16,777,216 pixels, independent of texture aspect')
+                yield Static(self.display_geometry.description+' Saved/stock scenes and edited dimensions stay unchanged.',id='display-geometry',markup=False)
                 yield Input(self.document.view.geometry,id='geometry')
             with Horizontal():
                 yield Button('Preview', id='preview', variant='primary')

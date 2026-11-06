@@ -54,6 +54,7 @@ their original 800×600 dimensions; v14 scenes retain their stored dimensions.
 
 | Control | Meaning |
 | --- | --- |
+| Preview geometry | Blank UI drafts use the primary macOS display's backing-pixel size, within the 16,777,216-pixel bound; unavailable/out-of-bound detection visibly falls back to 1920×1080. Logical points and additional display sizes are shown separately. Saved/stock scenes retain their dimensions; manual changes remain authoritative. No display settings or lifecycle defaults change. |
 | Rectangular / orthographic map | A projected target view using latitude/longitude. Orthographic is still projected mode. |
 | Space (no projection) | A non-projected target view, with geographic or body-origin camera choices. |
 | Geographic observer | Latitude/longitude above the target; studio bounds are ±90° latitude and ±180° longitude. |

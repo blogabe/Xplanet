@@ -31,6 +31,14 @@ class PythonProviderTests(Sandbox):
                     'UV_PREFIX': str(self.uv_prefix), 'UV_PYTHON': str(self.uv_python),
                     'TEST_PYTHON': sys.executable}
         self.env.pop('TOTALMARKER_PYTHON', None)
+        self.helper = self.root / 'python-runtime.zsh'
+        helper = (PROJECT / 'scripts/lib/xplanet/python-runtime.zsh').read_text()
+        self.standard_brew = self.root / 'standard-homebrew/bin/brew'
+        self.intel_brew = self.root / 'intel-homebrew/bin/brew'
+        helper = helper.replace('/opt/homebrew/bin/brew', str(self.standard_brew))
+        helper = helper.replace('/usr/local/bin/brew', str(self.intel_brew))
+        self.env['HOME'] = str(self.root / 'home')
+        self.helper.write_text(helper)
         uv = '''#!/bin/sh
 printf 'uv %s\\n' "$*" >> "$TRACE"
 case " $* " in
@@ -62,12 +70,28 @@ esac
     def invoke(self, action, provider="", answers="", flags=()):
         return subprocess.run(['/bin/zsh', '-c',
                                'script_dir=$1; project_root=${script_dir:h}; source "$2"; shift 2; "$@"', 'fixture',
-                               str(self.scripts), str(PROJECT / 'scripts/lib/xplanet/python-runtime.zsh'),
+                               str(self.scripts), str(self.helper),
                                action, provider, *flags], env=self.env, input=answers, capture_output=True, text=True,
                               timeout=5)
 
     def calls(self):
         return self.trace.read_text().splitlines() if self.trace.exists() else []
+
+    def test_brew_discovery_preserves_path_priority_and_finds_standard_prefixes(self):
+        for target in (self.standard_brew, self.intel_brew,
+                       Path(self.env['HOME']) / '.homebrew/bin/brew'):
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(self.bin / 'brew', target)
+        self.assertEqual(self.invoke('python_brew').stdout.strip(), str(self.bin / 'brew'))
+        (self.bin / 'brew').unlink()
+        for target in (self.standard_brew, self.intel_brew,
+                       Path(self.env['HOME']) / '.homebrew/bin/brew'):
+            result = self.invoke('python_brew')
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout.strip(), str(target))
+            target.unlink()
+        self.assertNotEqual(self.invoke('python_brew').returncode, 0)
+        self.assertEqual(self.calls(), [])
 
     def test_homebrew_choice_is_validated_and_does_not_fall_back_to_path(self):
         result = self.invoke('python_provider_find', 'homebrew')
@@ -166,6 +190,19 @@ esac
         result = self.invoke('python_choose_runtime', answers='2\ny\n')
         self.assertEqual(result.returncode, 1, result.stderr)
         self.assertEqual(selected.read_bytes(), before)
+
+    def test_rejected_runtime_is_not_reported_as_absent(self):
+        selector = self.scripts / 'run-totalmarker'
+        selector.write_text('#!/bin/sh\nexit 2\n')
+        result = self.invoke('python_choose_runtime', answers='q\n')
+        self.assertEqual(result.returncode, 3, result.stderr)
+        self.assertIn('No compatible interpreter selected or found', result.stdout)
+        self.assertIn('Python 3.11+ required', result.stdout)
+        self.assertIn('An installed older Python', result.stdout)
+        self.assertNotIn('Current interpreter: unavailable', result.stdout)
+        self.assertNotIn('Keep current compatible interpreter', result.stdout)
+        self.assertFalse((self.root / 'config/totalmarker.python').exists())
+        self.assertFalse(any('install' in call for call in self.calls()))
 
     def test_interactive_switches_existing_providers_without_installing(self):
         candidate = self.brew_prefix / 'bin/python3'

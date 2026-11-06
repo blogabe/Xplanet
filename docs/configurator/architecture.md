@@ -548,6 +548,17 @@ identity checks remain at publication, so review is not a claim of live validity
 
 ## Attempt-scoped diagnostics and selection inspection
 
+`display_geometry.py` reads AppKit NSScreen data through the system JXA bridge
+once at interactive CLI launch, with a two-second timeout and a fixed 32-display
+report limit. It uses `convertRectToBacking`, not a guessed Retina multiplier;
+NSScreen index 0 is the primary menu-bar display. These are backing dimensions,
+not a claim about native panel pixels or the display containing Terminal. No
+serial numbers/names are collected, settings changed, or renderer invoked.
+A valid bounded primary size seeds only a blank UI draft. Saved scenes, recovery,
+stock presets, model/CLI defaults and explicit desktop handoff dimensions retain
+their own geometry. Missing GUI sessions or excessive sizes visibly fall back to
+1920×1080. No live monitoring or automatic resize of an edited draft occurs.
+
 `geometry.py` shares bounded frame validation with deployment review. Geometry
 is part of the native scene and active preview identity. `resources.py` keeps
 bounded first/last log evidence and executable-identity-bound `-version` support
