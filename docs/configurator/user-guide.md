@@ -159,6 +159,10 @@ or `--view` to resume; cross-session undo history is not restored. For example:
 ./scripts/xplanet.sh config --view "$PWD/config/scenes/my-moon.conf"
 ```
 
+Older frozen observations with escaped labels or scalar transparency values
+are refused without rewriting the source. Start a new draft and recapture
+corrected producer output; see [observation compatibility](observations.md#save-and-reopen).
+
 ## 6. Leave, interrupt or recover
 
 | Key/action | Result |

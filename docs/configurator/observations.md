@@ -71,8 +71,12 @@ V10 saves include the native marker/arc files, referenced PNG icons and bounded
 references (for example `earth.observed-quake.markers`); metadata uses canonical
 scene-independent names/hashes. Reopening verifies associations and hashes, never
 reads the original producer, and does not adopt imported executable/asset roots.
-Inactive captured data remains portable with the scene. Old configurator formats
-still reopen; new observational choices cannot be written into an older format.
+Inactive captured data remains portable with the scene. Supported older scene
+formats still reopen; new observational choices cannot be written into an older
+format. Frozen rows with backslash-escaped labels or scalar `transparent=30`
+are refused because Xplanet cannot interpret them safely. Their files are not
+rewritten. Start a new draft, explicitly recapture corrected producer output,
+and save a new scene; the refused scene cannot be edited in place.
 
 Original configurations, producer files, desktop settings and schedules are untouched.
 Saving is still a new-copy operation, not Apply. See [configurator](reference.md).
