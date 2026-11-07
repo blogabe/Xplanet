@@ -49,8 +49,23 @@ for runtime_dir in "$project_root/.state" "$project_root/.state/configurator" "$
 done
 python_bin="$project_root/.state/configurator/venv/bin/python"
 if [ "$runtime_safe" != true ] || [ ! -x "$python_bin" ] || ! "$python_bin" -P -s -B -m configurator.runtime --check "$project_root"; then
-    printf '%s\n' 'Configurator runtime is not ready. No dependencies were installed.' \
-        'For explicit preparation or rebuilding instructions: scripts/xplanet.sh config --guide' >&2
+    printf '%s\n' 'Configurator runtime is not ready. No dependencies were installed.' >&2
+    preparation_safe=true
+    for runtime_dir in "$project_root/.state" "$project_root/.state/configurator"; do
+        if [ -L "$runtime_dir" ] || { [ -e "$runtime_dir" ] && [ ! -d "$runtime_dir" ]; }; then preparation_safe=false; break; fi
+    done
+    runtime_marker="$project_root/.state/configurator/lock.sha256"
+    if [ -L "$runtime_marker" ] || { [ -e "$runtime_marker" ] && [ ! -f "$runtime_marker" ]; }; then preparation_safe=false; fi
+    if [ "$preparation_safe" != true ]; then
+        printf '%s\n' 'Check the runtime paths before preparation; see scripts/xplanet.sh config --guide.' >&2
+    elif [ -e "$project_root/.state/configurator/venv" ] || [ -L "$project_root/.state/configurator/venv" ]; then
+        printf '%s\n' 'The existing environment needs attention. For rebuilding instructions: scripts/xplanet.sh config --guide' \
+            'Preserve .state/configurator/drafts; preparation does not replace an existing environment.' >&2
+    else
+        printf '%s\n' 'Prepare the isolated environment: ./scripts/xplanet.sh config --prepare' \
+            'Preparation downloads pinned dependencies from PyPI. Then run ./scripts/xplanet.sh config again.' \
+            'More instructions: ./scripts/xplanet.sh config --guide' >&2
+    fi
     exit 4
 fi
 exec "$python_bin" -P -s -B -m configurator --root "$project_root" "$@"

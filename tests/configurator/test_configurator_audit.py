@@ -124,3 +124,73 @@ class RuntimeBoundaryTests(unittest.TestCase):
             result=subprocess.run([str(self.root/'scripts/run-configurator')],stdin=slave,stdout=slave,stderr=subprocess.PIPE,timeout=5,env={**os.environ,'HOME':str(self.root)})
         finally:os.close(master);os.close(slave)
         self.assertEqual(result.returncode,4,result.stderr);self.assertFalse(guard.exists())
+
+
+class RuntimeHintTests(unittest.TestCase):
+    def setUp(self):
+        self.temp=tempfile.TemporaryDirectory(dir='/tmp');self.addCleanup(self.temp.cleanup)
+        self.root=Path(self.temp.name).resolve();scripts=self.root/'scripts';scripts.mkdir()
+        self.wrapper=scripts/'run-configurator';shutil.copyfile(ROOT/'scripts/run-configurator',self.wrapper)
+        # Launching the studio must never select a preparation interpreter or install dependencies.
+        (scripts/'run-totalmarker').write_text('#!/bin/sh\nexit 91\n')
+        (scripts/'run-totalmarker').chmod(0o700)
+
+    def snapshot(self):
+        return {str(path.relative_to(self.root)): ('link',os.readlink(path)) if path.is_symlink()
+                else ('directory',) if path.is_dir() else ('file',path.read_bytes())
+                for path in self.root.rglob('*')}
+
+    def launch(self):
+        import subprocess
+        before=self.snapshot();master,slave=pty.openpty()
+        try:
+            result=subprocess.run(['/bin/sh',str(self.wrapper)],stdin=slave,stdout=slave,
+                                  stderr=subprocess.PIPE,text=True,timeout=5,
+                                  env={**os.environ,'HOME':str(self.root)})
+        finally:os.close(master);os.close(slave)
+        self.assertEqual(result.returncode,4,result.stderr)
+        self.assertIn('No dependencies were installed.',result.stderr)
+        self.assertEqual(before,self.snapshot(),'runtime failure must remain read-only')
+        return result.stderr
+
+    def test_missing_runtime_suggests_explicit_preparation(self):
+        output=self.launch()
+        self.assertIn('Prepare the isolated environment: ./scripts/xplanet.sh config --prepare',output)
+        self.assertIn('downloads pinned dependencies from PyPI',output)
+        self.assertIn('Then run ./scripts/xplanet.sh config again.',output)
+        self.assertIn('./scripts/xplanet.sh config --guide',output)
+        self.assertFalse((self.root/'.state').exists())
+
+    def test_missing_venv_with_recovery_drafts_suggests_preparation(self):
+        drafts=self.root/'.state/configurator/drafts';drafts.mkdir(parents=True)
+        (drafts/'keep').write_bytes(b'private recovery draft')
+        self.assertIn('config --prepare',self.launch())
+
+    def test_existing_incomplete_or_failed_runtime_suggests_rebuilding(self):
+        runtime=self.root/'.state/configurator/venv';runtime.mkdir(parents=True)
+        for executable in (False,True):
+            with self.subTest(executable=executable):
+                if executable:
+                    binary=runtime/'bin/python';binary.parent.mkdir()
+                    binary.write_text('#!/bin/sh\nexit 4\n');binary.chmod(0o700)
+                output=self.launch()
+                self.assertIn('config --guide',output)
+                self.assertIn('Preserve .state/configurator/drafts',output)
+                self.assertIn('does not replace an existing environment',output)
+                self.assertNotIn('config --prepare',output)
+
+    def test_obstructed_or_linked_paths_do_not_suggest_preparation(self):
+        for relative in ('.state','.state/configurator','.state/configurator/venv',
+                         '.state/configurator/lock.sha256'):
+            for kind in ('file','link'):
+                if relative.endswith('lock.sha256') and kind=='file':continue
+                with self.subTest(path=relative,kind=kind):
+                    state=self.root/'.state'
+                    if state.is_symlink() or state.is_file():state.unlink()
+                    elif state.exists():shutil.rmtree(state)
+                    target=self.root/relative;target.parent.mkdir(parents=True,exist_ok=True)
+                    if kind=='link':target.symlink_to(self.root/'missing-target')
+                    else:target.write_bytes(b'keep')
+                    output=self.launch()
+                    self.assertIn('config --guide',output)
+                    self.assertNotIn('config --prepare',output)
