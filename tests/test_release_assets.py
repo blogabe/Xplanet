@@ -1,6 +1,8 @@
 """Check bundled assets directly against the Git index without exporting files."""
 import subprocess
 import unittest
+import tempfile
+from pathlib import Path
 from .support import PROJECT
 from . import release_policy
 
@@ -44,3 +46,39 @@ class ReleaseAssetsTests(unittest.TestCase):
             indexed.append(relative)
         self.assertGreater(len(indexed),100)
         self.assertEqual(len(indexed),len(set(indexed)))
+
+    def test_map_family_rename_preserves_index_with_explicit_add_despite_ignore_policy(self):
+        # A filesystem rename alone is not permission to publish newly named maps.
+        with tempfile.TemporaryDirectory(prefix='xplanet-map-index-') as temporary:
+            root = Path(temporary)
+            def git(*args):
+                return subprocess.check_output(['git', *args], cwd=root, stderr=subprocess.STDOUT)
+            git('init', '-q')
+            (root / '.gitignore').write_bytes((PROJECT / '.gitignore').read_bytes())
+            old = root / 'maps/old-family'
+            old.mkdir(parents=True)
+            for name in ('day.png', 'night.png'):
+                (old / name).write_bytes(('fixture ' + name).encode())
+            git('add', '.gitignore')
+            git('add', '-f', 'maps/old-family')
+            git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid',
+                'commit', '-qm', 'fixture maps')
+            renamed = root / 'maps/renamed-family'
+            old.rename(renamed)
+            git('add', '-A')
+            self.assertEqual(git('ls-files', '--', 'maps/').decode(), '')
+            git('add', '-f', '--', 'maps/renamed-family')
+            self.assertEqual(git('ls-files', '--', 'maps/').decode().splitlines(),
+                             ['maps/renamed-family/day.png', 'maps/renamed-family/night.png'])
+            for name in ('day.png', 'night.png'):
+                self.assertEqual(git('show', ':maps/renamed-family/' + name), ('fixture ' + name).encode())
+            git('mv', 'maps/renamed-family', 'maps/final-family')
+            git('add', '-A')
+            self.assertEqual(git('ls-files', '--', 'maps/').decode().splitlines(),
+                             ['maps/final-family/day.png', 'maps/final-family/night.png'])
+            private = root / 'maps/new-private-family/personal.png'
+            private.parent.mkdir(); private.write_bytes(b'not authorized for release')
+            git('add', '-A')
+            self.assertEqual(git('check-ignore', 'maps/new-private-family/personal.png').strip(),
+                             b'maps/new-private-family/personal.png')
+            self.assertNotIn('personal.png', git('ls-files').decode())

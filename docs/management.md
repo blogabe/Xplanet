@@ -159,6 +159,13 @@ and setup retain their documented exit statuses.
 
 ## Desktop commands
 
+Shell `preview` and `render` write replaceable images and renderer scratch beneath
+`output/preview/`. Configurator image and comparison-sheet exports instead default
+to new named directories under `output/exports/`; those copies are durable and never
+automatically pruned. The editor's working previews remain temporary. Existing
+exports, including older copies under `config/`, are left in place; native scene
+saves still belong to `config/scenes/`. No migration or cleanup is performed.
+
 `setup --help` lists setup modes without inspecting configuration or prerequisites.
 
 

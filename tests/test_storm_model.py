@@ -98,7 +98,7 @@ class StormModelTests(Sandbox):
         good = run(self.fs, settings, fetcher=MappedFetcher(), now=NOW)
         self.assertEqual(good.outcome, "changed")
         before = (self.fs.read(settings.storm.marker), self.fs.read(settings.storm.arc))
-        long_detail = self.config("StormCheckIntervalSeconds=0\nStormDetailList=" + "X" * 600 + "\n")
+        long_detail = self.config("StormCheckIntervalSeconds=0\nStormDetailList=" + "<name>" * 160 + "\n")
         failed = run(self.fs, long_detail, fetcher=MappedFetcher(), now=NOW + 60)
         self.assertEqual(failed.outcome, "failed")
         self.assertIn("510-byte limit", failed.message)

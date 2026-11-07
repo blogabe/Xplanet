@@ -191,6 +191,8 @@ is a finite snapshot, not a live tail: reads stop at the initial file size. A
 change detected while reading warns on stderr and returns 1; rerun for a fresh
 view. A stable read returns 0, not an assertion that the log contains no errors.
 Missing, unreadable or nonregular files return 2. Symlink paths are refused.
+A downstream reader such as `head` may close the pipe early; the view exits
+quietly with status 0, without claiming the whole snapshot was displayed.
 
 No renderer, pipeline, job, configuration or raw log is changed. `xplanet.log`
 keeps TotalMarker's normal JSON output, including unchanged results and failures.
@@ -239,6 +241,21 @@ recapture from the producer explicitly and save a new scene. Image transparency
 uses Xplanet's RGB color-key syntax, `transparent={R,G,B}`, with each channel
 0–255. This selects a transparent color; it is not numeric opacity. Bare digits
 such as `transparent=30` are unsupported because the renderer drops those markers.
+
+To migrate an older scalar `image_transparent` setting (INI:
+`QuakeImageTransparent`, `VolcanoImageTransparent` or `StormImageTransparent`),
+leave it empty to disable color-key transparency, or explicitly choose the RGB
+color in the image to hide, for example `"{0,0,0}"` for black in TOML. There is no
+safe opacity-to-color conversion, and existing configuration is not rewritten.
+Invalid scalar values fail configuration loading with exit 2, including saved
+and live `health` and other commands that load the shared configuration. Fix the
+setting even if that layer is disabled. `log-view` reads without loading it.
+
+Detail templates are checked at configuration time against the minimum possible
+UTF-8 marker-row size, including coordinates and style options. A row that cannot
+fit Xplanet's 510-byte limit is refused before fetching. Variable substitutions
+such as names and locations still require the runtime row-length guard; valid
+configuration alone cannot guarantee that every provider value will fit.
 
 Provider XML refuses document type declarations, including encoded XML. KMZ
 members are bounded while decompressed, not solely by archive metadata. Failed

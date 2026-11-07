@@ -70,7 +70,9 @@ sampled clock identifies an attempt; it is not a per-request network audit trail
 | `config/totalmarker.python` | User-selected absolute interpreter path; shared by the data launcher and scheduled jobs unless explicitly overridden |
 | `.state/totalmarker/storm-rejected.json` | Bounded latest rejected public-source evidence; preserve for diagnosis |
 | `logs/` | Diagnostic history; not required for new saved product error facts |
-| Preview and test temporary directories | Disposable development output |
+| `output/preview/` | Replaceable shell preview/render images and renderer scratch; no automatic cleanup |
+| `output/exports/` | User-owned durable configurator image/sheet copies; never automatically pruned |
+| Configurator working previews and test temporary directories | Disposable temporary output |
 
 The existing self-contained installation paths remain. Stock maps come from the
 installed renderer; seasonal maps use the checkout's committed assets. Packages
@@ -81,6 +83,10 @@ stay ignored; adding a shipped asset requires deliberate `git add -f` and
 provenance review. A map-family rename also needs explicit staging: a plain `mv`
 followed by `git add -A` can stage deletions while the new ignored path remains
 untracked. Review `git status --short --ignored maps/` and the staged file list.
+
+The entire `output/` tree is private runtime/user material: ignored by Git and
+rejected by indexed release checks, including files added with force. Existing
+exports elsewhere are not moved or deleted.
 
 The indexed privacy scan covers known identifiers in bounded text, including
 provider `.dat` and `.geojson` fixtures. It reads index blobs, not replacement

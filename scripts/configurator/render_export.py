@@ -1,8 +1,9 @@
 """Durable copies of owned successful render snapshots; never rerender or Apply."""
 import asyncio,hashlib,json,os,stat
 from datetime import datetime,timezone
+from contextlib import contextmanager
 from pathlib import Path
-from .fileio import new_directory
+from .fileio import new_directory,same_directory
 from .resources import file_identity
 
 IMAGE_LIMIT=64*1024*1024
@@ -12,6 +13,42 @@ DURABLE_NOTE=b'Durable exported snapshot. These copies remain until you remove t
 
 def encoded(value):return (json.dumps(value,sort_keys=True,ensure_ascii=True,allow_nan=False,indent=2)+'\n').encode()
 def sha(raw):return hashlib.sha256(raw).hexdigest()
+
+def default_destination(project_root,kind):
+    """Suggest a durable location without creating anything before confirmation."""
+    return Path(project_root)/'output'/'exports'/('export-'+kind+'-'+datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S'))
+
+@contextmanager
+def default_parent(project_root):
+    """Create only the two default parents, holding real directory identities."""
+    root=Path(project_root)
+    if not root.is_absolute() or root!=root.resolve():raise ValueError('The project root must be a real absolute directory.')
+    root_fd=os.open(root,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+    opened=[];created=[]
+    try:
+        same_directory(root,root_fd);parent=root;parent_fd=root_fd
+        for name in ('output','exports'):
+            same_directory(parent,parent_fd);path=parent/name
+            made=False
+            try:os.mkdir(name,mode=0o700,dir_fd=parent_fd);made=True
+            except FileExistsError:pass
+            fd=os.open(name,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=parent_fd)
+            opened.append(fd)
+            if made:created.append((parent_fd,name,fd))
+            same_directory(path,fd);parent=path;parent_fd=fd
+        yield parent_fd
+    except BaseException:
+        # Remove only empty ancestors created by this attempt, and only while
+        # their identities still match. Existing exports or foreign files stay.
+        for parent_fd,name,fd in reversed(created):
+            try:
+                current=os.stat(name,dir_fd=parent_fd,follow_symlinks=False);held=os.fstat(fd)
+                if (current.st_dev,current.st_ino)==(held.st_dev,held.st_ino):os.rmdir(name,dir_fd=parent_fd)
+            except OSError:pass
+        raise
+    finally:
+        for fd in reversed(opened):os.close(fd)
+        os.close(root_fd)
 
 async def read_owned(workspace,path,expected,limit):
     path=Path(path);root=workspace.root
@@ -34,7 +71,7 @@ def image(raw,geometry):
     if len(raw)<24 or raw[:8]!=b'\x89PNG\r\n\x1a\n' or raw[12:16]!=b'IHDR' or raw[16:24]!=width.to_bytes(4,'big')+height.to_bytes(4,'big'):raise ValueError('Retained PNG header does not match its recorded geometry; render again.')
     # This verifies a container header, not a full image decode or metadata scrub.
 
-async def export_snapshot(workspace,kind,snapshot,destination):
+async def export_snapshot(workspace,kind,snapshot,destination,*,project_root=None):
     if workspace.busy:raise ValueError('Wait for the current operation before exporting.')
     try:target=Path(destination).expanduser();resolved=target.resolve()
     except RuntimeError as exc:raise ValueError('Export destination cannot be resolved safely.') from exc
@@ -72,6 +109,10 @@ async def export_snapshot(workspace,kind,snapshot,destination):
         # Cancellation is cooperative while preparing bounded bytes. Publication
         # reuses exclusive owned-file creation; no detached thread can write later.
         await asyncio.sleep(0)
-        return new_directory(destination,[*files,('export.json',encoded(receipt))])
+        files=[*files,('export.json',encoded(receipt))]
+        if project_root is not None and target.parent==Path(project_root)/'output'/'exports':
+            with default_parent(project_root) as parent_fd:
+                return new_directory(target,files,parent_fd=parent_fd)
+        return new_directory(target,files)
     except (KeyError,TypeError,UnicodeError,RuntimeError) as exc:raise ValueError('Retained render metadata is invalid; render again.') from exc
     finally:workspace.busy=False;workspace.operation=None

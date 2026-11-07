@@ -121,6 +121,17 @@ class ManagementTests(Sandbox):
             next_step = next(menu_steps, None)
             while proc.poll() is None and time.monotonic() < deadline:
                 if confirm_interrupt and not confirmation_signalled and b'Run start? [y/N]' in output:
+                    # Prompt output can arrive before zsh enters its read.
+                    # Require both canonical mode and the owned shell sleeping
+                    # at that read, rather than racing it with a fixed delay.
+                    state=''
+                    while proc.poll() is None and time.monotonic()<deadline:
+                        observed=subprocess.run(['/bin/ps','-o','state=','-p',str(proc.pid)],
+                                                capture_output=True,text=True,timeout=1)
+                        state=observed.stdout.strip()
+                        if termios.tcgetattr(slave)[3] & termios.ICANON and state.startswith('S'):break
+                    self.assertTrue(termios.tcgetattr(slave)[3] & termios.ICANON,output.decode())
+                    self.assertTrue(state.startswith('S'),(state,output))
                     os.write(master,b'\x03');confirmation_signalled=True
                 if key_marker and key_marker in output:
                     os.write(master, b'q')
@@ -390,8 +401,8 @@ class ManagementTests(Sandbox):
                       '2) Configurator', 'q) Exit']:
             self.assertIn(label, lines)
         self.assertFalse(any('3) Start' in line and '4) Stop' in line for line in lines))
-        self.assertIn('Stop ALL your Xplanet processes, including finite renders?', output)
-        self.assertIn('Restart: stop ALL your Xplanet processes, then start one desktop?', output)
+        self.assertIn('Remove the desktop job and stop normal/configured Xplanet processes, including finite renders?', output)
+        self.assertIn('Restart: remove the desktop job, stop normal/configured Xplanet processes, then start one desktop?', output)
         self.assertEqual(self.calls(), [])
 
     def enhanced_terminal(self):

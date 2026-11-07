@@ -82,6 +82,9 @@ def view(fs, path, output, errors):
                     current = None
                 changed = (short or _identity(before) != _identity(after)
                            or current is None or _identity(before) != _identity(current))
+    except BrokenPipeError:
+        # The CLI handles a reader closing stdout; it is not a file-read failure.
+        raise
     except FileNotFoundError:
         raise StorageError("Log file not found; log view creates nothing") from None
     except OSError:

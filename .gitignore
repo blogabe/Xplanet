@@ -63,3 +63,6 @@
 
 /tests/**/.tmp/
 /tests/**/.tmp/**
+
+# Private generated previews and durable user exports, never release inputs.
+/output/

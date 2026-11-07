@@ -56,9 +56,9 @@ Redirected input or output prints usage instead.
 Explore and configure
   config       Open the scene studio; save and selection are separate
   preview      Render one custom Earth frame at 1920x1080
-               Output: dev/preview/earth-manual.png
+               Output: output/preview/earth-manual.png
   render       Render one custom Earth frame at the configured size
-               Output: dev/preview/earth-render.png
+               Output: output/preview/earth-render.png
 
 Install and maintain
   bootstrap    Clone into ~/.xplanet, then run install (Homebrew required)
@@ -68,8 +68,8 @@ Install and maintain
 
 Control the desktop
   start        Start the launchd-owned foreground display
-  stop         Stop ALL this user's Xplanet processes
-               Includes finite renders
+  stop         Remove desktop job; stop normal/configured Xplanet processes
+               Includes matching finite renders
   restart      Stop, wait for exit, then start one display
   earth        Select the current month's configured Earth map link
 
@@ -117,9 +117,10 @@ Workflow notes (macOS)
 
   Without a selector, start uses custom configuration. An invalid selected
   revision fails instead of falling back. Apply never restarts; start uses
-  one job with no automatic respawn. Stop removes it and stops ALL this
-  user's Xplanet processes. Restart waits for exit before starting one
-  display.
+  one job with no automatic respawn. Stop removes that job and stops this
+  user's processes named xplanet or by the trusted xp.def renderer, including
+  matching finite renders. Historical scene names are not signal targets.
+  Restart waits for that stop before starting one display.
 USAGE
 }
 
@@ -180,22 +181,20 @@ case "$switch" in
         ;;
     preview)
         load_render_config
-        mkdir -p "$project_root/dev/preview/tmp" "$project_root/dev/preview/cache" ||
-            fail "cannot create project-local preview directories"
-        TMPDIR="$project_root/dev/preview/tmp" \
-        XDG_CACHE_HOME="$project_root/dev/preview/cache" \
-        render_frame 1920x1080 "$project_root/dev/preview/earth-manual.png" \
-            "$project_root/dev/preview/tmp"
+        prepare_preview_output earth-manual.png
+        TMPDIR="$project_root/output/preview/tmp" \
+        XDG_CACHE_HOME="$project_root/output/preview/cache" \
+        render_frame 1920x1080 "$project_root/output/preview/earth-manual.png" \
+            "$project_root/output/preview/tmp"
         ;;
     render)
         load_render_config
         [[ -n "$XPLANET_GEOMETRY" ]] || fail "xp.def XPLANET_GEOMETRY is required for render"
-        mkdir -p "$project_root/dev/preview/tmp" "$project_root/dev/preview/cache" ||
-            fail "cannot create project-local render directories"
-        TMPDIR="$project_root/dev/preview/tmp" \
-        XDG_CACHE_HOME="$project_root/dev/preview/cache" \
-        render_frame "$XPLANET_GEOMETRY" "$project_root/dev/preview/earth-render.png" \
-            "$project_root/dev/preview/tmp"
+        prepare_preview_output earth-render.png
+        TMPDIR="$project_root/output/preview/tmp" \
+        XDG_CACHE_HOME="$project_root/output/preview/cache" \
+        render_frame "$XPLANET_GEOMETRY" "$project_root/output/preview/earth-render.png" \
+            "$project_root/output/preview/tmp"
         ;;
     start)
         start_xplanet

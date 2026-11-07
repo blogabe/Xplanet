@@ -50,12 +50,22 @@ select_earth_map() (
         [[ -d "$project_root/$directory" && ! -L "$project_root/$directory" ]] ||
             fail "$directory must be a real directory"
     done
+    # Even an unchanged map needs the state lock during the real start. Check
+    # its nearest existing parent before any unchanged-link early return.
+    local state_parent="$project_root/.state/totalmarker"
+    while [[ ! -d "$state_parent" ]]; do state_parent="${state_parent:h}"; done
+    [[ -w "$state_parent" && -x "$state_parent" ]] ||
+        fail "Earth map state directory must be writable and searchable: $state_parent"
     lockdir="$project_root/.state/totalmarker/map.lock.d"
     if [[ "$checking" == true ]]; then
         [[ ! -e "$lockdir" && ! -L "$lockdir" ]] || fail "Earth map selection is locked at $lockdir; another earth command may be running. If none is running after an interruption, remove that empty lock directory with rmdir and retry."
     else
-        mkdir -- "$lockdir" 2>/dev/null ||
-            fail "Earth map selection is locked at $lockdir; another earth command may be running. If none is running after an interruption, remove that empty lock directory with rmdir and retry."
+        if ! mkdir -- "$lockdir" 2>/dev/null; then
+            if [[ -e "$lockdir" || -L "$lockdir" ]]; then
+                fail "Earth map selection is locked at $lockdir; another earth command may be running. If none is running after an interruption, remove that empty lock directory with rmdir and retry."
+            fi
+            fail "Cannot create Earth map lock at $lockdir; check state directory permissions and available storage."
+        fi
         trap 'rmdir -- "$lockdir"' EXIT
         trap 'exit 130' INT
         trap 'exit 143' TERM
@@ -82,9 +92,6 @@ select_earth_map() (
     fi
     if [[ "$checking" == true ]]; then
         [[ -w "$project_root/images" ]] || fail "images must be writable for Earth map selection"
-        local state_parent="$project_root/.state/totalmarker"
-        while [[ ! -d "$state_parent" ]]; do state_parent="${state_parent:h}"; done
-        [[ -w "$state_parent" ]] || fail "Earth map state directory must be writable: $state_parent"
         print -- "Earth map prerequisites verified: $source"
         exit 0
     fi
@@ -122,6 +129,20 @@ load_render_config() {
     if [[ -n "$XPLANET_LATITUDE" ]]; then
         latitude_args=(-latitude "$XPLANET_LATITUDE")
     fi
+}
+
+prepare_preview_output() {
+    local directory output="$project_root/output/preview/$1"
+    for directory in "$project_root/output" "$project_root/output/preview" \
+                     "$project_root/output/preview/tmp" "$project_root/output/preview/cache"; do
+        [[ ! -L "$directory" ]] || fail "preview directories must not be symlinks"
+        if [[ ! -e "$directory" ]]; then
+            mkdir -m 700 -- "$directory" || fail "cannot create project-local preview directories"
+        fi
+        [[ -d "$directory" && ! -L "$directory" ]] || fail "preview path must be a real directory"
+    done
+    [[ ! -L "$output" ]] || fail "preview output must not be a symlink"
+    [[ ! -e "$output" || -f "$output" ]] || fail "preview output must be a regular file"
 }
 
 render_frame() (

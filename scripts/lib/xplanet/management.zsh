@@ -222,8 +222,8 @@ manage_xplanet() {
                 if [[ -n "$command" ]]; then
                     management_section "${(C)command}"
                     case "$command" in
-                        stop) confirmation="Stop ALL your Xplanet processes, including finite renders?" ;;
-                        restart) confirmation="Restart: stop ALL your Xplanet processes, then start one desktop?" ;;
+                        stop) confirmation="Remove the desktop job and stop normal/configured Xplanet processes, including finite renders?" ;;
+                        restart) confirmation="Restart: remove the desktop job, stop normal/configured Xplanet processes, then start one desktop?" ;;
                         *) confirmation="Run $command?" ;;
                     esac
                     if management_confirm "$confirmation"; then

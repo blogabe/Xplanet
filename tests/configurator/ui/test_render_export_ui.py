@@ -1,5 +1,6 @@
 """Explicit retained-image export preserves drafts, sources and lifecycle state."""
 import json,unittest
+from pathlib import Path
 from textual.widgets import Input,Static,Select
 from configurator.export_ui import RenderExport
 from tests.configurator.ui import fixtures
@@ -26,6 +27,23 @@ class ExportUITests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(json.loads((destination/'export.json').read_text())['scene_summary'],snapshot.view.summary())
         self.assertEqual(list((self.root/'config').iterdir()),[])
         self.workspace.close();self.assertEqual((destination/'preview.png').read_bytes(),raw)
+    async def test_default_destination_cancel_back_and_confirm_create_only_exports(self):
+        async with self.app.run_test(size=(130,55)) as pilot:
+            await self.prepare(pilot);snapshot=self.workspace.latest
+            for cancel in ('escape','back'):
+                await click(pilot,'#export-image')
+                destination=Path(self.app.screen.query_one('#render-export-directory',Input).value)
+                self.assertEqual(destination.parent,self.root/'output/exports');self.assertFalse((self.root/'output').exists())
+                if cancel=='escape':await pilot.press('escape')
+                else:await click(pilot,'#render-export-back')
+                self.assertFalse((self.root/'output').exists())
+            await click(pilot,'#export-image')
+            destination=Path(self.app.screen.query_one('#render-export-directory',Input).value)
+            await click(pilot,'#render-export-confirm');await self.app.workers.wait_for_complete();await pilot.pause()
+            self.assertEqual((destination/'preview.png').read_bytes(),snapshot.path.read_bytes())
+            self.assertFalse((self.root/'output/preview').exists())
+        self.assertEqual(list((self.root/'config').iterdir()),[])
+
     async def test_failure_keeps_source_and_reenables_export_and_preview(self):
         destination=self.root/'dev/exists';destination.mkdir();(destination/'keep').write_bytes(b'keep')
         async with self.app.run_test(size=(130,55)) as pilot:
@@ -36,13 +54,13 @@ class ExportUITests(unittest.IsolatedAsyncioTestCase):
             self.assertFalse(self.app.query_one('#export-image').disabled);self.assertFalse(self.app.query_one('#preview').disabled)
             self.assertIs(self.workspace.latest,snapshot);self.assertEqual((destination/'keep').read_bytes(),b'keep')
     async def test_sheet_export_does_not_change_original_preview_or_draft(self):
-        destination=self.root/'dev/saved sheet'
         async with self.app.run_test(size=(130,55)) as pilot:
             await self.prepare(pilot);snapshot=self.workspace.latest
             self.app.query_one('#projection',Select).value='space';await pilot.pause()
             await click(pilot,'#framing-sheet');await click(pilot,'#comparison-confirm');await self.app.workers.wait_for_complete();await pilot.pause()
             before=self.app.history.current;sheet=self.workspace.comparison_latest
-            await click(pilot,'#export-sheet');self.app.screen.query_one('#render-export-directory',Input).value=str(destination)
+            await click(pilot,'#export-sheet');destination=Path(self.app.screen.query_one('#render-export-directory',Input).value)
+            self.assertEqual(destination.parent,self.root/'output/exports');self.assertFalse(destination.parent.exists())
             await click(pilot,'#render-export-confirm');await self.app.workers.wait_for_complete();await pilot.pause()
             self.assertEqual(self.app.history.current,before);self.assertIs(self.workspace.latest,snapshot);self.assertIs(self.workspace.comparison_latest,sheet)
             self.assertTrue((destination/'index.html').is_file());self.assertTrue((destination/'frame-3.png').is_file())

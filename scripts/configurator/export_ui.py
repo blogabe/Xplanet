@@ -15,7 +15,7 @@ class RenderExport(ModalScreen[str|None]):
             yield Static('Export retained '+('preview' if self.kind=='preview' else 'comparison sheet')+' as a durable copy?')
             yield Static(self.description,markup=False)
             yield Static('Exports the recorded snapshot, which may differ from the current draft. No rerender, provider, scene save, selection or desktop operation. Image bytes and embedded metadata are retained; review before sharing.')
-            yield Static('Choose a NEW directory in an existing real parent. Existing destinations and symlink paths are refused; nothing is overwritten. A preview exports preview.png plus export.json; a comparison sheet exports its three PNGs, static HTML and manifests.')
+            yield Static('Choose a NEW directory. The default output/exports parents are created only when you confirm; other parents must already exist. Existing destinations and symlink paths are refused; nothing is overwritten. A preview exports preview.png plus export.json; a comparison sheet exports its three PNGs, static HTML and manifests.')
             yield Input(self.destination,id='render-export-directory')
             with Horizontal():
                 yield Button('Export copy',id='render-export-confirm',variant='primary')

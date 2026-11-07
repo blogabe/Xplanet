@@ -90,3 +90,44 @@ class MarkerConfigurationTests(Sandbox):
         for emit in calls:
             with self.subTest(emit=emit), self.assertRaisesRegex(FeedError, "RGB color key"):
                 emit()
+
+    def test_impossible_detail_templates_fail_at_load_in_ini_and_toml(self):
+        for product in ('quake', 'volcano', 'storm'):
+            key = product.title() + 'DetailList'
+            for detail in ('x' * 600, 'é' * 260):
+                for data, name in (((key + '=' + detail + '\n').encode(), 'config.ini'),
+                                   ((f'[{product}]\ndetail = ' + json.dumps(detail)).encode(), 'config.toml')):
+                    with self.subTest(product=product, detail=detail[:3], syntax=name), \
+                         self.assertRaisesRegex(ConfigError, key + '.*510-byte'):
+                        load_bytes(self.fs, data, name)
+
+    def test_static_detail_boundary_includes_utf8_coordinates_and_style(self):
+        for product, suffix in (('quake', ' color=Red align=Above'),
+                                ('volcano', ' color=Brown align=Below image=none'),
+                                ('storm', ' align=Below color=SkyBlue')):
+            budget = 510 - len(('   0.00    0.00 ""' + suffix).encode())
+            for detail in ('x' * budget, 'é' * (budget // 2) + 'x' * (budget % 2)):
+                data = (f'[{product}]\ndetail = ' + json.dumps(detail)).encode()
+                settings = load_bytes(self.fs, data, 'config.toml')
+                self.assertEqual(getattr(settings, product).detail, detail)
+                with self.assertRaisesRegex(ConfigError, '510-byte'):
+                    load_bytes(self.fs, (f'[{product}]\ndetail = ' + json.dumps(detail + 'x')).encode(), 'config.toml')
+        self.assertEqual(list(self.root.iterdir()), [])
+
+    def test_placeholder_minimums_and_storm_image_overhead_are_counted(self):
+        for product, detail in (('quake', '<date>' * 50), ('volcano', '<lat>' * 70),
+                                ('storm', '<long>' * 70)):
+            with self.subTest(product=product), self.assertRaisesRegex(ConfigError, '510-byte'):
+                load_bytes(self.fs, (f'[{product}]\ndetail = ' + json.dumps(detail)).encode(), 'config.toml')
+        payload = b'[storm]\ndetail = "' + b'x' * 440 + b'"\nimage = "storm.png"\nimage_transparent = "{0,0,0}"'
+        with self.assertRaisesRegex(ConfigError, 'StormDetailList.*510-byte'):
+            load_bytes(self.fs, payload, 'config.toml')
+
+    def test_possible_variable_detail_keeps_runtime_guard(self):
+        from totalmarker.quake_geojson import render_body, parse_geojson
+        from .test_quake import feed, feature
+        settings = load_bytes(self.fs, b'[quake]\ndetail = "<location>"', 'config.toml')
+        events, _ = parse_geojson(feed(feature()), 6)
+        events = [replace(events[0], place='é' * 260)]
+        with self.assertRaisesRegex(FeedError, '510-byte'):
+            render_body(events, settings.quake)

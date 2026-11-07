@@ -42,7 +42,7 @@ from .comparison import plan as comparison_plan,reason as comparison_reason,rend
 from .comparison_ui import ComparisonReview,MonthComparisonReview
 from .help_ui import StudioHelp
 from .export_ui import RenderExport
-from .render_export import export_snapshot
+from .render_export import export_snapshot,default_destination
 from .binary_diagnostics import cached as cached_binary_evidence,store as store_binary_evidence
 from .workspace import Workspace, configuration_issues, open_view, save_view
 
@@ -922,7 +922,7 @@ class ConfiguratorApp(App):
             snapshot=self.workspace.latest if kind=='preview' else self.workspace.comparison_latest
             if snapshot is not None and not self.workspace.busy:
                 description=(snapshot.view.summary()+'\nRender completed: '+snapshot.completed_utc) if kind=='preview' else ('Three recorded '+('imagery-month' if snapshot.plan.parameter=='month' else 'framing')+' snapshots; epoch '+snapshot.plan.epoch)
-                destination=self.root/'config'/('export-'+kind+'-'+datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S'))
+                destination=default_destination(self.root,kind)
                 self.push_screen(RenderExport(kind,description,str(destination)),lambda path:self.start_export(kind,snapshot,path))
         elif action == 'compare':
             if self.workspace.previous and self.workspace.latest:
@@ -1141,7 +1141,7 @@ class ConfiguratorApp(App):
         self.query_one('#cancel-preview').display=True;self.query_one('#cancel-preview',Button).label='Cancel export'
         self.status('Preparing a durable copy of the retained snapshot… Existing destinations will not be overwritten.')
         try:
-            path=await export_snapshot(self.workspace,kind,snapshot,destination)
+            path=await export_snapshot(self.workspace,kind,snapshot,destination,project_root=self.root)
             self.status('Durable render exported to '+str(path)+'. Draft, native scenes and desktop selection unchanged.')
         except asyncio.CancelledError:
             if not self.leaving:self.status('Export cancelled; check the chosen destination before retrying. Prior snapshots and native files retained.')

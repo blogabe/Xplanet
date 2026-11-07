@@ -177,3 +177,46 @@ class LogViewTests(Sandbox):
         self.assertIn("night: 3 occurrence(s), 2 repeat(s) hidden", result.stdout)
         self.assertIn("Warning: distinct", result.stdout)
         self.assertFalse((self.root / ".state").exists())
+
+    def test_closed_pipe_is_clean_for_buffered_and_unbuffered_cli(self):
+        for unbuffered in (False, True):
+            for early_read in (False, True):
+                with self.subTest(unbuffered=unbuffered, early_read=early_read):
+                    data = b"first diagnostic\n" + (b"later diagnostic\n" * 20000 if early_read else b"")
+                    self.path.write_bytes(data)
+                    before = log_view._identity(self.path.stat())
+                    env = {**os.environ, "PYTHONPATH": str(PROJECT / "scripts"),
+                           "PYTHONUNBUFFERED": "1" if unbuffered else ""}
+                    command = [sys.executable, "-B", "-m", "totalmarker", "--root",
+                               str(self.root), "log-view"]
+                    if early_read:
+                        child = subprocess.Popen(command, env=env, stdout=subprocess.PIPE,
+                                                 stderr=subprocess.PIPE)
+                        self.assertEqual(child.stdout.readline(), b"first diagnostic\n")
+                        child.stdout.close()
+                    else:
+                        reader, writer = os.pipe()
+                        os.close(reader)
+                        try:
+                            child = subprocess.Popen(command, env=env, stdout=writer,
+                                                     stderr=subprocess.PIPE)
+                        finally:
+                            os.close(writer)
+                    try:
+                        self.assertEqual(child.wait(timeout=10), 0)
+                        self.assertEqual(child.stderr.read(), b"")
+                    finally:
+                        if child.poll() is None:
+                            child.kill(); child.wait()
+                        child.stderr.close()
+                    self.assertEqual(self.path.read_bytes(), data)
+                    self.assertEqual(log_view._identity(self.path.stat()), before)
+                    self.assertFalse((self.root / ".state").exists())
+
+    def test_output_pipe_error_is_not_misreported_as_log_read_error(self):
+        self.path.write_bytes(b"diagnostic\n")
+        class ClosedReader:
+            def write(self, text):
+                raise BrokenPipeError(32, "reader closed")
+        with self.assertRaises(BrokenPipeError):
+            log_view.view(self.fs, "logs/xplanet-error.log", ClosedReader(), io.StringIO())

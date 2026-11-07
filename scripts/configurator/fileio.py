@@ -75,7 +75,7 @@ class OwnedFiles:
         return retained
 
 
-def new_directory(destination,files):
+def new_directory(destination,files,*,parent_fd=None):
     """Exclusive private data snapshot; no overwrite or execution."""
     from pathlib import Path
     target=Path(destination).expanduser();files=tuple(files)
@@ -86,7 +86,9 @@ def new_directory(destination,files):
     if parent!=parent.resolve() or not parent.is_dir():raise ValueError('The parent must be an existing directory without symlink components.')
     if not files or len(files)>64 or len({name for name,_ in files})!=len(files):raise ValueError('Invalid native snapshot file set.')
     if any(Path(name).name!=name or name in ('','.','..') or not isinstance(data,bytes) for name,data in files):raise ValueError('Native snapshot names must be contained files.')
-    parent_fd=os.open(parent,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW);directory_fd=None;owned=None
+    owns_parent=parent_fd is None
+    if owns_parent:parent_fd=os.open(parent,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+    directory_fd=None;owned=None
     try:
         same_directory(parent,parent_fd)
         try:os.mkdir(target.name,mode=0o700,dir_fd=parent_fd)
@@ -106,7 +108,7 @@ def new_directory(destination,files):
         raise
     finally:
         if directory_fd is not None:os.close(directory_fd)
-        os.close(parent_fd)
+        if owns_parent:os.close(parent_fd)
 
 
 def native_error(error):

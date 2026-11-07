@@ -128,7 +128,9 @@ An external viewer may retain already loaded pixels. Nothing replaces wallpaper,
 starts desktop jobs or runs providers.
 
 **Export comparison sheet…** keeps the complete set as PNGs plus static local HTML.
-Source previews are temporary; exported copies survive editor cleanup. Exported
+The default destination is a new directory under `output/exports/`, created only
+after export confirmation. Source previews are temporary; exported copies survive
+editor cleanup. Native scenes still save under `config/scenes/`. Exported
 images are snapshots, not portable scene files or new observations. See
 [durable exports and limits](export.md).
 
