@@ -39,6 +39,26 @@ def internal_diagnostic(error):
 
 
 def main(argv=None):
+    try:
+        result = _main(argv)
+        # Surface buffered EPIPE here, rather than during interpreter shutdown.
+        sys.stdout.flush()
+        return result
+    except BrokenPipeError:
+        # A downstream reader (for example head) has finished. Redirect the
+        # existing descriptor so Python's final flush cannot emit a traceback.
+        try:
+            fd = os.open(os.devnull, os.O_WRONLY)
+            try:
+                os.dup2(fd, sys.stdout.fileno())
+            finally:
+                os.close(fd)
+        except (OSError, ValueError, AttributeError):
+            pass
+        return 0
+
+
+def _main(argv=None):
     parser = argparse.ArgumentParser(prog="totalmarker")
     parser.add_argument("--root", required=True, help="Existing isolated project root")
     parser.add_argument("--config", help="INI or TOML path within root (never rewritten)")
@@ -94,6 +114,8 @@ def main(argv=None):
         fields = asdict(result)
         print(json.dumps({**fields, "deferred_settings_count": len(settings.deferred_settings)}))
         return 1 if result.outcome == "failed" else 0
+    except BrokenPipeError:
+        raise
     except TotalMarkerError as error:
         print(json.dumps({"outcome": "failed", "message": str(error)}))
         return 2

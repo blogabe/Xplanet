@@ -25,7 +25,7 @@ class LauncherRenderTests(Sandbox):
         pgrep = self.desktop_bin / 'pgrep'
         pgrep.write_text('#!/bin/sh\nexit 1\n')
         pgrep.chmod(0o700)
-        self.capture = self.root / "dev/preview/capture.json"
+        self.capture = self.root / "output/preview/capture.json"
         self.mock = scripts / "mock-xplanet"
         self.mock.write_text(
             "#!/usr/bin/env python3\n"
@@ -53,7 +53,7 @@ class LauncherRenderTests(Sandbox):
                               env=environment, capture_output=True, text=True,
                               check=False)
 
-    def test_render_is_one_frame_and_all_declared_writes_are_under_dev(self):
+    def test_render_is_one_frame_and_all_declared_writes_are_under_output(self):
         result = self.invoke("render")
         self.assertEqual(result.returncode, 0, result.stderr)
         recorded = json.loads(self.capture.read_text())
@@ -64,12 +64,12 @@ class LauncherRenderTests(Sandbox):
         self.assertEqual(args[args.index("-searchdir") + 1], str(self.root))
         self.assertEqual(args[args.index("-config") + 1], str(self.root / "config/xp.conf"))
         self.assertEqual(args[args.index("-output") + 1],
-                         str(self.root / "dev/preview/earth-render.png"))
+                         str(self.root / "output/preview/earth-render.png"))
         self.assertEqual(args[args.index("-tmpdir") + 1],
-                         str(self.root / "dev/preview/tmp"))
+                         str(self.root / "output/preview/tmp"))
         self.assertEqual(args[args.index("-num_times") + 1], "1")
-        self.assertEqual(recorded["tmp"], str(self.root / "dev/preview/tmp"))
-        self.assertEqual(recorded["cache"], str(self.root / "dev/preview/cache"))
+        self.assertEqual(recorded["tmp"], str(self.root / "output/preview/tmp"))
+        self.assertEqual(recorded["cache"], str(self.root / "output/preview/cache"))
         self.assertNotIn("-fork", args)
 
     def test_preview_uses_xp_def_coordinates_projection_and_fixed_geometry(self):
@@ -82,18 +82,44 @@ class LauncherRenderTests(Sandbox):
         self.assertEqual(result.returncode, 0, result.stderr)
         recorded = json.loads(self.capture.read_text())
         args = recorded["args"]
-        self.assertEqual(args[args.index("-tmpdir") + 1], str(self.root / "dev/preview/tmp"))
-        self.assertEqual(recorded["tmp"], str(self.root / "dev/preview/tmp"))
-        self.assertEqual(recorded["cache"], str(self.root / "dev/preview/cache"))
+        self.assertEqual(args[args.index("-tmpdir") + 1], str(self.root / "output/preview/tmp"))
+        self.assertEqual(recorded["tmp"], str(self.root / "output/preview/tmp"))
+        self.assertEqual(recorded["cache"], str(self.root / "output/preview/cache"))
         self.assertFalse((self.root / ".state").exists())
         self.assertEqual(args[args.index("-longitude") + 1], "-21.91")
         self.assertEqual(args[args.index("-latitude") + 1], "12.5")
         self.assertEqual(args[args.index("-projection") + 1], "orthographic")
         self.assertEqual(args[args.index("-geometry") + 1], "1920x1080")
         self.assertEqual(args[args.index("-output") + 1],
-                         str(self.root / "dev/preview/earth-manual.png"))
+                         str(self.root / "output/preview/earth-manual.png"))
         self.assertEqual(args[args.index("-num_times") + 1], "1")
         self.assertNotIn("-fork", args)
+
+    def test_render_preserves_legacy_preview_exports_and_native_scenes(self):
+        legacy=self.root/'dev/preview/old.png';legacy.parent.mkdir(parents=True);legacy.write_bytes(b'old preview')
+        export=self.root/'output/exports/keep/preview.png';export.parent.mkdir(parents=True);export.write_bytes(b'user export')
+        scene=self.root/'config/scenes/keep.conf';scene.parent.mkdir();scene.write_bytes(b'user scene')
+        for command in ('preview','render'):
+            result=self.invoke(command);self.assertEqual(result.returncode,0,result.stderr)
+        self.assertEqual(legacy.read_bytes(),b'old preview');self.assertEqual(export.read_bytes(),b'user export')
+        self.assertEqual(scene.read_bytes(),b'user scene')
+
+    def test_preview_refuses_linked_directories_and_output_files(self):
+        outside=self.base/'outside';outside.mkdir();sentinel=outside/'keep';sentinel.write_bytes(b'outside')
+        for relative in ('output','output/preview','output/preview/tmp','output/preview/cache','output/preview/earth-manual.png'):
+            with self.subTest(relative=relative):
+                target=self.root/relative;target.parent.mkdir(parents=True,exist_ok=True)
+                target.symlink_to(outside if relative.rsplit('/',1)[-1]!='earth-manual.png' else sentinel)
+                result=self.invoke('preview');self.assertEqual(result.returncode,2,result.stderr)
+                self.assertIn('symlink',result.stderr);self.assertFalse(self.capture.exists())
+                self.assertEqual(list(outside.iterdir()),[sentinel]);self.assertEqual(sentinel.read_bytes(),b'outside')
+                target.unlink()
+                if (self.root/'output').exists():shutil.rmtree(self.root/'output')
+
+    def test_preview_refuses_non_directory_parent_without_overwrite(self):
+        target=self.root/'output';target.write_bytes(b'user file')
+        result=self.invoke('preview');self.assertEqual(result.returncode,2,result.stderr)
+        self.assertEqual(target.read_bytes(),b'user file');self.assertFalse(self.capture.exists())
 
     def test_preview_requires_longitude_from_xp_def_before_launch(self):
         config = self.root / "config/xp.def"
@@ -224,7 +250,7 @@ class LauncherRenderTests(Sandbox):
             "-date_format=%D at %r", "-color=green2",
             "-geometry=1600x900+12-34",
         ])
-        self.assertFalse((spaced / "dev/preview").exists())
+        self.assertFalse((spaced / "output/preview").exists())
         failed = subprocess.run([str(wrapper), "restart"], cwd=self.base,
                                 env={**environment, "MOCK_EXIT": "37"},
                                 capture_output=True, text=True, check=False)

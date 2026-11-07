@@ -87,7 +87,7 @@ class MonthlyMapTests(Sandbox):
         self.assertEqual(self.chosen.read_bytes(), before)
         self.assertIn("Earth map unchanged", self.run_earth().stdout)
 
-    def test_preflight_unchanged_map_needs_no_write_permission(self):
+    def test_preflight_unchanged_map_needs_no_images_write_permission(self):
         self.link.unlink()
         self.link.symlink_to('../maps/world/' + self.filename)
         images = self.root / 'images'
@@ -195,3 +195,51 @@ class MonthlyMapTests(Sandbox):
         self.assertEqual(result.returncode,2,result.stderr)
         self.assertIn('unrecognized old map link',result.stderr)
         self.assertEqual(str(self.link.readlink()),old)
+
+    def test_unchanged_map_restart_refuses_unwritable_state_before_service_or_signal(self):
+        self.link.unlink()
+        self.link.symlink_to('../maps/world/' + self.filename)
+        definition = self.definition.read_text()
+        self.definition.write_text(definition + 'XPLANET_BIN=/usr/bin/true\n' +
+            'XPLANET_CONFIG=' + shlex.quote(str(self.root / 'config')) +
+            '\nXPLANET_PROJECTION=rectangular\nXPLANET_LONGITUDE=0\n')
+        (self.root / 'config/xp.conf').write_text('[earth]\n')
+        # Keep even the lifecycle lock private to this fixture.
+        runtime = self.base / 'runtime'
+        runtime.mkdir(mode=0o700)
+        getconf = self.bin / 'getconf'
+        getconf.write_text('#!/bin/sh\nprintf \"%s\\n\" ' + shlex.quote(str(runtime)) + '\n')
+        getconf.chmod(0o700)
+        trace = self.base / 'service-trace'
+        for name in ('launchctl', 'pgrep', 'kill'):
+            stub = self.bin / name
+            stub.write_text('#!/bin/sh\necho called >> ' + shlex.quote(str(trace)) + '\nexit 99\n')
+            stub.chmod(0o700)
+        state = self.root / '.state'
+        state.mkdir()
+        for directory in (state, state / 'totalmarker'):
+            if not directory.exists(): directory.mkdir()
+            directory.chmod(0o500)
+            try:
+                result = subprocess.run([str(self.root / 'scripts/xplanet.sh'), 'restart'],
+                    env={'PATH': f'{self.bin}:/usr/bin:/bin', 'TEST_MONTH': f'{self.current:02d}'},
+                    capture_output=True, text=True, timeout=10)
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertIn('state directory must be writable', result.stderr)
+                self.assertNotIn('rmdir', result.stderr)
+                self.assertFalse(trace.exists(), 'restart reached a service or signal operation')
+                self.assertEqual(self.link.readlink(), Path('../maps/world/' + self.filename))
+                self.assertFalse((state / 'totalmarker/map.lock.d').exists())
+            finally:
+                directory.chmod(0o700)
+
+    def test_lock_creation_failure_without_existing_lock_has_storage_guidance(self):
+        (self.root / '.state/totalmarker').mkdir(parents=True)
+        mkdir = self.bin / 'mkdir'
+        mkdir.write_text('#!/bin/sh\nexit 1\n')
+        mkdir.chmod(0o700)
+        result = self.run_earth()
+        self.assertEqual(result.returncode, 2)
+        self.assertIn('Cannot create Earth map lock', result.stderr)
+        self.assertIn('permissions and available storage', result.stderr)
+        self.assertNotIn('rmdir', result.stderr)

@@ -57,6 +57,8 @@ class ReleaseContentTests(unittest.TestCase):
             "tests/.env-data/token.json", "tests/result.log", "tests/private.key",
             "tests/private.pem", "tests/private.ini", "tests/module.pyc",
             "tests/module.pyo", "tests/module.pyd",
+            "output/preview/earth-render.png", "output/exports/copy/export.json",
+            "output/future-private-file.txt",
         )
         for name in unsafe:
             with self.subTest(name=name), self.assertRaisesRegex(RuntimeError, "unsafe source entry"):
@@ -74,7 +76,8 @@ class ReleaseContentTests(unittest.TestCase):
 
     def test_privacy_policy_rejects_force_tracked_private_fixture(self):
         from . import release_policy as release
-        for name in ("tests/.env.local", "tests/configurator/ui/.tmp/capture.json"):
+        for name in ("tests/.env.local", "tests/configurator/ui/.tmp/capture.json",
+                     "output/exports/copy/preview.png"):
             with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
                 private = root / name
@@ -97,6 +100,8 @@ class ReleaseContentTests(unittest.TestCase):
             "dev/reference/private/file",
             "dev/recovery/archive", "dev/validation/frame.png",
             "dev/todel/snapshot", "dev/preview/earth-render.png",
+            "output/preview/earth-manual.png", "output/preview/earth-render.png",
+            "output/exports/copy/export.json", "output/future-private-file.txt",
             "tests/.tmp/capture", "maps/personal.png",
             ".state/totalmarker/state.json", "logs/totalmarker/events.jsonl",
         )
@@ -166,6 +171,17 @@ class ReleaseContentTests(unittest.TestCase):
 
 
 class IndexedPrivacyTests(unittest.TestCase):
+    def test_force_added_output_is_rejected_from_actual_index_without_changing_bytes(self):
+        from .release_policy import index_text
+        for name in ('output/preview/earth-render.png','output/exports/copy/export.json','output/future.dat'):
+            with self.subTest(name=name),tempfile.TemporaryDirectory() as directory:
+                root=Path(directory);subprocess.run(['git','init','-q'],cwd=root,check=True)
+                (root/'.gitignore').write_text('/output/\n')
+                path=root/name;path.parent.mkdir(parents=True);path.write_bytes(b'private user output')
+                subprocess.run(['git','add','-f','--',name],cwd=root,check=True)
+                with self.assertRaisesRegex(RuntimeError,'unsafe source entry: '+name):index_text(root)
+                self.assertEqual(path.read_bytes(),b'private user output')
+
     def test_scan_uses_index_bytes_and_checks_all_paths(self):
         from .release_policy import index_text
         with tempfile.TemporaryDirectory() as directory:

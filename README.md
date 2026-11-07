@@ -100,7 +100,7 @@ with uv-managed Python available as an explicit choice.
 | `config [--prepare]` | Open the scene studio; explicitly prepare its isolated UI if needed |
 | `update` | Fast-forward Git, then reinstall Xplanet if the tap formula changed |
 | `start` / `stop` / `restart` | Start, stop, or restart the desktop display |
-| `preview` / `render` | Render the custom Earth configuration under `dev/preview/` |
+| `preview` / `render` | Render the custom Earth configuration under `output/preview/` |
 | `earth` | Select the current seasonal Earth map |
 | `clouds`, `quake`, `storm`, `volcano` | Refresh that product and its labels |
 | `label` | Refresh update labels without fetching a product |

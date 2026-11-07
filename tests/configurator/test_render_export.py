@@ -5,7 +5,7 @@ from unittest.mock import patch
 from configurator.comparison import plan,render_set
 from configurator.model import View,SAMPLE
 from configurator.workspace import Workspace
-from configurator.render_export import export_snapshot
+from configurator.render_export import export_snapshot,default_destination
 from tests.configurator import support_comparison as fixtures
 
 class RenderExportTests(unittest.IsolatedAsyncioTestCase):
@@ -90,3 +90,87 @@ class RenderExportTests(unittest.IsolatedAsyncioTestCase):
         cycle=self.root/'cycle';cycle.symlink_to(cycle)
         with self.assertRaises((ValueError,OSError)):await export_snapshot(self.workspace,'preview',snapshot,cycle/'new')
         self.assertFalse(self.workspace.busy)
+
+    async def test_default_preview_and_sheet_create_only_durable_parents_after_validation(self):
+        snapshot=await self.preview();preview=default_destination(self.root,'preview')
+        self.assertEqual(preview.parent,self.root/'output/exports');self.assertFalse(preview.parent.exists())
+        legacy=self.root/'config/export-preview-old';legacy.mkdir(parents=True);(legacy/'keep').write_bytes(b'old export')
+        scene=self.root/'config/scenes/keep.conf';scene.parent.mkdir();scene.write_bytes(b'user scene')
+        await export_snapshot(self.workspace,'preview',snapshot,preview,project_root=self.root)
+        self.assertEqual((preview/'preview.png').read_bytes(),snapshot.path.read_bytes())
+        for directory in (self.root/'output',preview.parent,preview):self.assertEqual(directory.stat().st_mode&0o777,0o700)
+        sheet=await render_set(self.workspace,plan(self.view),str(self.binary),config_bytes=SAMPLE.read_bytes())
+        destination=default_destination(self.root,'sheet')
+        await export_snapshot(self.workspace,'sheet',sheet,destination,project_root=self.root)
+        self.assertTrue((destination/'index.html').is_file());self.assertTrue((destination/'frame-3.png').is_file())
+        self.workspace.close();self.assertTrue((preview/'preview.png').is_file())
+        self.assertEqual((legacy/'keep').read_bytes(),b'old export');self.assertEqual(scene.read_bytes(),b'user scene')
+        self.assertFalse((self.root/'output/preview').exists())
+
+    async def test_cancelled_or_invalid_default_export_creates_no_parents(self):
+        snapshot=await self.preview();destination=default_destination(self.root,'preview')
+        task=asyncio.create_task(export_snapshot(self.workspace,'preview',snapshot,destination,project_root=self.root))
+        await asyncio.sleep(0);task.cancel()
+        with self.assertRaises(asyncio.CancelledError):await task
+        self.assertFalse((self.root/'output').exists())
+        snapshot.path.write_bytes(b'changed')
+        with self.assertRaises(ValueError):await export_snapshot(self.workspace,'preview',snapshot,destination,project_root=self.root)
+        self.assertFalse((self.root/'output').exists())
+
+    async def test_default_export_refuses_parent_links_files_existing_copy_and_custom_missing_parent(self):
+        snapshot=await self.preview();outside=self.root/'outside';outside.mkdir();(outside/'keep').write_bytes(b'outside')
+        for component in ('output','output/exports'):
+            target=self.root/component;target.parent.mkdir(exist_ok=True)
+            for linked in (True,False):
+                with self.subTest(component=component,linked=linked):
+                    if linked:target.symlink_to(outside,target_is_directory=True)
+                    else:target.write_bytes(b'not a directory')
+                    with self.assertRaises((ValueError,OSError)):
+                        await export_snapshot(self.workspace,'preview',snapshot,self.root/'output/exports/copy',project_root=self.root)
+                    self.assertEqual(list(outside.iterdir()),[outside/'keep']);self.assertEqual((outside/'keep').read_bytes(),b'outside')
+                    target.unlink()
+        destination=self.root/'output/exports/copy'
+        await export_snapshot(self.workspace,'preview',snapshot,destination,project_root=self.root)
+        before={p.name:p.read_bytes() for p in destination.iterdir()}
+        with self.assertRaises(ValueError):await export_snapshot(self.workspace,'preview',snapshot,destination,project_root=self.root)
+        self.assertEqual({p.name:p.read_bytes() for p in destination.iterdir()},before)
+        custom=self.root/'missing/copy'
+        with self.assertRaises(ValueError):await export_snapshot(self.workspace,'preview',snapshot,custom,project_root=self.root)
+        self.assertFalse(custom.parent.exists())
+
+    async def test_failed_default_export_cleans_only_new_empty_parents(self):
+        from configurator.fileio import OwnedFiles
+        snapshot=await self.preview();destination=self.root/'output/exports/copy'
+        with patch.object(OwnedFiles,'write',side_effect=OSError('injected failure')),self.assertRaises(OSError):
+            await export_snapshot(self.workspace,'preview',snapshot,destination,project_root=self.root)
+        self.assertFalse((self.root/'output').exists())
+        destination.parent.mkdir(parents=True);keep=destination.parent/'keep';keep.write_bytes(b'existing export')
+        with patch.object(OwnedFiles,'write',side_effect=OSError('injected failure')),self.assertRaises(OSError):
+            await export_snapshot(self.workspace,'preview',snapshot,destination,project_root=self.root)
+        self.assertEqual(keep.read_bytes(),b'existing export');self.assertFalse(destination.exists())
+
+    async def test_replaced_default_parent_is_refused_without_following_link(self):
+        import configurator.render_export as exports
+        snapshot=await self.preview();destination=self.root/'output/exports/copy';outside=self.root/'outside';outside.mkdir()
+        original=exports.new_directory
+        def moved(target,files,**kwargs):
+            destination.parent.rename(self.root/'retained-exports')
+            destination.parent.symlink_to(outside,target_is_directory=True)
+            return original(target,files,**kwargs)
+        with patch.object(exports,'new_directory',moved),self.assertRaises(ValueError):
+            await export_snapshot(self.workspace,'preview',snapshot,destination,project_root=self.root)
+        self.assertEqual(list(outside.iterdir()),[]);self.assertEqual(list((self.root/'retained-exports').iterdir()),[])
+
+    async def test_replaced_default_parent_real_directory_is_not_written(self):
+        import configurator.render_export as exports
+        snapshot=await self.preview();destination=self.root/'output/exports/copy'
+        original=exports.new_directory
+        def moved(target,files,**kwargs):
+            destination.parent.rename(self.root/'retained-exports')
+            destination.parent.mkdir();(destination.parent/'foreign').write_bytes(b'new owner')
+            return original(target,files,**kwargs)
+        with patch.object(exports,'new_directory',moved),self.assertRaises(ValueError):
+            await export_snapshot(self.workspace,'preview',snapshot,destination,project_root=self.root)
+        self.assertEqual(list(destination.parent.iterdir()),[destination.parent/'foreign'])
+        self.assertEqual((destination.parent/'foreign').read_bytes(),b'new owner')
+        self.assertEqual(list((self.root/'retained-exports').iterdir()),[])

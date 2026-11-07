@@ -7,7 +7,20 @@ import re
 from urllib.parse import urlsplit, urlunsplit
 
 from .errors import ConfigError, DownloadError
-from .marker_text import rgb_color_key
+from .marker_text import MAX_MARKER_LINE_BYTES, quoted_label, rgb_color_key, transparency_option
+
+
+def _check_detail_budget(key, detail, minimums, suffix):
+    """Reject only impossible rows; variable provider text is checked at emission."""
+    if not detail:
+        return
+    for placeholder, value in minimums.items():
+        detail = detail.replace("<" + placeholder + ">", value)
+    # Every emitted coordinate occupies at least seven characters per axis.
+    row = "   0.00    0.00 " + quoted_label(detail) + suffix
+    if len(row.encode("utf-8")) > MAX_MARKER_LINE_BYTES:
+        raise ConfigError(key + " cannot fit Xplanet's safe 510-byte marker-row limit; "
+                          "shorten detail text or style/image options")
 
 
 def https_url(value, *, allow_query=False):
@@ -789,6 +802,23 @@ def load_bytes(fs, raw, path):
         detail_color=token("StormColorDetail", "SkyBlue"),
         detail_align=token("StormAlignDetail", "Below"), image=simage,
         image_transparent=strans, track_enabled=storm_track == "on")
+    _check_detail_budget("VolcanoDetailList", volcano.detail,
+        {"lat": "   0.00", "long": "   0.00", "elevation": "", "elev": "",
+         "name": "", "location": ""},
+        f" color={volcano.detail_color} align={volcano.detail_align} image=none")
+    quake_colors = ((quake.detail_color_min, quake.detail_color_int,
+                     quake.detail_color_max, "White")
+                    if quake.detail_color == "Multi" else (quake.detail_color,))
+    _check_detail_budget("QuakeDetailList", quake.detail,
+        {"date": "2000-01-01", "time": "00:00:00", "lat": "   0.00",
+         "long": "   0.00", "depth": "   0.0", "mag": "0.0", "quality": "U",
+         "location": ""},
+        f" color={min(quake_colors, key=len)} align={quake.detail_align}")
+    storm_image = (f" image={storm.image}" + transparency_option(storm.image_transparent)
+                   if storm.image else "")
+    _check_detail_budget("StormDetailList", storm.detail,
+        {"lat": "   0.00", "long": "   0.00", "type": "", "name": "", "speed": "  0"},
+        f" align={storm.detail_align} color={storm.detail_color}{storm_image}")
     norad_enabled = get("NoradEnabled", "Off").lower()
     if norad_enabled not in {"on", "off"}:
         raise ConfigError("NoradEnabled must be On or Off")

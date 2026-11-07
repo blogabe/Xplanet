@@ -24,7 +24,7 @@ def check_source_paths(entries):
     """Keep personal config, development history and runtime outputs out."""
     allowed_config = {"config/earth.example", "config/xp.conf.example",
                       "config/xp.def.example", "config/totalmarker.example.toml"}
-    runtime = ("images/", "markers/", "arcs/", "satellites/", "logs/", ".state/")
+    runtime = ("images/", "markers/", "arcs/", "satellites/", "logs/", ".state/", "output/")
     for name, metadata in entries.items():
         if (private_source_path(name) or metadata.startswith("120000 ") or
                 name.startswith(runtime) or
