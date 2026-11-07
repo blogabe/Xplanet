@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 import subprocess
 
-from textual import work
+from textual import on, work
 from textual.worker import WorkerCancelled, WorkerFailed
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -28,6 +28,7 @@ from .library import save_named
 from .history import DraftHistory
 from .native_inspection import inspect_native,copy_unchanged
 from .moon_scales_ui import MoonScalesScreen
+from .installed_annotations import DATASETS as ANNOTATIONS, import_datasets, validate_text as annotation_count
 from .native_patch import NativePatch
 from .native_edit_ui import NativePatchPath,NativePatchScreen
 from .handoff_ui import HandoffScreen
@@ -259,6 +260,7 @@ class ConfiguratorApp(App):
         self.observations_id=self.document.view.observations_id
         for field in ('norad_id','eclipse_id','eclipse_window'):setattr(self,field,getattr(self.document.view,field))
         self.moon_scales=self.document.view.moon_scales
+        for key in ANNOTATIONS:setattr(self,key+'_text',getattr(self.document.view,key+'_text'))
         self.workspace.reset_captures(self.document.capture,self.document.observations,self.document.astronomy)
 
     def compose(self) -> ComposeResult:
@@ -487,6 +489,16 @@ class ConfiguratorApp(App):
                 yield Label('Route thickness: 1–5 whole pixels')
                 yield Input(number(self.document.view.route_width),id='route-width')
             yield Static('Surface degrees only; static annotations, not provider data, pixel/sky coordinates, travel trajectories or eclipse predictions.')
+            yield Label('Installed sky and planetary annotations')
+            for key,(_,_,_,label) in ANNOTATIONS.items():
+                with Vertical(id='control-'+key.replace('_','-'),classes='control'):
+                    yield Label(label)
+                    yield Select([('Off — retain imported data','off'),('On','on')],value=getattr(self.document.view,key),allow_blank=False,id=key.replace('_','-'))
+            yield Static('Sky: space mode only, declination degrees and right ascension hours. Apollo: Moon east-positive longitude. Mars: historical west-positive surface labels. Normal stars remain the renderer’s existing catalog.',id='annotation-context')
+            yield Static('',id='annotation-summary',markup=False)
+            yield Label('Installed xplanet data directory (explicit import only; source files unchanged)')
+            yield Input('',placeholder='/path/to/share/xplanet',id='annotation-source')
+            yield Button('Import selected annotations…',id='import-annotations')
             yield Static('Finite previews only; no provider requests or desktop changes.')
             with Vertical(id='control-geometry',classes='control'):
                 yield Label('Preview WIDTHxHEIGHT — up to 16,777,216 pixels, independent of texture aspect')
@@ -629,7 +641,7 @@ class ConfiguratorApp(App):
         except (OSError,ValueError) as exc:self.status('Recovery could not be restored: '+str(exc)+'. Original recovery material retained.')
 
     def on_select_changed(self, event: Select.Changed):
-        if self.controls_ready and event.select.id in ('camera-mode', 'orbit-paths', 'orbit-color', 'composition', 'target', 'projection', 'observer', 'framing', 'longitude-mode', 'north', 'time-mode', 'map-family', 'month', 'night', 'grid', 'label', 'places', 'routes', 'place-color', 'route-color', 'relief', 'relief-shadow', 'specular', 'clouds', 'quake-layer', 'volcano-layer', 'storm-layer', 'norad-layer', 'eclipse-layer'):
+        if self.controls_ready and event.select.id in ('sky-labels','sky-constellations','moon-sites','mars-names','camera-mode', 'orbit-paths', 'orbit-color', 'composition', 'target', 'projection', 'observer', 'framing', 'longitude-mode', 'north', 'time-mode', 'map-family', 'month', 'night', 'grid', 'label', 'places', 'routes', 'place-color', 'route-color', 'relief', 'relief-shadow', 'specular', 'clouds', 'quake-layer', 'volcano-layer', 'storm-layer', 'norad-layer', 'eclipse-layer'):
             self.capture_edit()
 
     def on_input_changed(self, event: Input.Changed):
@@ -648,12 +660,13 @@ class ConfiguratorApp(App):
         fields = {field.replace('-', '_'): self.query_one('#' + field, Input).value
                   for field in ('orbit-latitude','orbit-longitude','orbit-range','frame-x','frame-y','geometry', 'latitude', 'longitude', 'solar-hour', 'distance', 'rotation', 'radius', 'fov', 'utc', 'twilight', 'place-size', 'route-width', 'relief-scale', 'relief-shade', 'cloud-gamma', 'cloud-threshold', 'planet-shade', 'satellite-scale', 'orbit-width')}
         fields.update({field.replace('-', '_'): str(self.query_one('#' + field, Select).value)
-                       for field in ('camera-mode', 'orbit-paths', 'orbit-color', 'composition', 'target', 'projection', 'observer', 'framing', 'longitude-mode', 'north', 'time-mode', 'map-family', 'month', 'night', 'grid', 'label', 'places', 'routes', 'place-color', 'route-color', 'relief', 'relief-shadow', 'specular', 'clouds', 'quake-layer', 'volcano-layer', 'storm-layer', 'norad-layer', 'eclipse-layer')})
+                       for field in ('sky-labels','sky-constellations','moon-sites','mars-names','camera-mode', 'orbit-paths', 'orbit-color', 'composition', 'target', 'projection', 'observer', 'framing', 'longitude-mode', 'north', 'time-mode', 'map-family', 'month', 'night', 'grid', 'label', 'places', 'routes', 'place-color', 'route-color', 'relief', 'relief-shadow', 'specular', 'clouds', 'quake-layer', 'volcano-layer', 'storm-layer', 'norad-layer', 'eclipse-layer')})
         fields.update({field.replace('-', '_'):self.query_one('#'+field,TextArea).text for field in ('places-text','routes-text')})
         fields['capture_id']=self.capture_id
         fields['observations_id']=self.observations_id
         for field in ('norad_id','eclipse_id','eclipse_window'):fields[field]=getattr(self,field)
         fields['moon_scales']=self.moon_scales
+        for key in ANNOTATIONS:fields[key+'_text']=getattr(self,key+'_text')
         fields['renderer'] = self.query_one('#renderer', Input).value
         return fields
 
@@ -667,7 +680,7 @@ class ConfiguratorApp(App):
 
     def restore_fields(self, values):
         for field, value in values.items():
-            if field in ('capture_id','observations_id','moon_scales','norad_id','eclipse_id','eclipse_window'):
+            if field in ('capture_id','observations_id','moon_scales','norad_id','eclipse_id','eclipse_window',*(key+'_text' for key in ANNOTATIONS)):
                 setattr(self,field,value)
                 continue
             widget = self.query_one('#' + field.replace('_', '-'))
@@ -696,9 +709,14 @@ class ConfiguratorApp(App):
                  'Executable changes are relative to the local selection when this scene was opened; saved executables are never adopted.']
         for field, before, after in self.history.changes():
             role = 'local executable selection' if field == 'renderer' else ('active' if field in active else 'retained / currently inactive')
-            lines.append(f'{field.replace("_", " ").title()} ({role}): {before!r} → {after!r}')
+            if field in {key+'_text' for key in ANNOTATIONS}:
+                import hashlib
+                def note(value):return f'{len(value.encode())} bytes, SHA-256 {hashlib.sha256(value.encode()).hexdigest()}' if value else 'not imported'
+                lines.append(f'{field.replace("_", " ").title()} ({role}): {note(before)} → {note(after)}')
+            else:lines.append(f'{field.replace("_", " ").title()} ({role}): {before!r} → {after!r}')
         if not self.history.dirty:
             lines.append('No unsaved scene changes. A new copy can still be saved.')
+        if any(getattr(self,key+'_text') for key in ANNOTATIONS):lines.append('Save retains imported annotation bytes, original source hashes and attribution comments. The importer does not add the chosen local source path; retained comments may contain personal information or paths. Review the data and third-party terms before sharing exported scene copies.')
         if self.norad_id or self.eclipse_id:lines.append('Save retains associated astronomy bytes and provenance, including inactive captures. Active NORAD desktop handoff is unavailable; eclipse handoff requires matching Fixed UTC.')
         if self.observations_id:
             lines.append('Save includes frozen observation markers/arcs and referenced PNG icons (embedded image metadata unchanged), plus bounded provenance; review before sharing.')
@@ -727,7 +745,7 @@ class ConfiguratorApp(App):
         issues = self.current_issues()
         invalid = {issue.field for issue in issues if issue.severity == 'blocking'}
         active = view.active_fields()
-        for field, widget_type in [('camera-mode',Select),('orbit-latitude',Input),('orbit-longitude',Input),('orbit-range',Input),('frame-x',Input),('frame-y',Input),('geometry',Input),('moon-scales',Button),('orbit-paths',Select),('orbit-color',Select),('orbit-width',Input),('composition',Select),('satellite-scale',Input),('target',Select),('projection', Select), ('observer', Select), ('framing', Select),
+        for field, widget_type in [(key.replace('_','-'),Select) for key in ANNOTATIONS]+[('camera-mode',Select),('orbit-latitude',Input),('orbit-longitude',Input),('orbit-range',Input),('frame-x',Input),('frame-y',Input),('geometry',Input),('moon-scales',Button),('orbit-paths',Select),('orbit-color',Select),('orbit-width',Input),('composition',Select),('satellite-scale',Input),('target',Select),('projection', Select), ('observer', Select), ('framing', Select),
                                    ('longitude-mode',Select),('north',Select),('solar-hour',Input),('distance',Input),('rotation',Input),
                                    ('time-mode', Select), ('latitude', Input), ('longitude', Input),
                                    ('radius', Input), ('fov', Input), ('utc', Input), ('map-family', Select),
@@ -741,6 +759,13 @@ class ConfiguratorApp(App):
             visible = key in active or key in invalid
             self.query_one('#control-' + field).display = visible
             self.query_one('#' + field, widget_type).disabled = not visible
+        annotation_notes=[]
+        for key,(_,_,_,label) in ANNOTATIONS.items():
+            text=getattr(view,key+'_text')
+            if text:
+                try:count=annotation_count(text,key);annotation_notes.append(f'{label}: {count} frozen rows'+(' active' if key in view.uses_annotations() else ' retained/inactive'))
+                except ValueError:annotation_notes.append(label+': invalid retained data')
+        self.query_one('#annotation-summary',Static).update('\n'.join(annotation_notes) or 'No installed annotation data imported. Select a layer and explicitly import its local data.')
         self.query_one('#system-context',Static).update(('System mode uses bundled companions: '+', '.join(SYSTEMS[view.target])+'. Frame manually; per-body hiding is unavailable.' if view.uses_system() else 'System choices are retained but inactive for this target/map mode.' if view.composition=='system' else 'System appearance is available in space mode for Mars, Jupiter, Saturn, Uranus and Pluto. It does not isolate visible bodies.'))
         self.query_one('#orbit-context',Static).update('Approximate local orbit guides, parent held at scene epoch. Not spacecraft trails or event predictions; fixed-date sample coverage is checked by health.' if view.uses_orbits() else 'Orbital choices are retained; paths are currently off or inactive.')
         self.query_one('#orbit-context').display=view.uses_system()
@@ -953,6 +978,30 @@ class ConfiguratorApp(App):
                 self.status(str(exc))
         elif action == 'cancel':
             self.run_worker(self.action_cancel())
+
+    @on(Button.Pressed, '#import-annotations')
+    def import_annotations(self):
+        if self.workspace.busy:
+            self.status('Wait for the current finite operation before importing annotations.');return
+        keys=tuple(key for key in ANNOTATIONS if self.raw_fields()[key]=='on')
+        source=self.query_one('#annotation-source',Input).value.strip()
+        if not keys:
+            self.status('Select at least one installed annotation layer before importing.');return
+        self.run_worker(self._import_annotations(source,keys),group='annotations',exclusive=True)
+
+    async def _import_annotations(self,source,keys):
+        content=self.query_one('#content');content.disabled=True
+        try:
+            result=await self.workspace.file_operation(import_datasets,source,keys)
+            if asyncio.current_task().cancelling():raise asyncio.CancelledError
+            for key,text in result.items():setattr(self,key+'_text',text)
+            self.capture_edit()
+            self.status('Imported '+str(len(result))+' bounded annotation datasets into this draft. Sources unchanged; Save creates scene-owned copies, selection remains separate.')
+        except asyncio.CancelledError:
+            self.status('Annotation import cancelled; previous data retained.')
+        except (ValueError,OSError) as exc:
+            self.status('Annotation import refused: '+native_error(exc))
+        finally:content.disabled=False
 
     def use_moon_scales(self,value):
         if value is None:self.status('Moon override edits cancelled; draft unchanged.');return

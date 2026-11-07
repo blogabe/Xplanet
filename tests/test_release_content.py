@@ -42,7 +42,8 @@ class ReleaseContentTests(unittest.TestCase):
                        and "/" not in name[len("scripts/"):]}
         self.assertEqual(entrypoints, {"scripts/xplanet.sh", "scripts/xp-setup.sh",
                                        "scripts/xp-bootstrap.sh",
-                                       "scripts/run-totalmarker", "scripts/run-configurator"})
+                                       "scripts/run-totalmarker", "scripts/run-configurator",
+                                       "scripts/import-satellite-icons"})
         self.assertFalse(any(name.startswith("examples/") and name.endswith(".ini")
                              for name in names))
 

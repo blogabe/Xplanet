@@ -254,3 +254,11 @@ dated eclipse paths. NORAD is Now-only for editor preview; eclipse display requi
 matching Fixed UTC. Inactive captures remain saved, but active NORAD desktop handoff
 is refused because runtime expiry is not enforced. No producer refresh or automatic
 activation occurs. See [capture steps, time policy and limits](astronomy-capture.md).
+
+## Installed sky and planetary labels
+
+Use the [installed annotation workflow](installed-annotations.md) for bright-star
+labels, constellation lines, Apollo sites and historical Mars names. Import is
+explicit and read-only for the installed package; saved scenes own bounded snapshots.
+See the [advanced astronomy assessment](advanced-astronomy-assessment.md) for the
+separate atmosphere, flyby and external-ephemeris prerequisites.

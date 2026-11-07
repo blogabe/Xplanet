@@ -5,6 +5,8 @@
 - [Install](../README.md#install-on-macos) and [first-run sequence](management.md#quick-start)
 - [Terminal management](management.md): setup, updates, desktop control and saved health
 - [Python runtime](python-runtime.md): explicit Homebrew/uv interpreter selection
+- [Installed satellite icons](installed-satellite-icons.md): explicit local import with source receipts
+- [Resources and prerequisites](resources.md): installed data, project assets, lookup and optional features
 - [Configuration examples](../examples/README.md): recipes and native templates
 - [TotalMarker independently](totalmarker-standalone.md): data generation without desktop setup
 - [Data operations](technical-notes.md) and [desktop troubleshooting](management.md#troubleshooting)
@@ -13,6 +15,8 @@
 
 - [Configurator user guide](configurator/user-guide.md): workflow, keys, recovery and safety
 - [Configurator topic index](configurator/README.md): detailed feature guides
+- [Installed sky and planetary annotations](configurator/installed-annotations.md): explicit frozen local datasets
+- [Advanced astronomy assessment](configurator/advanced-astronomy-assessment.md): prerequisites and finite-workflow limits
 - [Control reference](configurator/reference.md) and [stock scenes](configurator/stock-scenes.md)
 - [Reviewed selection / Apply](configurator/apply-design.md): selection is separate from restart
 

@@ -36,7 +36,7 @@ class SceneExchange(ModalScreen[tuple|None]):
                 yield Static('No current preview is attached automatically. The selected PNG is an illustration, not verified to match the saved scene. Metadata is stripped; personal labels/pixels remain. Review before sharing.')
             else:
                 yield Static('Import preserves the current draft. After success you may choose Open separately; replacing a dirty draft still requires explicit confirmation.')
-            yield Static('Bundled maps stay references. Exchange v1 refuses all retained provider captures, including disabled ones. Hashes verify consistency, not authenticity; review user-authored annotations before sharing.')
+            yield Static('Bundled maps stay references. Exchange v1 refuses all retained provider captures, including disabled ones. Hashes verify consistency, not authenticity; review labels, retained attribution comments and imported datasets’ third-party terms before sharing. Comments may contain personal information or paths.')
             yield Static('',id='exchange-message',markup=False)
             with Horizontal():
                 yield Button('Create archive copy' if self.mode=='export' else 'Import as new copy',id='exchange-confirm',variant='primary')

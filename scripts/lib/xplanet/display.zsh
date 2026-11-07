@@ -146,9 +146,12 @@ prepare_preview_output() {
 }
 
 render_frame() (
+    local renderer="${XPLANET_BIN:a}" geometry="$1" output="$2" temporary="$3"
+    # Xplanet checks cwd before -searchdir. Use the same checkout cwd as the
+    # custom desktop job, regardless of where preview/render was invoked.
+    cd -- "$project_root" || fail "cannot enter project root for rendering"
     renderer_numeric_locale
-    local geometry="$1" output="$2" temporary="$3"
-    "$XPLANET_BIN" -body earth \
+    "$renderer" -body earth \
         -searchdir "$project_root" \
         -config "$project_root/config/xp.conf" \
         -projection "$XPLANET_PROJECTION" \

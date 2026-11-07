@@ -273,21 +273,8 @@ manage_xplanet() {
                       management_set_result cancelled "Python selection cancelled; prior choice retained." ;;
                    *) management_set_result error "Python selection failed; prior choice retained." ;;
                esac ;;
-            9) management_section "Renderer diagnostics"
-               print -- 'Explicitly run the selected renderer version probe and record private support evidence.'
-               print -- 'No provider refresh, desktop start or service changes. Use Help for diagnostic switches.'
-               if management_confirm "Capture renderer support now?"; then
-                   management_details=true
-                   "$script_dir/xplanet.sh" diagnostics
-                   result=$?
-                   case "$result" in
-                       0) management_set_result success "Renderer support captured; running process not identified." ;;
-                       1) management_set_result warning "Diagnostic completed; renderer support remains unknown." ;;
-                       *) management_set_result error "Renderer inspection failed (exit $result); review details above." ;;
-                   esac
-               else
-                   management_set_result cancelled "Renderer diagnostic was not run."
-               fi ;;
+            9) load_helpers management-troubleshooting
+               management_troubleshooting || return 0 ;;
             10) management_section "Help"
                 management_details=true
                 "$script_dir/xplanet.sh" --help

@@ -14,6 +14,7 @@ import tempfile
 from .cloud_capture import FrozenCloud, IMAGE_FILE, META_FILE, IMAGE_LIMIT, META_LIMIT, describe_capture
 from .astronomy_capture import FrozenAstronomy,FILES as ASTRONOMY_FILES,META_LIMIT as ASTRONOMY_META_LIMIT,LIMIT as ASTRONOMY_LIMIT,ICON_LIMIT as ASTRONOMY_ICON_LIMIT,ICON_NAME as ASTRONOMY_ICON_NAME,payload_names as astronomy_payload_names,describe as describe_astronomy
 from .geography import PLACE_FILE, ROUTE_FILE
+from .installed_annotations import DATASETS as ANNOTATIONS, LIMIT as ANNOTATION_LIMIT
 from .observation_capture import FrozenObservations,PRODUCTS as OBS_PRODUCTS,META_FILE as OBS_META,payload_names,describe as describe_observations,TEXT_LIMIT,ICON_LIMIT
 from totalmarker.paths import RootFS
 from .cloud_capture import read_stable
@@ -463,6 +464,7 @@ def read_bounded(fd,bound):
 def saved_limit(name,prefix):
     short=name[len(prefix):] if prefix and name.startswith(prefix) else name
     if ASTRONOMY_ICON_NAME.fullmatch(short):return ASTRONOMY_ICON_LIMIT
+    if short in {row[1] for row in ANNOTATIONS.values()}:return ANNOTATION_LIMIT
     if short==ORIGIN_FILE:return 256
     if short==IMAGE_FILE:return IMAGE_LIMIT
     if short==META_FILE:return META_LIMIT
@@ -516,6 +518,9 @@ def open_view(source):
             if name==def_name and contents[name].startswith(tuple((header+'\n').encode() for header,version in SCENE_HEADERS.items() if version>=4)):
                 lines=contents[name].split(b'\n')
                 if contents[name].startswith(tuple((header+'\n').encode() for header,version in SCENE_HEADERS.items() if version>=15)) and f'XPLANET_ORIGIN_FILE={prefix}{ORIGIN_FILE}'.encode() in lines:names.append(prefix+ORIGIN_FILE)
+                if contents[name].startswith(tuple((header+'\n').encode() for header,version in SCENE_HEADERS.items() if version>=17)):
+                    for key,(_,filename,_,_) in ANNOTATIONS.items():
+                        if f'XPLANET_{key.upper()}_FILE={prefix}{filename}'.encode() in lines:names.append(prefix+filename)
                 for field,filename in (('XPLANET_PLACES_FILE',PLACE_FILE),('XPLANET_ROUTES_FILE',ROUTE_FILE)):
                     if f'{field}={prefix}{filename}'.encode() in lines:names.append(prefix+filename)
                 if contents[name].startswith(tuple((header+'\n').encode() for header,version in SCENE_HEADERS.items() if version>=6)) and any(re.fullmatch(b'XPLANET_CLOUD_CAPTURE=[0-9a-f]{64}',line) for line in lines):
@@ -539,6 +544,7 @@ def open_view(source):
         same_directory(directory,directory_fd)
         return replace(parse_saved_view(contents[def_name],contents[conf_name],
                                         places=contents.get(prefix+PLACE_FILE),routes=contents.get(prefix+ROUTE_FILE),
+                                        annotations={key:contents[prefix+row[1]] for key,row in ANNOTATIONS.items() if prefix+row[1] in contents},
                                         capture=FrozenCloud(contents[prefix+IMAGE_FILE],contents[prefix+META_FILE]) if prefix+IMAGE_FILE in contents else None,
                                         observations=FrozenObservations.from_files(contents,prefix) if prefix+OBS_META in contents else None,
                                         origin=contents.get(prefix+ORIGIN_FILE),asset_prefix=prefix,astronomy=tuple(FrozenAstronomy.from_files(contents,product,prefix) for product in ASTRONOMY_FILES if prefix+f'frozen-{product}.json' in contents)),source=selected if named else directory,named_source=named,native_files=tuple(contents.items()))

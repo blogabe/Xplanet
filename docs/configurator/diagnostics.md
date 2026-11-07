@@ -74,6 +74,25 @@ is normal search behavior, not a failed data source. A reported found path is no
 independent proof that the image decoded correctly. Unsupported log formats or
 missing rows leave resource resolution unknown.
 
+The same explicit report also lists up to 32 relevant file requests from the
+scene's generated configuration and arguments. Sky markers/arcs and per-body
+markers/arcs keep their different roles. For each request it checks metadata for
+at most four candidates in the known project and private preview roots, without
+reading asset contents or following child symlinks. An explicit root itself may
+resolve through a symlink. Installed data directories are not inferred from the
+binary path, and renderer-reported paths are displayed without opening them.
+
+Known missing project/scene inputs are distinguished from unknown stock lookup.
+A reported path that differs from an expected input, or another known local copy,
+is labeled **possible shadowing** or **potentially not selected**. Matches are by
+filename; the raw log must establish context before attributing a path to a role.
+This is not an emulation of the renderer's complete search order. Truncated logs,
+more than 128 recognized lookup rows or unsupported formats cannot prove absence.
+The additional resource report is limited to 16,384 characters with explicit omission.
+Metadata is sampled after the attempt, not a lease on the bytes used by the renderer.
+See [resource ownership and prerequisites](../resources.md) for installed examples,
+project assets and optional feature requirements.
+
 The report separately records the process outcome, PNG signature and available
 IHDR dimensions. Those do not certify the complete PNG, every renderer feature,
 all incidental-body textures or astronomical accuracy. Raw warnings remain visible;

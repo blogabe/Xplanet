@@ -66,3 +66,7 @@
 
 # Private generated previews and durable user exports, never release inputs.
 /output/
+
+# Explicit optional installed-icon import tool and public guide.
+!/scripts/import-satellite-icons
+!/docs/installed-satellite-icons.md

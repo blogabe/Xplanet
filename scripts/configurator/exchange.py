@@ -18,7 +18,7 @@ from .workspace import open_view, renderer_path
 
 LIMIT = 20 * 1024 * 1024
 PREVIEW_LIMIT = 16 * 1024 * 1024
-MAX_FILES = 10
+MAX_FILES = 14
 PORTABLE_ROOT = '/xplanet-exchange/assets'
 PORTABLE_RENDERER = '/xplanet-exchange/renderer'
 

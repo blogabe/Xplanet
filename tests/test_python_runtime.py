@@ -1,4 +1,5 @@
 """The existing command wrappers require a supported interpreter in sparse PATHs."""
+import json
 import subprocess
 import shutil
 import sys
@@ -173,3 +174,76 @@ class PythonRuntimeTests(Sandbox):
         self.assertEqual(result.returncode, 2)
         self.assertEqual(result.stdout, "")
         self.assertIn("not an executable Python 3.11+", result.stderr)
+
+    def test_caller_checkout_cannot_shadow_totalmarker_or_stdlib(self):
+        environment = {"PATH": "/usr/bin:/bin", "HOME": str(self.root),
+                       "TOTALMARKER_PYTHON": sys.executable}
+        for name in ("totalmarker", "json"):
+            with self.subTest(module=name):
+                collision = self.base / (name + ".py")
+                collision.write_text("raise RuntimeError('caller module was imported')\n")
+                try:
+                    result = subprocess.run([str(self.launcher), "--help"],
+                                            cwd=self.base, env=environment,
+                                            capture_output=True, text=True, timeout=10)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertIn("clouds", result.stdout)
+                    self.assertNotIn("caller module", result.stderr)
+                finally:
+                    collision.unlink()
+        package = self.base / "totalmarker"
+        package.mkdir()
+        (package / "__init__.py").write_text("raise RuntimeError('other checkout imported')\n")
+        result = subprocess.run([str(self.launcher), "--help"], cwd=self.base,
+                                env=environment, capture_output=True, text=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("clouds", result.stdout)
+
+    def test_inherited_pythonpath_and_user_site_do_not_enter_runtime(self):
+        inherited = self.base / "inherited python path"
+        inherited.mkdir()
+        sentinel = self.base / "startup-ran"
+        (inherited / "sitecustomize.py").write_text(
+            "from pathlib import Path\nPath(" + repr(str(sentinel)) + ").write_text('ran')\n")
+        (inherited / "json.py").write_text("raise RuntimeError('inherited module imported')\n")
+        # A tiny local package records startup flags without importing any app dependencies.
+        (self.root / "scripts/totalmarker").unlink()
+        package = self.root / "scripts/totalmarker"
+        package.mkdir()
+        (package / "__init__.py").write_text("")
+        (package / "__main__.py").write_text(
+            "import json, os, sys\nprint(json.dumps({'safe_path': sys.flags.safe_path, "
+            "'no_user_site': sys.flags.no_user_site, 'cwd': os.getcwd(), 'args': sys.argv[1:]}))\n")
+        result = subprocess.run([str(self.launcher), "health", "--json"], cwd=self.base,
+                                env={"PATH": "/usr/bin:/bin", "HOME": str(self.root),
+                                     "TOTALMARKER_PYTHON": sys.executable,
+                                     "PYTHONPATH": str(inherited) + ":."},
+                                capture_output=True, text=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(sentinel.exists(), "inherited startup code ran during Python selection or CLI")
+        recorded = json.loads(result.stdout)
+        self.assertTrue(recorded["safe_path"])
+        self.assertTrue(recorded["no_user_site"])
+        self.assertEqual(recorded["cwd"], str(self.base))
+        self.assertEqual(recorded["args"], ["--root", str(self.root), "--config",
+                                             "config/totalmarker.toml", "health", "--json"])
+
+    def test_test_runner_uses_only_selected_checkout_modules(self):
+        tests = self.root / "tests"
+        tests.mkdir()
+        (tests / "__init__.py").write_text("")
+        (tests / "run_core.py").write_text(
+            "import json, os, sys\nprint(json.dumps({'cwd': os.getcwd(), "
+            "'safe_path': sys.flags.safe_path, 'no_user_site': sys.flags.no_user_site}))\n")
+        collision = self.base / "tests.py"
+        collision.write_text("raise RuntimeError('wrong test runner')\n")
+        result = subprocess.run([str(self.launcher), "--test"], cwd=self.base,
+                                env={"PATH": "/usr/bin:/bin", "HOME": str(self.root),
+                                     "TOTALMARKER_PYTHON": sys.executable,
+                                     "PYTHONPATH": str(self.base)},
+                                capture_output=True, text=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        recorded = json.loads(result.stdout)
+        self.assertEqual(recorded["cwd"], str(self.root))
+        self.assertTrue(recorded["safe_path"])
+        self.assertTrue(recorded["no_user_site"])
