@@ -57,6 +57,12 @@ For TotalMarker-only use, including Linux, see
 
 ## Maps and configuration
 
+Resources come from different places: the installed Xplanet package supplies its
+stock data, this checkout supplies additional textures, and TotalMarker generates
+current-data overlays. A compiled feature, an available file and a configured
+scene are separate requirements. See [resources and prerequisites](docs/resources.md)
+for lookup rules, optional data and the limits of packaged examples.
+
 The stock configuration uses `earth.jpg` and `night.jpg` from the installed
 [Xplanet data directory](https://xplanet.sourceforge.net/README). It includes
 Earth, quake, volcano and storm marker entries; generated files appear after

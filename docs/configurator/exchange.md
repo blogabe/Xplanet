@@ -47,8 +47,8 @@ PYTHONPATH=scripts python3 -m configurator.exchange --export /absolute/config/sc
 The destination must be a **new directory** in an existing real parent. The result
 is `new-package/scene.xplanet.zip`. Export also accepts a legacy generated scene
 directory containing `xp.def` and `xp.conf`. It reads only the loader's recognized
-native pair and associated places/routes/orbital-camera data, not neighboring
-files. Unsupported or hand-edited definitions are refused. Originals stay unchanged.
+native pair and associated places/routes/orbital-camera data and installed annotation
+snapshots, not neighboring files. Unsupported or hand-edited definitions are refused. Originals stay unchanged.
 
 An optional `--preview /absolute/preview.png` includes an illustrative PNG. It is
 not proof that the image matches the exported scene: render it deliberately and
@@ -72,8 +72,8 @@ the archive hash and original member hashes, without sender paths.
 
 ## Scope and privacy
 
-- Version 1 exchanges scene settings and supported user-authored places/routes and
-  camera data. It normalizes generated native files to the current recognized format;
+- Version 1 exchanges scene settings, supported user-authored places/routes,
+  camera data and imported installed annotation snapshots. It normalizes generated native files to the current recognized format;
   it is **not a byte-preserving native-file backup** or arbitrary-config importer.
 - Bundled maps, imagery, fonts and renderer binaries are **references only**, not
   redistributed. The recipient needs the corresponding compatible project assets
@@ -82,17 +82,19 @@ the archive hash and original member hashes, without sender paths.
 - Frozen provider captures are refused, including retained inactive captures. They
   are not silently stripped. Sharing those images/observations needs a separate
   provenance, embedded-metadata and redistribution policy.
-- Renderer and checkout paths, unrelated files, environment variables, provider
-  credentials and source filenames are not copied. User-authored names, route text
-  and rendered pixels are intentional content: inspect them before sharing. The tool
-  cannot infer whether a label contains personal information or a secret.
+- Generated renderer and checkout path fields, unrelated files, environment variables
+  and provider credentials are not copied. The chosen installed-source path is not
+  added, but dataset-relative names, source hashes, labels and attribution comments
+  are preserved. Comments, user-authored names, route text and rendered pixels may
+  themselves contain personal information, paths or secrets: inspect them before
+  sharing. The tool cannot infer which content is private.
 - Hashes establish internal consistency, **not authenticity or trust**. No signature,
   scientific accuracy claim, provider freshness claim or activation is implied.
 
 ## Untrusted archive boundary
 
 The format is a stored (uncompressed) ZIP with a canonical JSON manifest, SHA-256
-hashes and sizes. It is limited to 20 MiB and ten members; recognized native inputs
+hashes and sizes. It is limited to 20 MiB and fourteen members; recognized native inputs
 have their existing smaller limits. Deflated or encrypted archives, duplicates,
 subdirectories, links, special files, control-character names and unsupported native
 content are refused. Image decoding is bounded. Import never calls `extractall` and
@@ -104,3 +106,13 @@ attempt and preserves externally changed partial output for review.
 Use `python3 -m configurator.exchange --help` with `PYTHONPATH=scripts` for the
 complete command syntax. See [native preservation](import.md),
 [durable image exports](export.md) and the [user guide](user-guide.md).
+
+## Imported installed annotations
+
+Version 17 scenes can include scene-owned bright-star/constellation and Moon/Mars
+annotation snapshots, including inactive datasets. The importer does not add its
+chosen local source path; source-relative names, hashes, canonical data and attribution
+comments remain. Comments may themselves contain personal information or paths. These are third-party
+datasets, not newly MIT-licensed assets. Review their terms before sharing an
+archive. Exporting locally neither sends the archive nor grants redistribution
+rights. See [installed annotations](installed-annotations.md).

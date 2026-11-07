@@ -62,3 +62,9 @@ feature does not rewrite or reload existing jobs or provide a migration workflow
 
 For independent use without the macOS management/install flow, see
 [standalone TotalMarker](totalmarker-standalone.md).
+
+TotalMarker loads modules from the invoked checkout, ignoring inherited
+`PYTHONPATH`, the caller working directory and Python user-site packages. The
+interpreter probe uses the same isolation. `--test` additionally exposes
+that checkout’s root for its test package. Interpreter selection and CLI
+arguments are unchanged.

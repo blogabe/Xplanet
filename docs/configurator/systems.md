@@ -7,7 +7,7 @@ Choose a supported parent target in **space mode**, then select **System texture
 | Mars | Phobos, Deimos |
 | Jupiter | Io, Europa, Ganymede, Callisto |
 | Saturn | Mimas, Enceladus, Tethys, Dione, Rhea, Titan, Hyperion, Iapetus, Phoebe |
-| Uranus | Miranda only; other Uranian moons lack bundled maps |
+| Uranus | Miranda only; other bundled Uranian textures are not wired into this mode |
 | Pluto | Charon |
 
 The existing camera, origin, date, range, framing and rotation are unchanged.
@@ -94,6 +94,8 @@ Source files are never edited in place. `jupiter-europa-enlarged` and
 
 A wider Uranus view can expose unconfigured moons such as Ariel. The renderer may
 report a missing texture and still produce an image with fallback appearance.
+Ariel's bundled Celestia texture is not automatically selected for that body;
+file presence is different from scene coverage. See [planetary resources](planetary.md).
 Health explicitly warns about this coverage gap. No map is fabricated and the
 warning is retained in render diagnostics. Titan's known PNG profile warning can
 also appear when its map is actually decoded; the asset is not silently altered.

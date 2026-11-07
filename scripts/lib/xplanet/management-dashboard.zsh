@@ -120,7 +120,7 @@ management_saved_health() {
 # Xplanet build is historical: this reader does not probe an executable or
 # execute definitions. The explicit diagnostic validates current identity.
 management_binary_facts() {
-    management_binary='Build features not checked; choose Diagnostics (9)'
+    management_binary='Build features not checked; choose Troubleshooting (9)'
     local evidence="$project_root/.state/configurator/binary-evidence.json" folder size stamp outcome schema
     for folder in "$project_root/.state" "$project_root/.state/configurator"; do
         [[ -d "$folder" && ! -L "$folder" && "${folder:A}" == "$folder" ]] || return 0

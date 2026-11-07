@@ -58,3 +58,16 @@ where original retrieval metadata is unknown. The historical scene
 [goldens](fixtures/configurator/scenes/README.md) retain their hashes and versions;
 private development revision IDs are not public-history links. Do not regenerate
 fixture bytes to accommodate current parsers.
+
+## Explicit native resource lookup check
+
+With an already installed Xplanet binary supporting PNG, verify finite shell
+preview/render lookup against colliding maps:
+
+```sh
+PYTHONPATH=scripts:. python3 -B -m tests.native_renderer_cwd /absolute/path/to/xplanet
+```
+
+This uses disposable configurations, images and a temporary HOME under `/tmp`.
+It neither starts/stops the desktop nor reads or edits a working installation.
+The offline suite remains independent of a native renderer.

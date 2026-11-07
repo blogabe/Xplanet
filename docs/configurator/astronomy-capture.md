@@ -117,7 +117,8 @@ preserve this provenance. Existing ordinary same-day producer captures remain re
 
 ## Save, recovery, comparisons and desktop handoff
 
-New generated copies use scene format v16. Older recognized scenes still open
+Astronomy captures were introduced in scene format v16; new copies use the current
+scene format (v17 also retains installed annotations). Older recognized scenes still open
 without changing their source bytes and default these layers Off. Named pairs
 retain product-scoped metadata and payloads, for example:
 

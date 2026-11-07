@@ -4,7 +4,8 @@ from dataclasses import dataclass
 from datetime import datetime,timezone
 from pathlib import Path
 import hashlib,os,re,stat,sys
-from .model import Issue
+from .model import Issue, ROOT
+from .resource_diagnostics import describe as describe_resources
 
 LOG_LIMIT=32768
 
@@ -173,6 +174,8 @@ class ResourceEvidence:
     lookups:tuple
     png_signature:bool
     dimensions:tuple|None
+    resource_details:str=""
+    lookup_limited:bool=False
 
     def sections(self):
         found=tuple(dict.fromkeys(path for path,success in self.lookups if success))
@@ -180,16 +183,19 @@ class ResourceEvidence:
         return [safe('Diagnostic attempt: '+self.outcome+'; renderer exit '+str(self.exit_code)+'\n'+self.summary+'\nExecutable: '+str(self.renderer)),
                 'PNG signature observed: '+str(self.png_signature)+'; IHDR dimensions: '+(str(self.dimensions) if self.dimensions else 'unavailable')+'. This is not a full image-decoding or build certification.',
                 'Renderer-reported found paths (not independent proof of decoding):\n'+('\n'.join(safe(path) for path in found) if found else 'No recognized successful lookup rows; resolution remains unknown.'),
+                safe(self.resource_details),
                 f'Recognized not-found search attempts in the retained excerpt: {misses}. A search miss before a later successful lookup is normal, not a source failure.',
-                f'Lookup rows are limited to 128; this is not a complete resource inventory. Log bytes: {self.log_bytes}; excerpt truncated: {self.truncated}. Evidence is from this attempt, not a live watcher or a guarantee about another scene/binary.',
+                f'Lookup rows are limited to 128 (row limit reached: {self.lookup_limited}); this is not a complete resource inventory. Log bytes: {self.log_bytes}; excerpt truncated: {self.truncated}. Evidence is from this attempt, not a live watcher or a guarantee about another scene/binary.',
                 'Raw renderer evidence (bounded, controls escaped):\n'+safe(self.raw)]
 
 
 def resource_evidence(binary,view,stream,output,outcome,code):
-    raw,size,truncated=excerpt(stream);rows=[]
+    raw,size,truncated=excerpt(stream);rows=[];lookup_limited=False
     for line in raw.splitlines():
         match=re.fullmatch(r'Looking for (.{1,4096}) \.\.\. (found|not found)',line)
-        if match and len(rows)<128:rows.append((match[1],match[2]=='found'))
+        if match:
+            if len(rows)<128:rows.append((match[1],match[2]=='found'))
+            else:lookup_limited=True
     signature=False;dimensions=None
     try:
         with Path(output).open('rb') as image:header=image.read(24)
@@ -198,4 +204,5 @@ def resource_evidence(binary,view,stream,output,outcome,code):
             import struct
             dimensions=struct.unpack('>II',header[16:24])
     except OSError:pass
-    return ResourceEvidence(Path(binary),view.render_digest(),view.summary(),outcome,code,raw,size,truncated,tuple(rows),signature,dimensions)
+    details=describe_resources(view,tuple(rows),Path(output).parent,ROOT,incomplete=truncated or lookup_limited)
+    return ResourceEvidence(Path(binary),view.render_digest(),view.summary(),outcome,code,raw,size,truncated,tuple(rows),signature,dimensions,details,lookup_limited)

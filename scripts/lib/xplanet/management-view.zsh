@@ -242,7 +242,7 @@ ${management_heading}Maintenance${management_reset}"
     management_item 6 "Update"
     management_item 7 "Saved health"
     management_item 8 "Advanced Python"
-    management_item 9 "Diagnostics"
+    management_item 9 "Troubleshooting..."
     management_item 10 "Help"
     print -r -- "  q) Exit"
     print

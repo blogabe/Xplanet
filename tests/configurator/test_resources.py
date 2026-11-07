@@ -24,7 +24,7 @@ class GeometryTests(unittest.TestCase):
         self.assertEqual(parse_saved_view(raw,old.body()).view,old)
         with self.assertRaises(ValueError):parse_saved_view(raw.replace(b'800x600',b'1920x1080'),old.body())
         with self.assertRaises(ValueError):View().definition('/renderer',version=13)
-        current=View();definition=current.definition('/renderer').encode();self.assertIn(b'scene v16',definition)
+        current=View();definition=current.definition('/renderer').encode();self.assertIn(b'scene v17',definition)
         self.assertEqual(parse_saved_view(definition,current.body()).view,current)
 
 

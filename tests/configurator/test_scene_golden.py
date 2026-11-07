@@ -6,6 +6,7 @@ from pathlib import Path
 import unittest
 
 from configurator.model import View, parse_saved_view
+from configurator.installed_annotations import FIELDS as ANNOTATION_FIELDS
 from configurator.workspace import open_view
 
 FIXTURES = Path(__file__).resolve().parents[1]/'fixtures/configurator/scenes'
@@ -14,7 +15,7 @@ FIXTURES = Path(__file__).resolve().parents[1]/'fixtures/configurator/scenes'
 class NativeSceneGoldenTests(unittest.TestCase):
     def test_every_supported_historical_pair_preserves_bytes_and_meaning(self):
         manifest = json.loads((FIXTURES/'manifest.json').read_bytes())
-        self.assertEqual(set(manifest['versions']), {str(v) for v in range(2, 17)})
+        self.assertEqual(set(manifest['versions']), {str(v) for v in range(2, 18)})
         for version, record in manifest['versions'].items():
             with self.subTest(version=version):
                 folder = FIXTURES/('v'+version)
@@ -23,7 +24,7 @@ class NativeSceneGoldenTests(unittest.TestCase):
                     self.assertEqual(len(raw), record['files'][name]['bytes'])
                     self.assertEqual(hashlib.sha256(raw).hexdigest(), record['files'][name]['sha256'])
                 document = parse_saved_view(files['xp.def'], files['xp.conf'])
-                self.assertEqual(asdict(document.view), record['expected_fields'])
+                self.assertEqual(asdict(document.view), {**{key:getattr(View(),key) for key in ANNOTATION_FIELDS},**record['expected_fields']})
                 self.assertEqual(document.config, files['xp.conf'])
                 self.assertEqual(document.saved_renderer, '/path/to/xplanet')
                 reopened = open_view(folder/'xp.conf')

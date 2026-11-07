@@ -2,13 +2,16 @@
 set -eu
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
 project_root=$(CDPATH= cd -- "$script_dir/.." && pwd -P)
-export PYTHONPATH="$script_dir${PYTHONPATH:+:$PYTHONPATH}"
+# Load code from this checkout, never the caller directory or inherited module
+# paths. Keep the caller cwd for CLI path semantics; Python 3.11+ provides -P.
+export PYTHONPATH="$script_dir"
 export PYTHONDONTWRITEBYTECODE=1
+export PYTHONNOUSERSITE=1
 
 # Keep interpreter selection with the TotalMarker entry point. Explicit environment
 # overrides remain authoritative; a project selection is shared by CLI and new jobs.
 supported_python() {
-    [ -x "$1" ] && "$1" -B -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' \
+    [ -x "$1" ] && "$1" -P -s -B -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' \
         >/dev/null 2>&1
 }
 
@@ -100,10 +103,9 @@ case "${1:-}" in
     --test)
         [ "$#" -eq 1 ] || exit 2
         cd "$project_root"
-        export PYTHONNOUSERSITE=1
         export TZ=UTC
-        export PYTHONPATH="$project_root:$PYTHONPATH"
-        exec "$python_bin" -B -m tests.run_core
+        export PYTHONPATH="$script_dir:$project_root"
+        exec "$python_bin" -P -s -B -m tests.run_core
         ;;
 esac
-exec "$python_bin" -B -m totalmarker --root "$project_root" --config config/totalmarker.toml "$@"
+exec "$python_bin" -P -s -B -m totalmarker --root "$project_root" --config config/totalmarker.toml "$@"
