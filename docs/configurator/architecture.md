@@ -20,7 +20,7 @@ versioned xp.def and matching xp.conf. `shlex` tokenizes literal paths without
 expansion or execution. V8 adds explicit target; V7 adds composition. V6 adds a bounded frozen cloud asset and provenance; V5 adds whitelisted bundled layer settings; V4 adds bounded native surface
 annotation files; V3 adds map family/month, night texture, whole-degree
 twilight, grid and label; v2 camera/time and original foundation pairs remain
-explicit recognition cases with appearance defaults. V14 stores bounded preview geometry; V15 adds an optional frozen lunar camera row and frame-centre percentages; new copies use v16 with independent astronomy capture associations and a provenance-bound eclipse interval. Pre-v14 scenes retain 800×600; v14 preserves its stored dimensions. Saved
+explicit recognition cases with appearance defaults. V14 stores bounded preview geometry; V15 adds an optional frozen lunar camera row and frame-centre percentages; V16 adds independent astronomy capture associations and a provenance-bound eclipse interval. New copies use v17 with bounded scene-owned installed annotation files, independent sky/body choices and derived-file hashes. Pre-v14 scenes retain 800×600; v14 preserves its stored dimensions. Saved
 executables and asset roots are never adopted by the UI. Native files stay the
 scene record; there is no sidecar settings store.
 

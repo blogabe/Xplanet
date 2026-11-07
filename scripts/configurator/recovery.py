@@ -15,6 +15,7 @@ from .observation_capture import FrozenObservations,META_FILE as OBS_META
 from .astronomy_capture import FrozenAstronomy,FILES as ASTRONOMY_FILES,payload_names as astronomy_payload_names
 from .fileio import OwnedFiles,fingerprint,same_directory
 from .model import View,NUMERIC_FIELDS,choice_rules,recognized_body
+from .installed_annotations import FIELDS as ANNOTATION_FIELDS, DATASETS as ANNOTATIONS
 
 META_LIMIT=2*1024*1024
 BLOB_LIMIT=32*1024*1024
@@ -23,7 +24,8 @@ ENTRY_LIMIT=4096
 SESSION=re.compile('[0-9a-f]{32}')
 SHA=re.compile('[0-9a-f]{64}')
 ASTRONOMY_FIELDS={'norad_layer','norad_id','eclipse_layer','eclipse_id','eclipse_window'}
-LEGACY_FIELDS=(set(vars(View()))-ASTRONOMY_FIELDS)|{'renderer'}
+V16_FIELDS=(set(vars(View()))-ANNOTATION_FIELDS)|{'renderer'}
+LEGACY_FIELDS=V16_FIELDS-ASTRONOMY_FIELDS
 
 def digest(raw):return hashlib.sha256(raw).hexdigest()
 def encoded(value):return (json.dumps(value,sort_keys=True,ensure_ascii=True,allow_nan=False,separators=(',',':'))+'\n').encode()
@@ -36,9 +38,11 @@ def raw_fields(view=None,renderer=''):
 def validate_fields(values):
     if isinstance(values,dict) and set(values)==LEGACY_FIELDS:
         values={**{key:getattr(View(),key) for key in ASTRONOMY_FIELDS},**values}
+    if isinstance(values,dict) and set(values)==V16_FIELDS:
+        values={**{key:getattr(View(),key) for key in ANNOTATION_FIELDS},**values}
     if not isinstance(values,dict) or set(values)!=set(vars(View()))|{'renderer'}:raise ValueError('Unsupported recovery fields/version; originals retained.')
     for key,value in values.items():
-        if not isinstance(value,str) or len(value.encode('utf-8'))>256*1024 or any(not c.isprintable() and not (key in ('places_text','routes_text') and c in '\n\t') for c in value):raise ValueError('Unsafe or oversized recovery field: '+key)
+        if not isinstance(value,str) or len(value.encode('utf-8'))>256*1024 or any(not c.isprintable() and not (key in ('places_text','routes_text',*(key+'_text' for key in ANNOTATIONS)) and c in '\n\t') for c in value):raise ValueError('Unsafe or oversized recovery field: '+key)
     for key,allowed,_ in choice_rules():
         if values[key] not in allowed:raise ValueError('Unsupported recovery choice: '+key)
     for key in ('capture_id','observations_id','norad_id','eclipse_id'):
@@ -149,7 +153,7 @@ def metadata(fd,sha):
         if any(not isinstance(value[key],dict) or set(value[key])!=LEGACY_FIELDS for key in ('current','baseline')):raise ValueError('Unsupported legacy recovery fields; originals retained.')
         value={**value,'astronomy':{}}
     elif value['schema']!=2 or set(value)!=legacy_keys|{'astronomy'}:raise ValueError('Recovery checkpoint hash/schema mismatch.')
-    elif any(not isinstance(value[key],dict) or set(value[key])!=set(vars(View()))|{'renderer'} for key in ('current','baseline')):raise ValueError('Unsupported recovery fields/version; originals retained.')
+    elif any(not isinstance(value[key],dict) or set(value[key]) not in (V16_FIELDS,set(vars(View()))|{'renderer'}) for key in ('current','baseline')):raise ValueError('Unsupported recovery fields/version; originals retained.')
     value={**value,'current':dict(validate_fields(value['current'])),'baseline':dict(validate_fields(value['baseline']))}
     if type(value['at']) not in (int,float) or not math.isfinite(value['at']) or not 0<=value['at']<=32503680000:raise ValueError('Invalid recovery time.')
     if not isinstance(value['source'],str) or len(value['source'])>4096 or any(not c.isprintable() for c in value['source']):raise ValueError('Invalid source hint.')

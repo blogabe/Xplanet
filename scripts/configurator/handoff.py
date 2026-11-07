@@ -49,8 +49,9 @@ def command(view,binary,root,config,search,dimensions):
     if 'norad' in view.uses_astronomy():raise ValueError('NORAD desktop handoff is unavailable: runtime epoch expiry is not enforced. Turn the NORAD layer Off to retain its capture without displaying it.')
     prefix=Path(config).stem+'.'
     args=view.arguments(asset_prefix=prefix,geometry_override=dimensions)
-    if '-dynamic_origin' in args:
-        index=args.index('-dynamic_origin')+1;args[index]=str(Path(config).parent/args[index])
+    for option in ('-dynamic_origin','-marker_file','-arc_file'):
+        if option in args:
+            index=args.index(option)+1;args[index]=str(Path(config).parent/args[index])
     if args[-2:]!=['-geometry',dimensions]:raise ValueError('Preview argument contract changed; handoff must be reviewed.')
     args=[str(binary),*args[:-2],'-searchdir',str(root),'-searchdir',str(search),'-config',str(config),'-geometry',geometry(dimensions)]
     if view.time_mode=='fixed':args+=['-timewarp','0']

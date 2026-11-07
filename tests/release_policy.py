@@ -56,7 +56,7 @@ def index_text(root):
         if stage!='0':raise RuntimeError('Unmerged index entry: '+name)
         rows[name]=metadata.decode()
         path=PurePosixPath(name)
-        if path.suffix.lower() in TEXT_SUFFIXES or path.name in {'LICENSE','.gitignore','.gitattributes','run-totalmarker','run-configurator'}:text.append((name,identity))
+        if path.suffix.lower() in TEXT_SUFFIXES or path.name in {'LICENSE','.gitignore','.gitattributes','run-totalmarker','run-configurator','import-satellite-icons'}:text.append((name,identity))
         elif not name.startswith(('maps/','assets/')):binary.append((name,identity))
     check_source_paths(rows)
     # Binary fixtures are not decoded by the identifier scan. Bound their indexed

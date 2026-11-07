@@ -174,8 +174,10 @@ otherwise Xplanet sizes the desktop automatically. A selected revision uses its
 reviewed explicit geometry and scene arguments; invalid selection fails clearly.
 The `render` command saves a frame at the configured
 dimensions, while `preview` uses a fixed 1920×1080 size. Both render the custom
-Earth configuration, not a selected studio revision or unsaved draft. Use Preview
-in the configurator for a studio scene. `stop` signals
+Earth configuration, not a selected studio revision or unsaved draft. Both use
+the checkout as the renderer working directory, matching the custom desktop job;
+a same-named resource in the caller directory cannot replace the checkout’s map
+or overlay. Use Preview in the configurator for a studio scene. `stop` signals
 all current-user processes named `xplanet` or by the trusted configured renderer,
 including matching finite renders and other checkouts, and succeeds when none is running.
 It does not discover arbitrary executable names from historical scenes. It first removes the managed desktop job.
@@ -206,19 +208,38 @@ Management's binary line is historical evidence, not a current/running build che
 Setup and normal start do not automatically run this diagnostic. Saved TotalMarker
 health describes data sources, not compiled renderer capabilities.
 
-## Help and explicit diagnostics in management
+## Help and troubleshooting in management
 
-**9) Diagnostics** offers confirmation before running the existing selected-renderer
-version/support capture. It records private evidence without starting the desktop,
-refreshing providers or changing services. A completed but unrecognized/failed probe
-reports unknown support; execution/storage problems remain failures. Cancelling the
-confirmation runs nothing and returns directly to the menu.
+**9) Troubleshooting...** opens a small submenu. Opening it or highlighting an
+option does not read a log, resolve a renderer or run a probe.
+
+- **View renderer log** runs the existing read-only `log-view` command against
+  `logs/xplanet-error.log`. Repeated exact resize notices are counted, not removed
+  from the original log. An absent log gets a clear message without creating it.
+- **View saved renderer support** runs `diagnostics --show`, resolving the current
+  choice and reading existing evidence without executing Xplanet. Missing, stale
+  or unknown evidence remains distinct from inspection failure.
+- **Check renderer support now** asks for confirmation before running `diagnostics`.
+  It records private evidence without starting the desktop, refreshing providers
+  or changing services. An inconclusive probe reports unknown support, not missing
+  features. Cancelling the confirmation returns immediately to the submenu.
+- **Back to management** returns to the main screen; `b` is a shortcut. `q` exits
+  management from either screen.
+
+All completed reports, including the filtered renderer log, warnings, errors and
+missing-log messages, stay visible until **Press any key to continue** is acknowledged.
+Only then is the submenu redrawn. Already queued submission newlines do not dismiss
+reports. Ctrl-D exits; Ctrl-C interrupts with terminal restoration. There is no
+pause added to direct CLI commands. The submenu uses arrow/highlight-and-Enter
+navigation in capable terminals and numbered line input in compact/plain terminals.
+Scene-specific resource diagnosis remains **Diagnose resources** in Configurator;
+renderer support alone does not establish that a scene's files are available.
 
 **10) Help** (h shortcut) displays the same intent-grouped usage as `xplanet.sh --help`: scene
 exploration, installation/maintenance, desktop control, data refresh, diagnostics,
 housekeeping/development, and unavailable commands. Detailed switches and the
-studio guide remain in the linked subcommand help. Both long
-reports use the existing any-key continuation; Ctrl-D exits and Ctrl-C interrupts
+studio guide remain in the linked subcommand help. Help also
+uses the existing any-key continuation; Ctrl-D exits and Ctrl-C interrupts
 with terminal restoration. Arrows reach both entries; 1–9 and h highlight (h selects Help), Enter
 activates. q remains the immediate exit shortcut. Limited terminals accept a numbered
 line (10 for Help), or h followed by Enter. Merely opening/highlighting entries performs no probe.
@@ -240,9 +261,9 @@ wall-clock invocation order. A later explicit Start can follow Stop. The origina
 cause was not reproduced. This overlap correction does not prove that incident
 resolved; recurring failures still need their exact log and job state.
 
-**Xplanet build** summarizes the last recorded renderer diagnostic. Diagnostics (9)
-shows its reported compile-time features and raw `-version` output; it cannot
-recover the original compiler command. Menu entry does not probe the renderer.
+**Xplanet build** summarizes the last recorded renderer diagnostic. Troubleshooting (9)
+can show saved support or capture reported compile-time features and raw `-version`
+output; it cannot recover the original compiler command. Menu entry does not probe the renderer.
 **Custom setup** only counts `xp.def`, `xp.conf`, `earth` and `totalmarker.toml`;
 “existing” means all four are present, not validated. “Configurator: option 2” points
 to the editor menu entry, not a scene count. The custom configuration is the default

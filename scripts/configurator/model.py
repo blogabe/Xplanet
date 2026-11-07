@@ -7,6 +7,7 @@ from .cloud_capture import FrozenCloud, IMAGE_FILE, META_FILE
 from .observation_capture import FrozenObservations,PRODUCTS as OBS_PRODUCTS,names as observation_names
 from .astronomy_capture import FrozenAstronomy,FILES as ASTRONOMY_FILES
 from .geometry import DEFAULT_GEOMETRY,LEGACY_GEOMETRY,geometry
+from .installed_annotations import DATASETS as ANNOTATIONS, FIELDS as ANNOTATION_FIELDS, selected as selected_annotations, validate_text as validate_annotation
 from .geography import COLORS, PLACE_FILE, ROUTE_FILE, HEADERS, validate_rows, read_rows
 from pathlib import Path
 import re
@@ -55,7 +56,8 @@ SYSTEMS={parent:tuple(body for body,primary in MOON_PARENTS.items() if primary==
 # Longest configured moon periods in reviewed Xplanet 1.3.1 (days).
 SYSTEM_PERIOD_DAYS={'mars':1.2624407,'jupiter':16.6890184,'saturn':550.48,'uranus':1.41347925,'pluto':6.38723}
 MOON_SCALE_BODIES=tuple(body for members in SYSTEMS.values() for body in members)
-HEADER = '# Xplanet configurator scene v16; saving does not apply it.'
+HEADER = '# Xplanet configurator scene v17; saving does not apply it.'
+V16_HEADER = '# Xplanet configurator scene v16; saving does not apply it.'
 V15_HEADER = '# Xplanet configurator scene v15; saving does not apply it.'
 V14_HEADER = '# Xplanet configurator scene v14; saving does not apply it.'
 V13_HEADER = '# Xplanet configurator scene v13; saving does not apply it.'
@@ -80,7 +82,7 @@ LAYER_ASSETS = {
     'specular': 'maps/specular/specular.png',
     'clouds': 'maps/clouds/clouds_26Aug2011_2048.jpeg',
 }
-SCENE_HEADERS={HEADER:16,V15_HEADER:15,V14_HEADER:14,V13_HEADER:13,V12_HEADER:12,V11_HEADER:11,V10_HEADER:10,V9_HEADER:9,V8_HEADER:8,V7_HEADER:7,V6_HEADER:6,V5_HEADER:5,V4_HEADER:4,V3_HEADER:3,V2_HEADER:2}
+SCENE_HEADERS={HEADER:17,V16_HEADER:16,V15_HEADER:15,V14_HEADER:14,V13_HEADER:13,V12_HEADER:12,V11_HEADER:11,V10_HEADER:10,V9_HEADER:9,V8_HEADER:8,V7_HEADER:7,V6_HEADER:6,V5_HEADER:5,V4_HEADER:4,V3_HEADER:3,V2_HEADER:2}
 
 ORIGIN_FILE='camera.origin'
 LUNAR_BODY=('\n# Xplanet configurator lunar orbital observer v15.\n[moon]\nmap='+PLANET_MAPS['moon']+'\ngrid=false\n').encode()
@@ -88,7 +90,8 @@ LUNAR_BODY=('\n# Xplanet configurator lunar orbital observer v15.\n[moon]\nmap='
 LOCAL_REFERENCES=(('marker_file',PLACE_FILE),('arc_file',ROUTE_FILE),('cloud_map',IMAGE_FILE),
                   *((key,name) for product in OBS_PRODUCTS for key,name in
                     (('marker_file',observation_names(product)[0]),('arc_file',observation_names(product)[1]))),
-                  ('satellite_file',ASTRONOMY_FILES['norad'][0]),('marker_file',ASTRONOMY_FILES['eclipse'][0]),('arc_file',ASTRONOMY_FILES['eclipse'][1]))
+                  ('satellite_file',ASTRONOMY_FILES['norad'][0]),('marker_file',ASTRONOMY_FILES['eclipse'][0]),('arc_file',ASTRONOMY_FILES['eclipse'][1]),
+                  ('marker_file',ANNOTATIONS['moon_sites'][1]),('marker_file',ANNOTATIONS['mars_names'][1]))
 
 LEGACY_HEADER = '# Earth sample from the configurator; saving does not apply it.'
 
@@ -203,6 +206,7 @@ def choice_rules():
                ('specular', ('off','bundled'), 'Choose specular reflection off or bundled.'),
                ('clouds', ('off','snapshot2011','captured'), 'Choose clouds off, the bundled 2011 image or an explicit frozen TotalMarker capture.')]
     choices.extend((p+'_layer',('off','captured'),'Choose observations off or frozen capture.') for p in (*OBS_PRODUCTS,*ASTRONOMY_FILES))
+    choices.extend((key,('off','on'),'Choose installed annotations off or on.') for key in ANNOTATIONS)
     return choices
 
 
@@ -269,6 +273,14 @@ class View:
     orbit_range: float = 2
     frame_x: float = 50
     frame_y: float = 50
+    sky_labels: str = 'off'
+    sky_labels_text: str = ''
+    sky_constellations: str = 'off'
+    sky_constellations_text: str = ''
+    moon_sites: str = 'off'
+    moon_sites_text: str = ''
+    mars_names: str = 'off'
+    mars_names_text: str = ''
 
     @classmethod
     def from_fields(cls, fields):
@@ -302,6 +314,10 @@ class View:
         if self.time_mode == 'fixed':
             fields.add('utc')
         fields.add('target')
+        if self.projection=='space':fields|={'sky_labels','sky_constellations'}
+        fields|={key+'_text' for key in self.uses_annotations()}
+        if self.target=='moon':fields.add('moon_sites')
+        if self.target=='mars':fields.add('mars_names')
         if self.projection=='space' and self.target in SYSTEMS:
             fields.add('composition')
             if self.composition=='system':fields|={'satellite_scale','orbit_paths','moon_scales'}
@@ -320,6 +336,14 @@ class View:
 
     def issues(self):
         issues = []
+        for key in ANNOTATIONS:
+            text=getattr(self,key+'_text')
+            try:validate_annotation(text,key)
+            except (ValueError,TypeError) as exc:issues.append(Issue('blocking',key,str(exc)))
+            if key in self.uses_annotations() and not text:issues.append(Issue('blocking',key,'Import the selected installed annotation data before Preview or Save.'))
+            elif getattr(self,key)=='on' and key not in self.uses_annotations():issues.append(Issue('info',key,'Annotation choice and imported data are retained but inactive in this target/projection.'))
+        if self.projection=='space' and any(key.startswith('sky_') for key in self.uses_annotations()) and self.framing=='radius':issues.append(Issue('info','annotations','Sky overlays may be outside a narrow radius-derived view. Choose FOV framing (for example 90 degrees) to inspect a wider sky.'))
+        if self.uses_annotations():issues.append(Issue('info','annotations','Frozen installed annotations retain their source receipt and attribution. Historical data is not scientific certification; sky coordinates are declination/RA, surface coordinates follow the named body.'))
         for product in ASTRONOMY_FILES:
             value=getattr(self,product+'_id')
             if not isinstance(value,str) or value and not re.fullmatch('[0-9a-f]{64}',value):issues.append(Issue('blocking',product+'_id','Invalid frozen astronomy identity.'))
@@ -443,6 +467,9 @@ class View:
     def validate(self):
         require_valid(self.issues())
 
+    def uses_annotations(self):
+        return selected_annotations(self)
+
     def uses_lunar_camera(self):
         return self.projection=='space' and self.observer=='moon' and self.camera_mode=='lunar_orbit'
 
@@ -475,6 +502,8 @@ class View:
         if self.uses_lunar_camera():args+=['-dynamic_origin',asset_prefix+ORIGIN_FILE]
         if self.projection=='space' and (self.frame_x,self.frame_y)!=(50,50):
             width,height=map(int,dimensions.split('x'));args+=['-center',f'+{round(width*self.frame_x/100)}+{round(height*self.frame_y/100)}']
+        for key,option in (('sky_labels','-marker_file'),('sky_constellations','-arc_file')):
+            if key in self.uses_annotations():args += [option,asset_prefix+ANNOTATIONS[key][1]]
         return args + ['-geometry', dimensions]
 
     def summary(self):
@@ -489,7 +518,8 @@ class View:
         distance=f'; range {number(self.distance)} body radii' if 'distance' in self.active_fields() else ''
         orbital=(f'; lunar orbital observer {number(self.orbit_latitude)}, {number(self.orbit_longitude)}; {number(self.orbit_range)} lunar radii from centre' if self.uses_lunar_camera() else '')
         centre=f'; centre {number(self.frame_x)}%, {number(self.frame_y)}%' if self.projection=='space' and (self.frame_x,self.frame_y)!=(50,50) else ''
-        return f'{self.target.title()}: {camera}{solar}{distance}{orientation}{orbital}; {clock}; frame {self.geometry}{centre}; {self.appearance_summary()}'
+        annotations='; installed annotations: '+', '.join(key.replace('_',' ') for key in self.uses_annotations()) if self.uses_annotations() else ''
+        return f'{self.target.title()}: {camera}{solar}{distance}{orientation}{orbital}; {clock}; frame {self.geometry}{centre}; {self.appearance_summary()}{annotations}'
 
     def uses_system(self):
         return self.composition=='system' and self.projection=='space' and self.target in SYSTEMS
@@ -554,7 +584,11 @@ class View:
 
     def body(self,asset_prefix=''):
         body=self._body(asset_prefix)
-        return body+LUNAR_BODY if self.uses_lunar_camera() else body
+        if self.uses_lunar_camera():body+=LUNAR_BODY
+        for key,target in (('moon_sites','moon'),('mars_names','mars')):
+            if key in self.uses_annotations():
+                body+=(f'\n# Xplanet configurator installed {key} v17.\n[{target}]\nmarker_file={asset_prefix+ANNOTATIONS[key][1]}\n').encode()
+        return body
 
     def _body(self,asset_prefix=''):
         if self.uses_system():
@@ -661,6 +695,9 @@ class View:
         self.validate()
         files={}
         if self.uses_lunar_camera():files[ORIGIN_FILE]=self.origin_data()
+        for key in ANNOTATIONS:
+            text=getattr(self,key+'_text')
+            if text and (not active_only or key in self.uses_annotations()):files[ANNOTATIONS[key][1]]=text.encode('utf-8')
         if active_only and self.target!='earth':return files
         for mode,text,name in ((self.places,self.places_text,PLACE_FILE),(self.routes,self.routes_text,ROUTE_FILE)):
             if mode=='on' or (text and not active_only):files[name]=HEADERS[name]+text.encode('utf-8')
@@ -677,13 +714,14 @@ class View:
         if 'eclipse' in self.uses_astronomy():digest.update(self.eclipse_window.encode())
         return digest.hexdigest()
 
-    def definition(self, renderer, *, version=16, asset_root=ROOT, asset_prefix=''):
+    def definition(self, renderer, *, version=17, asset_root=ROOT, asset_prefix=''):
         self.validate()
         scene_prefix(asset_prefix)
         mode = 'space' if self.projection == 'space' else 'map'
         projection = '' if mode == 'space' else self.projection
         if version not in SCENE_HEADERS.values():raise ValueError('Unsupported scene version.')
         header = next(header for header,value in SCENE_HEADERS.items() if value==version)
+        if version<17 and any(getattr(self,key)!=getattr(View(),key) for key in ANNOTATION_FIELDS):raise ValueError('Older formats cannot retain installed annotations.')
         if version<16 and (self.norad_layer!='off' or self.norad_id or self.eclipse_layer!='off' or self.eclipse_id or self.eclipse_window):raise ValueError('Older formats cannot retain astronomy captures.')
         if version<15 and (self.camera_mode!='centre' or (self.orbit_latitude,self.orbit_longitude,self.orbit_range,self.frame_x,self.frame_y)!=(0,145,2,50,50)):raise ValueError('Older formats cannot retain orbital camera or frame-centre settings.')
         if version<14 and self.geometry!=LEGACY_GEOMETRY:raise ValueError('Older formats require the legacy 800x600 geometry.')
@@ -734,6 +772,9 @@ class View:
         if version>=13:extra+=f'XPLANET_MOON_SCALES={shlex.quote(self.moon_scales)}\n'
         if version>=15:extra+=(f'XPLANET_CAMERA_MODE={self.camera_mode}\nXPLANET_ORBIT_LATITUDE={number(self.orbit_latitude)}\nXPLANET_ORBIT_LONGITUDE={number(self.orbit_longitude)}\nXPLANET_ORBIT_RANGE={number(self.orbit_range)}\nXPLANET_FRAME_X={number(self.frame_x)}\nXPLANET_FRAME_Y={number(self.frame_y)}\nXPLANET_ORIGIN_FILE={asset_prefix+ORIGIN_FILE if self.uses_lunar_camera() else ""}\n')
         if version>=16:extra+=(f'XPLANET_NORAD_LAYER={self.norad_layer}\nXPLANET_NORAD_CAPTURE={self.norad_id}\nXPLANET_ECLIPSE_LAYER={self.eclipse_layer}\nXPLANET_ECLIPSE_CAPTURE={self.eclipse_id}\nXPLANET_ECLIPSE_WINDOW={self.eclipse_window}\n')
+        if version>=17:
+            for key,(_,filename,_,_) in ANNOTATIONS.items():
+                extra+=f'XPLANET_{key.upper()}={getattr(self,key)}\nXPLANET_{key.upper()}_FILE={asset_prefix+filename if getattr(self,key+"_text") else ""}\nXPLANET_{key.upper()}_SHA256={hashlib.sha256(getattr(self,key+"_text").encode()).hexdigest() if getattr(self,key+"_text") else ""}\n'
         return (f'{header}\nXPLANET_BIN={shlex.quote(str(renderer))}\n'
                 'XPLANET_HOME="$project_root"\nXPLANET_CONFIG="$project_root/config"\n'
                 f'XPLANET_SCENE_MODE={mode}\nXPLANET_PROJECTION={projection}\n'
@@ -812,7 +853,7 @@ def current_map_body(config):
     return result
 
 
-def parse_saved_view(definition: bytes, config: bytes, *, places=None, routes=None, capture=None, observations=None, origin=None, asset_prefix='', astronomy=()):
+def parse_saved_view(definition: bytes, config: bytes, *, places=None, routes=None, capture=None, observations=None, origin=None, asset_prefix='', astronomy=(), annotations=None):
     """Recognize versioned exact native output formats, not arbitrary shell syntax."""
     try:
         if not isinstance(astronomy,tuple) or any(not isinstance(item,FrozenAstronomy) for item in astronomy):raise ValueError('Invalid astronomy association.')
@@ -828,6 +869,8 @@ def parse_saved_view(definition: bytes, config: bytes, *, places=None, routes=No
             raise ValueError
         projection = values['XPLANET_PROJECTION']
         version=SCENE_HEADERS.get(lines[0],0)
+        if annotations is not None and (not isinstance(annotations,dict) or any(key not in ANNOTATIONS or not isinstance(value,bytes) for key,value in annotations.items())):raise ValueError('Invalid annotation association.')
+        if version<17 and annotations:raise ValueError('Unexpected legacy annotation association.')
         if version>=2:
             if values['XPLANET_SCENE_MODE'] == 'space':
                 projection = 'space'
@@ -870,6 +913,11 @@ def parse_saved_view(definition: bytes, config: bytes, *, places=None, routes=No
                     view=replace(view,moon_scales=scales[0])
                 if version>=15:view=replace(view,camera_mode=values['XPLANET_CAMERA_MODE'],orbit_latitude=float(values['XPLANET_ORBIT_LATITUDE']),orbit_longitude=float(values['XPLANET_ORBIT_LONGITUDE']),orbit_range=float(values['XPLANET_ORBIT_RANGE']),frame_x=float(values['XPLANET_FRAME_X']),frame_y=float(values['XPLANET_FRAME_Y']))
                 if version>=16:view=replace(view,norad_layer=values['XPLANET_NORAD_LAYER'],norad_id=values['XPLANET_NORAD_CAPTURE'],eclipse_layer=values['XPLANET_ECLIPSE_LAYER'],eclipse_id=values['XPLANET_ECLIPSE_CAPTURE'],eclipse_window=values['XPLANET_ECLIPSE_WINDOW'])
+                if version>=17:
+                    annotations=annotations or {}
+                    if set(annotations)-set(ANNOTATIONS):raise ValueError('Unexpected annotation association.')
+                    view=replace(view,**{field:value for key in ANNOTATIONS for field,value in ((key,values['XPLANET_'+key.upper()]),(key+'_text',annotations.get(key,b'').decode('utf-8')))})
+                elif annotations:raise ValueError('Unexpected legacy annotation association.')
                 expected = view.definition(renderer,version=version,asset_root=roots[0],asset_prefix=asset_prefix)
             else:
                 expected = view.definition(renderer, version=2)
@@ -897,6 +945,14 @@ def recognized_body(config):
     normalized=current_map_body(config)
     if normalized!=config:
         return recognized_body(normalized)
+    for key,target in (('moon_sites','moon'),('mars_names','mars')):
+        match=re.search(rb'\n# Xplanet configurator installed '+key.encode()+rb' v17\.\n\['+target.encode()+rb'\]\nmarker_file=([^\r\n]+)\n$',config)
+        if match:
+            try:scene_prefix(match[1].decode()[:-len(ANNOTATIONS[key][1])])
+            except (ValueError,UnicodeError):return False
+            base=config[:match.start()]
+            return (match[1].endswith(ANNOTATIONS[key][1].encode()) and b'# Xplanet configurator installed ' not in base and
+                    ('['+target+']').encode() in base and recognized_body(base))
     if config.endswith(LUNAR_BODY):
         base=config[:-len(LUNAR_BODY)]
         return LUNAR_BODY not in base and b'[moon]' not in base and recognized_body(base)

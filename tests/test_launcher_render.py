@@ -32,7 +32,7 @@ class LauncherRenderTests(Sandbox):
             "import json, os, sys\n"
             "with open(os.environ['MOCK_CAPTURE'], 'w') as output:\n"
             "    json.dump({'args': sys.argv[1:], 'tmp': os.environ.get('TMPDIR'), "
-            "'cache': os.environ.get('XDG_CACHE_HOME')}, output)\n"
+            "'cache': os.environ.get('XDG_CACHE_HOME'), 'cwd': os.getcwd()}, output)\n"
             "sys.exit(int(os.environ.get('MOCK_EXIT', '0')))\n")
         self.mock.chmod(0o700)
         (self.root / "config").mkdir()
@@ -94,6 +94,44 @@ class LauncherRenderTests(Sandbox):
                          str(self.root / "output/preview/earth-manual.png"))
         self.assertEqual(args[args.index("-num_times") + 1], "1")
         self.assertNotIn("-fork", args)
+
+    def test_finite_render_resource_lookup_uses_checkout_not_caller_directory(self):
+        # Native Xplanet checks cwd before -searchdir. Match that behavior in this
+        # fixture so a colliding caller resource cannot pass an argv-only check.
+        chosen = self.root / "images/collision-map.png"
+        chosen.parent.mkdir()
+        chosen.write_bytes(b"selected checkout map")
+        colliding = self.base / "collision-map.png"
+        colliding.write_bytes(b"other checkout map")
+        self.mock.write_text(
+            "#!" + sys.executable + "\n"
+            "import json, os, sys\nfrom pathlib import Path\n"
+            "args = sys.argv[1:]\n"
+            "root = Path(args[args.index('-searchdir') + 1])\n"
+            "candidates = [Path('collision-map.png'), root / 'images/collision-map.png']\n"
+            "selected = next(path for path in candidates if path.is_file())\n"
+            "Path(os.environ['MOCK_CAPTURE']).write_text(json.dumps({'cwd': os.getcwd(), "
+            "'map': selected.read_text()}))\n")
+        for command in ("preview", "render"):
+            with self.subTest(command=command):
+                result = self.invoke(command)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                recorded = json.loads(self.capture.read_text())
+                self.assertEqual(recorded["cwd"], str(self.root))
+                self.assertEqual(recorded["map"], "selected checkout map")
+                self.assertEqual(colliding.read_bytes(), b"other checkout map")
+                self.assertEqual(chosen.read_bytes(), b"selected checkout map")
+
+    def test_relative_renderer_path_is_resolved_before_changing_directory(self):
+        config = self.root / "config/xp.def"
+        config.write_text(config.read_text().replace(
+            "XPLANET_BIN=" + shlex.quote(str(self.mock)),
+            "XPLANET_BIN=" + shlex.quote(str(self.mock.relative_to(self.base)))))
+        for command in ("preview", "render"):
+            with self.subTest(command=command):
+                result = self.invoke(command)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(json.loads(self.capture.read_text())["cwd"], str(self.root))
 
     def test_render_preserves_legacy_preview_exports_and_native_scenes(self):
         legacy=self.root/'dev/preview/old.png';legacy.parent.mkdir(parents=True);legacy.write_bytes(b'old preview')

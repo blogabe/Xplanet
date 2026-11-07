@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+export PYTHONPATH="$script_dir"
+export PYTHONDONTWRITEBYTECODE=1
+export PYTHONNOUSERSITE=1
+python_bin=$("$script_dir/run-totalmarker" --python-path)
+exec "$python_bin" -P -s -B -m configurator.installed_icons "$@"

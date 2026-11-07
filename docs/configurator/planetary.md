@@ -12,9 +12,13 @@ the Moon and these additional bundled targets/viewpoints:
 | Pluto | Pluto and Charon |
 
 Each has an existing texture under `maps/solarsystem`; no files are fetched.
-Bodies lacking a bundled texture (such as Triton, Nereid and the other Uranian
-moons) are not offered. Resource presence is checked; this does not certify map
-orientation, coverage, epoch or scientific accuracy. Pluto/Charon maps and geometry
+This is the studio's supported body list, not a complete inventory of the bundled
+collection. Triton, Ariel, Umbriel, Titania and Oberon textures are already present
+under `maps/solarsystem/celestia-textures/lores/` and `medres/`, but are not wired
+into the studio's target, origin or system choices. Nereid has no tracked texture.
+See [resource ownership and availability](../resources.md). Resource presence is
+checked for the selected maps; this does not certify orientation, coverage, epoch
+or scientific accuracy. Pluto/Charon maps and geometry
 are legacy material, not a reconstruction of New Horizons observations. Satellite
 shapes and orbits are simplified; small irregular moons are not shape-model views.
 

@@ -78,6 +78,25 @@ and `body-maps.txt` retain their names. These are collection names, not NAIF IDs
 Among the retained moons, the order follows increasing mean orbital distance
 within each system, checked against [JPL's satellite mean elements](https://ssd.jpl.nasa.gov/sats/elem/sep.html).
 It is not a complete list of satellites, a display order requirement or an
-ephemeris. Directory names do not certify image provenance. Empty local placeholders for Ariel, Umbriel, Titania,
-Oberon, Triton and Nereid are not packaged as textures or advertised as supported
-configurator targets. No new imagery or scientific certification is implied.
+ephemeris. Directory names do not certify image provenance. Empty numbered-folder
+placeholders are not packaged. Separately, the retained `celestia-textures/lores/`
+and `medres/` collections contain Ariel, Umbriel, Titania, Oberon and Triton maps;
+these are not currently offered as configurator targets. Nereid has no tracked
+texture. See [resources and prerequisites](resources.md) for the distinction
+between an included file and a configured feature. No new imagery or scientific
+certification is implied.
+
+## Explicit installed-resource imports
+
+The [satellite icon importer](installed-satellite-icons.md) copies only explicitly
+chosen ISS, Hubble and Shuttle PNGs from a physical installed resource directory.
+It preserves their original bytes and `images/README`, with SHA-256 source receipts.
+That README may identify upstream contributors and license terms; local package
+files can differ, so hashes establish consistency rather than upstream authenticity.
+The [installed annotation importer](configurator/installed-annotations.md) instead
+preserves source hashes and attribution comments alongside canonical bounded text
+rows. Neither workflow edits the installed package or vendors its files here.
+
+Imported files keep their upstream/contributor terms. A local import, saved scene
+or exported archive is not a new license grant or permission to redistribute them.
+Review the retained attribution, comments and applicable terms before sharing.

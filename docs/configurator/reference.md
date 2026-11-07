@@ -347,7 +347,7 @@ only unchanged files owned by that attempt; concurrently edited files and an
 incomplete-save guard are retained for review. A crash marker is preserved for review; use
 a different name rather than automatically discarding incomplete files.
 
-The current reader recognizes explicit v16 through v2 and foundation scene
+The current reader recognizes explicit v17 through v2 and foundation scene
 formats. Each must match its exact native layout and associated data; unsupported
 edits, duplicates, unknown fields, file links and ambiguous/missing inputs fail
 without replacing the draft. Loading never executes xp.def or adopts its saved
@@ -405,7 +405,7 @@ The grid and scene-time label remain available. Captured observational clouds ar
 active only for **Earth + Now**; fixed UTC or another target omits them, regardless
 of the retained cloud choice. The generic UTC scene label is not a data-update label.
 
-New v16 named or legacy-directory saves retain the target, planetary shadow
+New v17 named or legacy-directory saves retain the target, planetary shadow
 brightness and inactive Earth choices; v8 Moon/Mars scenes retain their defaults. Foundation/v2–v7 formats reopen as Earth; v8 retains its Moon/Mars targets. Arbitrary `xp2.conf` or
 `xp3.conf` files still require a recognized matching generated definition and
 associated files. No desktop Apply or lifecycle change is performed.
@@ -593,3 +593,7 @@ Fixed UTC within validated event sample coverage. Captures, choices and provenan
 survive save/reopen and recovery, including when inactive. No source refresh occurs.
 Active NORAD cannot be handed off to the desktop; static eclipse handoff remains
 reviewed and explicit.
+
+Installed sky/planetary annotation imports have a separate bounded workflow.
+See [installed annotations](installed-annotations.md) for coordinate domains,
+source receipts, owned files, and selection/exchange behavior.

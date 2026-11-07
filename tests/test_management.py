@@ -117,6 +117,7 @@ class ManagementTests(Sandbox):
             pause_signalled = False
             confirmation_signalled = False
             next_choice_sent = False
+            pause_choices = 0
             menu_steps = iter(menu_steps)
             next_step = next(menu_steps, None)
             while proc.poll() is None and time.monotonic() < deadline:
@@ -144,8 +145,9 @@ class ManagementTests(Sandbox):
                         os.kill(proc.pid, pause_signal)
                     else:
                         os.write(master, pause_key)
+                    pause_choices = output.count(b'Choose: ') + output.count(b'Troubleshooting choice')
                     pause_signalled = True
-                if after_pause and pause_signalled and not next_choice_sent and output.count(b'Choose: ') >= 2:
+                if after_pause and pause_signalled and not next_choice_sent and output.count(b'Choose: ') + output.count(b'Troubleshooting choice') > pause_choices:
                     os.write(master, after_pause.encode())
                     next_choice_sent = True
                 if select.select([master], [], [], .1)[0]:
@@ -837,19 +839,19 @@ class ManagementTests(Sandbox):
         self.assertEqual(self.calls(),[]);self.assertEqual(before,self.snapshot())
         evidence.write_text('{broken')
         code,output=self.terminal('q\n');self.assertEqual(code,0)
-        self.assertIn('Build features not checked; choose Diagnostics (9)',output);self.assertEqual(self.calls(),[])
+        self.assertIn('Build features not checked; choose Troubleshooting (9)',output);self.assertEqual(self.calls(),[])
 
     def test_diagnostic_and_help_entries_are_discoverable_without_activation(self):
         self.enhanced_terminal();before=self.snapshot()
         for keys in ('9q','hq'):
             code,output=self.terminal(keys)
-            self.assertEqual(code,0);self.assertIn('9) Diagnostics',output);self.assertIn('h) Help',output)
+            self.assertEqual(code,0);self.assertIn('9) Troubleshooting...',output);self.assertIn('h) Help',output)
             self.assertNotIn('Capture renderer support now?',output);self.assertNotIn('Usage: scripts/xplanet.sh',output)
         self.assertEqual(self.calls(),[]);self.assertEqual(before,self.snapshot())
 
     def test_diagnostic_cancellation_is_immediate_and_has_no_probe(self):
         self.enhanced_terminal();before=self.snapshot()
-        code,output=self.terminal('9\nn\nq')
+        code,output=self.terminal('9\n3\nn\nq')
         self.assertEqual(code,0);self.assertIn('Renderer diagnostic was not run.',output)
         self.assertNotIn('Press any key',output);self.assertEqual(self.calls(),[]);self.assertEqual(before,self.snapshot())
 
@@ -860,10 +862,146 @@ class ManagementTests(Sandbox):
         for status,message in (('0','Renderer support captured'),('1','renderer support remains unknown'),('2','Renderer inspection failed (exit 2)')):
             self.env['DIAGNOSTIC_RESULT']=status
             if self.trace.exists():self.trace.unlink()
-            before=self.snapshot();code,output=self.terminal('9\ny\n',pause_key=b' ',after_pause='q')
+            before=self.snapshot();code,output=self.terminal('9\n3\ny\n',pause_key=b' ',after_pause='q')
             self.assertEqual(code,0,output);self.assertIn('fixture support evidence',output);self.assertIn(message,output)
             self.assertEqual(output.count('Press any key'),1);self.assertEqual(self.calls(),['diagnostics'])
             self.assertEqual(before,self.snapshot());self.assertEqual(output.count('\x1b[?1049h'),1);self.assertTrue(output.endswith('\x1b[?1049l'))
+
+    def test_troubleshooting_navigation_and_back_do_not_read_or_probe(self):
+        self.enhanced_terminal()
+        self.write_script(self.scripts/'run-totalmarker', 'echo forbidden >> "$TRACE"; exit 2\n')
+        before = self.snapshot()
+        for keys in ('9\nbq', '9\n4\nq', '9\n2\x1b[B\x1b[Aq', '9\n' + '\x1b[B' * 8 + '\nq'):
+            code, output = self.terminal(keys)
+            self.assertEqual(code, 0, output)
+            for label in ('View renderer log', 'View saved renderer support', 'Check renderer support now', 'Back to management'):
+                self.assertIn(label, output)
+            self.assertNotIn('Press any key', output)
+            self.assertNotIn('Capture renderer support now?', output)
+            self.assertEqual(self.calls(), [])
+            self.assertEqual(before, self.snapshot())
+        self.assertIn('> \x1b[34m9) Troubleshooting...', output)
+
+    def real_log_view(self):
+        (self.root/'logs').mkdir()
+        path = self.root/'logs/xplanet-error.log'
+        pair = 'Warning: Resizing night map\nFor better performance, all image maps should be the same size as the day map\n'
+        path.write_text('first diagnostic\n' + pair * 3 + 'last diagnostic\n')
+        self.write_script(self.scripts/'run-totalmarker',
+            'echo "$*" >> "$TRACE"\n' +
+            'PYTHONPATH=' + shlex.quote(str(PROJECT/'scripts')) + ' exec ' + shlex.quote(sys.executable) +
+            ' -P -s -B -m totalmarker --root ' + shlex.quote(str(self.root)) + ' "$@"\n')
+        return path
+
+    def test_filtered_renderer_log_pauses_before_submenu_redraw_without_config(self):
+        self.real_log_view()
+        for enhanced in (False, True):
+            if enhanced:
+                self.enhanced_terminal()
+            if self.trace.exists():
+                self.trace.unlink()
+            before = self.snapshot()
+            code, output = self.terminal('9\n1\n\n\n', pause_key=b'x', after_pause='b\nq\n')
+            self.assertEqual(code, 0, output)
+            self.assertEqual(self.calls(), ['log-view'])
+            self.assertEqual(output.count('Warning: Resizing night map'), 1)
+            self.assertIn('night: 3 occurrence(s), 2 repeat(s) hidden', output)
+            self.assertIn('first diagnostic', output)
+            self.assertIn('last diagnostic', output)
+            self.assertEqual(output.count('Press any key to continue'), 1)
+            report = output.index('first diagnostic')
+            pause = output.index('Press any key to continue')
+            redraw = output.index('Read existing logs/evidence', pause)
+            self.assertLess(report, pause)
+            self.assertLess(pause, redraw)
+            self.assertNotIn('\x1b[H\x1b[J', output[report:pause])
+            self.assertEqual(before, self.snapshot())
+
+    def test_direct_log_view_does_not_acquire_menu_pause(self):
+        self.real_log_view()
+        before = self.snapshot()
+        result = subprocess.run([str(self.entry), 'log-view'], env=self.env,
+                                input='', capture_output=True, text=True, timeout=3)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('2 repeat(s) hidden', result.stdout)
+        self.assertNotIn('Press any key', result.stdout)
+        self.assertNotIn('Troubleshooting', result.stdout)
+        self.assertEqual(self.calls(), ['log-view'])
+        self.assertEqual(before, self.snapshot())
+
+    def test_absent_renderer_log_is_clear_and_stays_visible_until_acknowledged(self):
+        self.enhanced_terminal()
+        before = self.snapshot()
+        code, output = self.terminal('9\n1\n', pause_key=b'x', after_pause='q')
+        self.assertEqual(code, 0, output)
+        self.assertIn('No renderer log exists at logs/xplanet-error.log. Nothing was created.', output)
+        self.assertIn('Renderer log is absent; no log to display.', output)
+        self.assertEqual(output.count('Press any key to continue'), 1)
+        self.assertEqual(self.calls(), [])
+        self.assertEqual(before, self.snapshot())
+
+    def test_log_warnings_and_failures_pause_and_preserve_output(self):
+        self.enhanced_terminal()
+        (self.root/'logs').mkdir()
+        (self.root/'logs/xplanet-error.log').write_text('fixture log\n')
+        for status, message in ((1, 'Renderer log changed during reading'), (2, 'Renderer log inspection failed (exit 2)')):
+            self.write_script(self.scripts/'run-totalmarker',
+                f'echo "$*" >> "$TRACE"; echo "fixture log detail"; echo "fixture warning" >&2; exit {status}\n')
+            if self.trace.exists():
+                self.trace.unlink()
+            before = self.snapshot()
+            code, output = self.terminal('9\n1\n', pause_key=b' ', after_pause='q')
+            self.assertEqual(code, 0, output)
+            self.assertIn(message, output)
+            self.assertIn('fixture log detail', output)
+            self.assertIn('fixture warning', output)
+            self.assertEqual(output.count('Press any key to continue'), 1)
+            self.assertEqual(self.calls(), ['log-view'])
+            self.assertEqual(before, self.snapshot())
+
+    def test_saved_support_routes_show_without_probe_confirmation(self):
+        self.enhanced_terminal()
+        self.write_script(self.scripts/'lib/xplanet/diagnostics.zsh',
+            'renderer_diagnostics() { echo "diagnostics $*" >> "$TRACE"; print -- "fixture saved evidence"; return "$DIAGNOSTIC_RESULT"; }\n')
+        for status, message in (('0', 'Saved renderer support displayed'), ('1', 'Saved renderer support is missing, stale or unknown'), ('2', 'Saved renderer support inspection failed (exit 2)')):
+            self.env['DIAGNOSTIC_RESULT'] = status
+            if self.trace.exists():
+                self.trace.unlink()
+            before = self.snapshot()
+            code, output = self.terminal('9\n2\n', pause_key=b'x', after_pause='q')
+            self.assertEqual(code, 0, output)
+            self.assertIn('fixture saved evidence', output)
+            self.assertIn(message, output)
+            self.assertNotIn('Capture renderer support now?', output)
+            self.assertEqual(output.count('Press any key to continue'), 1)
+            self.assertEqual(self.calls(), ['diagnostics --show'])
+            self.assertEqual(before, self.snapshot())
+
+    def test_troubleshooting_and_log_pause_control_keys_restore_terminal(self):
+        self.enhanced_terminal()
+        self.real_log_view()
+        for key, expected in ((b'\x04', 0), (b'\x03', 130)):
+            code, output = self.terminal('9\n' + key.decode())
+            self.assertEqual(code, expected, output)
+            self.assertTrue(output.endswith('\x1b[?1049l'))
+            self.assertEqual(self.calls(), [])
+        for key, expected in ((b'\x04', 0), (b'\x03', 130)):
+            if self.trace.exists():
+                self.trace.unlink()
+            code, output = self.terminal('9\n1\n', pause_key=key)
+            self.assertEqual(code, expected, output)
+            self.assertIn('2 repeat(s) hidden', output)
+            self.assertEqual(output.count('Press any key to continue'), 1)
+            self.assertTrue(output.endswith('\x1b[?1049l'))
+            self.assertEqual(self.calls(), ['log-view'])
+
+    def test_plain_submenu_back_and_confirmation_eof_exit_without_probe(self):
+        before = self.snapshot()
+        for keys in ('9\nb\nq\n', '9\n4\nq\n', '9\n3\n\x04'):
+            code, output = self.terminal(keys)
+            self.assertEqual(code, 0, output)
+            self.assertEqual(self.calls(), [])
+            self.assertEqual(before, self.snapshot())
 
     def test_help_routes_existing_usage_and_exposes_detailed_help_without_probe(self):
         for enhanced in (False,True):
@@ -1004,7 +1142,7 @@ class ManagementTests(Sandbox):
         code,output=self.terminal('q\n')
         self.assertEqual(code,0,output)
         self.assertRegex(output,r'Running scene +\[\?\] Not identified')
-        self.assertIn('Build features not checked; choose Diagnostics (9)',output)
+        self.assertIn('Build features not checked; choose Troubleshooting (9)',output)
 
     def test_startup_ctrl_c_restores_screen_and_cleans_owned_health_group(self):
         self.enhanced_terminal()
