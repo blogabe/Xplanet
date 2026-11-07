@@ -104,6 +104,7 @@ with uv-managed Python available as an explicit choice.
 | `earth` | Select the current seasonal Earth map |
 | `clouds`, `quake`, `storm`, `volcano` | Refresh that product and its labels |
 | `label` | Refresh update labels without fetching a product |
+| `log-view [--file PATH]` | Read stderr with counts for repeated resize notices; raw logs stay unchanged |
 | `log-trim [--dry-run] [--days N]` | Trim recognized event logs older than 30 days by default |
 | `health [--live] [--json] [--verbose]` | Read saved health, or validate sources without updating outputs |
 | `norad`, `eclipse` | Run an explicitly configured optional product |

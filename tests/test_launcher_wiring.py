@@ -100,6 +100,18 @@ class LauncherWiringTests(Sandbox):
         self.assertEqual(result.stdout, '{"would_remove":4}\n')
         self.assertFalse((self.root / '.state').exists())
 
+    def test_log_view_forwards_options_without_loading_mac_helpers(self):
+        trace = self.base / 'view-trace.txt'
+        result = subprocess.run([str(self.launcher), 'log-view', '--file', 'logs/custom.log'],
+            cwd=self.base, env={**os.environ, 'TM_TEST_TRACE': str(trace), 'TM_TEST_EXIT': '1',
+                               'TM_TEST_OUTPUT': 'warning', 'TM_TEST_STDERR': 'changed'},
+            text=True, capture_output=True, timeout=5)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertEqual(trace.read_text().splitlines(), ['log-view', '--file', 'logs/custom.log'])
+        self.assertEqual(result.stdout, 'warning\n')
+        self.assertEqual(result.stderr, 'changed\n')
+        self.assertFalse((self.root / '.state').exists())
+
     def test_other_commands_still_reject_extra_arguments(self):
         result = subprocess.run(
             [str(self.launcher), "clouds", "--check"], cwd=self.base,
@@ -126,7 +138,7 @@ class LauncherWiringTests(Sandbox):
             "Install and maintain": ("bootstrap", "install", "setup", "update"),
             "Control the desktop": ("start", "stop", "restart", "earth"),
             "Refresh data (Python TotalMarker)": ("clouds", "quake", "storm", "volcano", "norad", "eclipse", "label"),
-            "Inspect and troubleshoot": ("health", "diagnostics"),
+            "Inspect and troubleshoot": ("log-view", "health", "diagnostics"),
             "Housekeeping and development": ("log-trim", "test"),
             "Unavailable": ("santa",),
         }

@@ -76,7 +76,7 @@ class PythonRuntimeTests(Sandbox):
                                      cwd=self.base, env=environment, capture_output=True,
                                      text=True, check=False)
         self.assertEqual(help_result.returncode, 0, help_result.stderr)
-        self.assertIn("{clouds,labels,quake,storm,volcano,norad,eclipse,santa,health,log-trim}",
+        self.assertIn("{clouds,labels,quake,storm,volcano,norad,eclipse,santa,health,log-trim,log-view}",
                       help_result.stdout)
         minimal_job = self.run_selector({"PATH": "/usr/bin:/bin",
                                          "TOTALMARKER_PYTHON": str(selected_python)})
@@ -129,7 +129,7 @@ class PythonRuntimeTests(Sandbox):
                                      "PYTHONDONTWRITEBYTECODE": "1"},
                                 capture_output=True, text=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("{clouds,labels,quake,storm,volcano,norad,eclipse,santa,health,log-trim}", result.stdout)
+        self.assertIn("{clouds,labels,quake,storm,volcano,norad,eclipse,santa,health,log-trim,log-view}", result.stdout)
 
     def test_marker_launcher_reports_selected_interpreter_for_setup(self):
         result = subprocess.run([str(self.launcher), "--python-path"],
@@ -154,7 +154,7 @@ class PythonRuntimeTests(Sandbox):
                                      cwd=self.base, env=environment, capture_output=True,
                                      text=True, check=False)
         self.assertEqual(help_result.returncode, 0, help_result.stderr)
-        self.assertIn("{clouds,labels,quake,storm,volcano,norad,eclipse,santa,health,log-trim}",
+        self.assertIn("{clouds,labels,quake,storm,volcano,norad,eclipse,santa,health,log-trim,log-view}",
                       help_result.stdout)
 
     def test_no_discoverable_python_fails_clearly(self):
