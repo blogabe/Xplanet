@@ -184,8 +184,19 @@ It does not discover arbitrary executable names from historical scenes. It first
 `restart` performs that same broad stop, then starts one display. Custom-configuration `start`
 catches up a configured monthly map; selected scenes retain their reviewed map.
 Start asks launchd to run one foreground desktop, without
-`KeepAlive` or automatic respawn after stop. Python runs TotalMarker and the
+`RunAtLoad`, `KeepAlive` or automatic respawn after stop. It registers the regular
+`~/Library/LaunchAgents/local.xplanet.desktop.plist` file if needed, then explicitly
+kickstarts it. No logout or login is required. Repeated start leaves the running
+renderer in place; stop unloads it and a later start registers it again. Python runs TotalMarker and the
 isolated configurator; lifecycle remains zsh.
+
+An existing desktop registration loaded from `.state/xplanet/desktop.plist`
+requires explicit `restart` to migrate to the standard LaunchAgents pathname.
+Plain `start` leaves it running and reports that instruction. Restart validates
+configuration and destination before stopping; a foreign, linked or edited
+same-name plist or unverified loaded job is refused rather than overwritten.
+The previous `.state` plist is retained unchanged. Existing file/directory
+permissions are preserved, not repaired.
 
 On the first start after upgrading from the old `-fork` launcher, an existing
 unmanaged Xplanet process produces a request to use `restart`; setup never kills

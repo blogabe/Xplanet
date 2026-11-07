@@ -20,7 +20,7 @@ class LauncherUpdateTests(Sandbox):
         (self.root / ".gitignore").write_text("cache/\n")
         (self.root / "tracked.txt").write_text("original\n")
         self.environment = {
-            **os.environ, "GIT_CONFIG_GLOBAL": os.devnull,
+            **os.environ, "HOME": str(self.base), "ZDOTDIR": str(self.base), "GIT_CONFIG_GLOBAL": os.devnull,
             "GIT_CONFIG_NOSYSTEM": "1", "GIT_TERMINAL_PROMPT": "0",
         }
         self.git(self.base, "init", "--bare", str(self.remote))

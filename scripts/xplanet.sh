@@ -117,7 +117,9 @@ Workflow notes (macOS)
 
   Without a selector, start uses custom configuration. An invalid selected
   revision fails instead of falling back. Apply never restarts; start uses
-  one job with no automatic respawn. Stop removes that job and stops this
+  one job from ~/Library/LaunchAgents with no automatic respawn or RunAtLoad.
+  An old .state registration requires explicit restart to migrate.
+  Stop removes that job and stops this
   user's processes named xplanet or by the trusted xp.def renderer, including
   matching finite renders. Historical scene names are not signal targets.
   Restart waits for that stop before starting one display.

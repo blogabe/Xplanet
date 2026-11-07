@@ -43,7 +43,7 @@ class LauncherRenderTests(Sandbox):
             "XPLANET_CONFIG=" + shlex.quote(str(self.root / "config")) + "\n"
             "XPLANET_PROJECTION=lambert\nXPLANET_LONGITUDE=-118.3989\n"
             "XPLANET_GEOMETRY=1600x900\n")
-        self.environment = {"PATH": f"{self.desktop_bin}:" + os.environ.get("PATH", "/usr/bin:/bin"),
+        self.environment = {"HOME": str(self.base), "ZDOTDIR": str(self.base), "PATH": f"{self.desktop_bin}:" + os.environ.get("PATH", "/usr/bin:/bin"),
                             "MOCK_CAPTURE": str(self.capture),
                             "PYTHONDONTWRITEBYTECODE": "1"}
 
@@ -495,7 +495,7 @@ sys.exit(4)
         second = self.invoke('start', env)
         self.assertEqual(second.returncode, 0, second.stderr)
         self.assertEqual(capture.stat().st_mtime_ns, before)
-        doc = plistlib.loads((self.root / '.state/xplanet/desktop.plist').read_bytes())
+        doc = plistlib.loads((self.base / 'Library/LaunchAgents/local.xplanet.desktop.plist').read_bytes())
         self.assertNotIn('KeepAlive', doc)
         self.assertNotIn('RunAtLoad', doc)
         self.assertEqual(doc['ProgramArguments'], ['/bin/zsh', str(self.root / 'scripts/lib/xplanet/desktop.zsh')])

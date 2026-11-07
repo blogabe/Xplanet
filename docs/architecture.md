@@ -105,7 +105,11 @@ source/packaged file boundaries and live-probe isolation. Isolated finite render
 can provide additional local evidence; live installation, Homebrew builds and
 GUI/login/launchd behavior still require their own native validation.
 The desktop is a foreground process owned by `local.xplanet.desktop`; the separate
-existing login trigger calls public start. There is no KeepAlive. Public start
+existing login trigger calls public start. Its validated regular plist is
+`~/Library/LaunchAgents/local.xplanet.desktop.plist`; start bootstraps that exact
+pathname when absent from the GUI domain, then explicitly kickstarts it. Neither
+RunAtLoad nor KeepAlive is set. Standard LaunchAgents placement lets macOS
+Background Task Management recognize a terminal-registered job. Public start
 selects the current map on the custom configuration path even when the job is already running;
 a selected studio revision retains its reviewed seasonal map. Stop first removes
 the desktop job, then stops current-user processes named `xplanet` or by the
@@ -142,3 +146,15 @@ probes; lifecycle never imports this code. See [diagnostic boundaries](configura
 Start/Stop/Restart operations. The foreground renderer does not hold it; Restart
 keeps the lock across its stop/start pair. Runtime files are private and local,
 shared across checkouts, and persistent lock files are not deleted on release.
+
+Desktop plist preparation validates the complete generated schema, owner, real
+parent directories and loaded registration pathname. It preserves existing
+permissions; new directories and plists use 0700 and 0600 respectively. Foreign,
+linked or modified same-name files/jobs are refused. Plain start leaves an old
+`.state/xplanet/desktop.plist` registration running and requests explicit restart.
+Restart checks configuration, selected scene, map, destination and job identity
+before stopping. It can transfer a recognized desktop from another checkout.
+The old `.state` file is left untouched; migration changes the loaded path by
+bootout/bootstrap, not by moving a file beneath a live registration. All CLI
+lifecycle changes cooperate through the same per-user lock; this is not a
+security boundary against other programs running as the same user.

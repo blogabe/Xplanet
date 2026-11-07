@@ -1,5 +1,5 @@
 """Deterministic overlap with fake launchctl; never host services or renderer."""
-import fcntl,json,os,shlex,signal,subprocess,sys,time
+import fcntl,json,os,plistlib,shlex,signal,subprocess,sys,time
 from pathlib import Path
 from .support import Sandbox,copy_launcher
 
@@ -17,13 +17,15 @@ args=sys.argv[1:];jobs=Path(os.environ['JOBS']);trace=Path(os.environ['TRACE']);
 def log(step):
  with trace.open('a') as out:out.write(json.dumps([actor,args[0],step])+'\\n')
 log('begin')
-if args[0] in ('list','print'):raise SystemExit(0 if jobs.exists() else 3)
+if args[0] in ('list','print'):
+ if jobs.exists():print_job(jobs)
+ raise SystemExit(0 if jobs.exists() else 3)
 if args[0]=='bootout':
  if not jobs.exists():raise SystemExit(3)
  jobs.unlink()
 if args[0]=='bootstrap':
  if jobs.exists():raise SystemExit(5)
- jobs.write_text(json.dumps({'root':actor}))
+ save_job(jobs,args[2],actor)
 if args[0]=='kickstart':
  if actor=='A' and os.environ.get('HOLD')=='1':
   Path(os.environ['MARKER']).write_text('entered')
@@ -36,8 +38,28 @@ log('end')
 '''
         self.script(self.bin/'launchctl',code,python=True)
         self.entry=self.checkout(self.root)
-        self.env={**os.environ,'PATH':str(self.bin)+':/usr/bin:/bin','JOBS':str(self.jobs),'TRACE':str(self.trace),'MARKER':str(self.marker),'RELEASE':str(self.release),'PYTHONDONTWRITEBYTECODE':'1'}
-    def script(self,path,body,python=False):path.write_text(('#!'+sys.executable if python else '#!/bin/sh')+'\n'+body);path.chmod(0o700)
+        self.seed_job()
+        self.env={**os.environ,'HOME':str(self.base),'ZDOTDIR':str(self.base),'PATH':str(self.bin)+':/usr/bin:/bin','JOBS':str(self.jobs),'TRACE':str(self.trace),'MARKER':str(self.marker),'RELEASE':str(self.release),'PYTHONDONTWRITEBYTECODE':'1'}
+    def seed_job(self):
+        self.plist=self.base/'Library/LaunchAgents/local.xplanet.desktop.plist'
+        self.plist.parent.mkdir(parents=True)
+        doc={'Label':'local.xplanet.desktop', 'ProgramArguments':['/bin/zsh',str(self.root/'scripts/lib/xplanet/desktop.zsh')], 'WorkingDirectory':str(self.root), 'StandardOutPath':str(self.root/'logs/xplanet.log'), 'StandardErrorPath':str(self.root/'logs/xplanet-error.log')}
+        self.plist.write_bytes(plistlib.dumps(doc));self.plist.chmod(0o600)
+        self.jobs.write_text(json.dumps({'root':'seed','path':str(self.plist),'doc':doc}))
+    def job_output(self):
+        return """def print_job(job):
+ data=json.loads(job.read_text());doc=data['doc']
+ print('path = '+data['path'])
+ print('program = '+doc['ProgramArguments'][0])
+ print('working directory = '+doc['WorkingDirectory'])
+ print('arguments = {\\n'+'\\n'.join(doc['ProgramArguments'])+'\\n}')
+def save_job(job,path,actor='A'):
+ import plistlib
+ job.write_text(json.dumps({'root':actor,'path':path,'doc':plistlib.loads(Path(path).read_bytes())}))
+"""
+    def script(self,path,body,python=False):
+        if python and path.name=='launchctl':body='import json\n'+self.job_output()+body
+        path.write_text(('#!'+sys.executable if python else '#!/bin/sh')+'\n'+body);path.chmod(0o700)
     def checkout(self,root):
         scripts=root/'scripts';scripts.mkdir(parents=True);entry=scripts/'xplanet.sh';copy_launcher(entry)
         config=root/'config';config.mkdir();(config/'xp.conf').write_text('[earth]\n')
@@ -139,9 +161,10 @@ log('end')
         spaced=self.base/'checkout with spaces';self.checkout(spaced)
         helper=spaced/'scripts/lib/xplanet/display.zsh'
         root=str(spaced)
-        good='program = /bin/zsh\nworking directory = '+root+'\narguments = {\n/bin/zsh\n'+root+'/scripts/lib/xplanet/desktop.zsh\n}\n'
-        for text,expected in ((good,0),(good+'working directory = /other\n',1),(good.replace('program = /bin/zsh','program = /bin/sh'),1),(good.replace('arguments = {','arguments = {\nextra'),1)):
-            result=subprocess.run(['/bin/zsh','-f','-c','project_root=$1;script_dir="$1/scripts";source "$2";desktop_job_owned "$3"','audit',root,str(helper),text],capture_output=True,text=True)
+        doc=plistlib.loads(self.plist.read_bytes());doc['WorkingDirectory']=root;doc['ProgramArguments'][1]=root+'/scripts/lib/xplanet/desktop.zsh';doc['StandardOutPath']=root+'/logs/xplanet.log';doc['StandardErrorPath']=root+'/logs/xplanet-error.log';self.plist.write_bytes(plistlib.dumps(doc))
+        good='path = '+str(self.plist)+'\nprogram = /bin/zsh\nworking directory = '+root+'\narguments = {\n/bin/zsh\n'+root+'/scripts/lib/xplanet/desktop.zsh\n}\n'
+        for text,expected in ((good,0),('arguments = {\n}\n'+good,1),(good+'path = /other\n',1),(good+'working directory = /other\n',1),(good.replace('program = /bin/zsh','program = /bin/sh'),1),(good.replace('arguments = {','arguments = {\nextra'),1)):
+            result=subprocess.run(['/bin/zsh','-f','-c','project_root=$1;script_dir="$1/scripts";source "$2";desktop_agent_paths;desktop_job_owned "$3"','audit',root,str(helper),text],env=self.env,capture_output=True,text=True)
             self.assertEqual(result.returncode,expected,(text,result.stderr))
 
     def test_failed_command_releases_lock_and_lock_inode_is_retained(self):
@@ -189,11 +212,12 @@ if args[0]=='print':
   remaining=int(pending.read_text())
   if remaining:pending.write_text(str(remaining-1))
   else:job.unlink(missing_ok=True);pending.unlink()
+ if job.exists():print_job(job)
  raise SystemExit(0 if job.exists() else 3)
 if args[0]=='bootout':pending.write_text('2');raise SystemExit(0)
 if args[0]=='bootstrap':
  if job.exists():raise SystemExit(5)
- job.write_text('{}');raise SystemExit(0)
+ save_job(job,args[2]);raise SystemExit(0)
 if args[0]=='kickstart':
  if pending.exists():job.unlink(missing_ok=True)
  raise SystemExit(0 if job.exists() else 3)
@@ -237,7 +261,8 @@ if args[0] in ('list','print'):
  if pending.exists():
   n=int(pending.read_text())
   if n:pending.write_text(str(n-1))
-  else:job.write_text('{}');pending.unlink()
+  else:save_job(job,str(Path(os.environ['HOME'])/'Library/LaunchAgents/local.xplanet.desktop.plist'));pending.unlink()
+ if job.exists():print_job(job)
  raise SystemExit(0 if job.exists() else 3)
 if args[0]=='bootstrap':pending.write_text('2');raise SystemExit(0)
 if args[0]=='kickstart':raise SystemExit(0 if job.exists() else 3)
