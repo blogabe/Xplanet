@@ -175,7 +175,38 @@ use `--live` to check the current configuration.
 
 The example launchd jobs send normal command output, including TotalMarker's JSON result, to `logs/xplanet.log`. Their stderr goes to separate files such as `logs/xplanet-clouds.log` or `logs/xplanet-storm.log`; an empty stderr file does not mean the refresh succeeded. TotalMarker also appends product outcome events to `logs/totalmarker/events.jsonl` when logging is configured. The supplied examples use `__XPLANET_ROOT__` path placeholders. Setup renders absolute working, launcher and log paths for the actual checkout, without adding a Python environment override. Existing personal plist customization is preserved.
 
-Logs grow without automatic rotation. To inspect an optional manual trim:
+### Read-only text-log view
+
+```sh
+./scripts/xplanet.sh log-view
+./scripts/xplanet.sh log-view --file logs/xplanet-storm.log
+```
+
+The default is `logs/xplanet-error.log` in this checkout. The view shows the first
+complete, exact two-line Xplanet resize notice for each of night, bump, specular
+and cloud maps, then counts all occurrences and hidden repeats at the end. Other
+warnings/errors, changed wording and incomplete notices stay visible in order.
+Invalid UTF-8 bytes and terminal controls are escaped rather than dropped. This
+is a finite snapshot, not a live tail: reads stop at the initial file size. A
+change detected while reading warns on stderr and returns 1; rerun for a fresh
+view. A stable read returns 0, not an assertion that the log contains no errors.
+Missing, unreadable or nonregular files return 2. Symlink paths are refused.
+
+No renderer, pipeline, job, configuration or raw log is changed. `xplanet.log`
+keeps TotalMarker's normal JSON output, including unchanged results and failures.
+The view needs no TotalMarker configuration. `--file` stays inside the selected
+root; to inspect a separate installation without updating it, use this checkout's
+`./scripts/run-totalmarker --root /absolute/installation/path log-view`.
+
+Text logs grow without automatic rotation. Manual deletion/reset when needed is
+an operator choice, not an added maintenance command or scheduled workflow.
+Deleting an active log does not redirect its writer's open descriptor: a later
+normal writer reopen is needed before new output appears at that pathname. This
+view never deletes/truncates files or restarts anything for cleanup.
+
+### Existing event-log trim
+
+To inspect an optional manual trim:
 
 ```sh
 ./scripts/xplanet.sh log-trim --dry-run

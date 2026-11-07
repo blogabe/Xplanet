@@ -17,6 +17,7 @@ from .features.eclipse import run as run_eclipse
 from .features.santa import run as run_santa
 from .paths import RootFS
 from .log_trim import trim as trim_log
+from .log_view import view as view_log
 
 
 def internal_diagnostic(error):
@@ -41,14 +42,17 @@ def main(argv=None):
     parser = argparse.ArgumentParser(prog="totalmarker")
     parser.add_argument("--root", required=True, help="Existing isolated project root")
     parser.add_argument("--config", help="INI or TOML path within root (never rewritten)")
-    parser.add_argument("command", choices=["clouds", "labels", "quake", "storm", "volcano", "norad", "eclipse", "santa", "health", "log-trim"])
+    parser.add_argument("command", choices=["clouds", "labels", "quake", "storm", "volcano", "norad", "eclipse", "santa", "health", "log-trim", "log-view"])
     parser.add_argument("--live", action="store_true", help="Health: validate sources in a temporary root")
     parser.add_argument("--json", action="store_true", help="Health: output structured JSON")
     parser.add_argument("--verbose", action="store_true", help="Health: include source and diagnostic details")
     parser.add_argument("--dashboard", action="store_true", help="Health: compact saved-status records for management")
     parser.add_argument("--days", type=int, help="Log trim: retain this many days (default 30)")
     parser.add_argument("--dry-run", action="store_true", help="Log trim: report without writing")
+    parser.add_argument("--file", help="Log view: file within root (default logs/xplanet-error.log)")
     args = parser.parse_args(argv)
+    if args.file is not None and args.command != "log-view":
+        parser.error("--file is a log-view option")
     if args.command != "log-trim" and (args.days is not None or args.dry_run):
         parser.error("--days and --dry-run are log-trim options")
     if args.days is not None and args.days < 1:
@@ -59,6 +63,8 @@ def main(argv=None):
         parser.error("--live, --json, --verbose and --dashboard are health options")
     try:
         fs = RootFS(args.root)
+        if args.command == "log-view":
+            return view_log(fs, args.file or "logs/xplanet-error.log", sys.stdout, sys.stderr)
         settings = load(fs, args.config)
         if args.command == "log-trim":
             result = trim_log(fs, settings, days=args.days or 30, dry_run=args.dry_run)

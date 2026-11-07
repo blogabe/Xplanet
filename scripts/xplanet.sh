@@ -83,6 +83,8 @@ Refresh data (Python TotalMarker)
   label        Refresh update labels without fetching (alias: labels)
 
 Inspect and troubleshoot
+  log-view     Read stderr; count repeat resize notices without changing logs
+               --file PATH selects another text log within this checkout
   health       Read saved health; --live probes without updating outputs
                --verbose shows details; --json returns structured results
   diagnostics  Capture selected renderer support; --show reads saved evidence
@@ -96,7 +98,7 @@ Unavailable
   santa        STUB: invocation-time Santa on/off is pending
 
 Detailed help: config --help, config --guide, setup --help, health --help,
-               diagnostics --help, log-trim --help
+               diagnostics --help, log-view --help, log-trim --help
 Use config --prepare to prepare the isolated scene-studio UI environment.
 
 Workflow notes (macOS)
@@ -121,7 +123,7 @@ Workflow notes (macOS)
 USAGE
 }
 
-if (( $# > 1 )) && [[ "$1" != setup && "$1" != health && "$1" != log-trim && "$1" != config && "$1" != diagnostics ]]; then
+if (( $# > 1 )) && [[ "$1" != setup && "$1" != health && "$1" != log-trim && "$1" != log-view && "$1" != config && "$1" != diagnostics ]]; then
     fail "expected exactly one command; use --help"
 fi
 if (( $# == 0 )); then
@@ -207,9 +209,9 @@ case "$switch" in
     earth)
         select_earth_map
         ;;
-    log-trim)
+    log-view|log-trim)
         shift
-        "$script_dir/run-totalmarker" log-trim "$@"
+        "$script_dir/run-totalmarker" "$switch" "$@"
         ;;
     health)
         shift
