@@ -123,6 +123,7 @@ if os.environ.get('MOCK_LAUNCHCTL_TRACE'):
     with open(os.environ['MOCK_LAUNCHCTL_TRACE'],'a') as stream: stream.write(' '.join(args)+'\n')
 if args[0] in ('list','print'):
     if doc and args[0]=='print':
+        print('path = '+doc['_path'])
         print('program = '+doc['ProgramArguments'][0])
         print('working directory = '+doc['WorkingDirectory'])
         print('arguments = {')
@@ -132,6 +133,7 @@ if args[0] in ('list','print'):
 if args[0]=='bootstrap':
     if doc: raise SystemExit(5)
     doc=plistlib.loads(Path(args[2]).read_bytes())
+    doc['_path']=args[2]
     state.write_text(json.dumps(doc)); raise SystemExit(0)
 if args[0]=='bootout':
     if os.environ.get('MOCK_BOOTOUT_FAIL')=='1': raise SystemExit(5)

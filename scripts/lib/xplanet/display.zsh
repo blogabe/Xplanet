@@ -190,84 +190,47 @@ desktop_command() {
 desktop_label=local.xplanet.desktop
 desktop_domain="gui/$EUID"
 
-desktop_job_owned() {
-    local line value program='' working='' in_arguments=false
-    local -a arguments
-    while IFS= read -r line; do
-        value="${line#"${line%%[![:space:]]*}"}"
-        value="${value%"${value##*[![:space:]]}"}"
-        if [[ "$value" == 'program = '* ]]; then
-            [[ -z "$program" ]] || return 1
-            program="${value#program = }"
-        elif [[ "$value" == 'working directory = '* ]]; then
-            [[ -z "$working" ]] || return 1
-            working="${value#working directory = }"
-        elif [[ "$value" == 'arguments = {' ]]; then
-            [[ "$in_arguments" == false && ${#arguments} == 0 ]] || return 1
-            in_arguments=true
-        elif [[ "$in_arguments" == true ]]; then
-            if [[ "$value" == '}' ]]; then in_arguments=false
-            else arguments+=("$value")
-            fi
-        fi
-    done <<< "$1"
-    [[ "$in_arguments" == false && "$program" == /bin/zsh && "$working" == "$project_root" &&
-       ${#arguments} == 2 && "$arguments[1]" == /bin/zsh && "$arguments[2]" == "$script_dir/lib/xplanet/desktop.zsh" ]]
-}
+source "$script_dir/lib/xplanet/desktop-agent.zsh" || return 2
 
 _start_xplanet() {
     local -a desktop_args
-    local map_note state temporary attempt job_info registered=false
+    local map_note attempt job_info registered=false
     desktop_command
     command -v launchctl >/dev/null || fail "launchctl is required for the desktop"
+    desktop_agent_preflight "${1:-}"
     if job_info=$(launchctl print "$desktop_domain/$desktop_label" 2>/dev/null); then
-        desktop_job_owned "$job_info" || fail "desktop job belongs to another or unverified checkout; use explicit restart to replace it"
+        desktop_job_owned "$job_info" && [[ "$REPLY" == "$project_root" ]] ||
+            fail "desktop job belongs to another or unverified checkout; review it before using explicit restart"
+        [[ "$desktop_job_path" == "$desktop_plist" ]] ||
+            fail "desktop job uses the old .state registration; use restart to migrate it safely (the current display was left running)"
         registered=true
+    fi
+    if [[ "$registered" == false ]]; then
+        local existing
+        existing=$(xplanet_pids) || fail "could not inspect Xplanet processes"
+        [[ -z "$existing" ]] || fail "Xplanet is already running outside the desktop job; use restart to stop all instances and migrate"
     fi
     if [[ -n "${EARTH_MAP_PRE:-}" ]]; then
         map_note=$(select_earth_map) || return $?
     fi
     [[ -z "$map_note" ]] || interactive_note "$map_note"
     if [[ "$registered" == false ]]; then
-        # Do not start a second desktop on top of the old -fork installation.
-        # An explicit restart authorizes the same broad termination as stop.
-        local existing
-        existing=$(xplanet_pids) || fail "could not inspect Xplanet processes"
-        [[ -z "$existing" ]] || fail "Xplanet is already running outside the desktop job; use restart to stop all instances and migrate"
-        state="$project_root/.state/xplanet"
-        local directory
-        for directory in "$project_root/.state" "$state" "$project_root/logs"; do
-            [[ ! -L "$directory" ]] || fail "desktop directories must not be symlinks"
-            mkdir -p -- "$directory" || fail "cannot create desktop directories"
-            [[ -d "$directory" ]] || fail "desktop directory is not a directory"
-        done
-        temporary=$(mktemp "$state/desktop.XXXXXXXX") || fail "cannot prepare desktop job"
-        # Use macOS's plist writer, never interpolate paths into XML or shell text.
-        (
-            trap 'rm -f -- "$temporary"' EXIT
-            trap 'exit 130' INT
-            trap 'exit 143' TERM
-            trap 'exit 129' HUP
-            /usr/bin/plutil -create xml1 "$temporary" &&
-            /usr/bin/plutil -insert Label -string "$desktop_label" "$temporary" &&
-            /usr/bin/plutil -insert ProgramArguments -xml '<array/>' "$temporary" &&
-            /usr/bin/plutil -insert ProgramArguments.0 -string /bin/zsh "$temporary" &&
-            /usr/bin/plutil -insert ProgramArguments.1 -string "$script_dir/lib/xplanet/desktop.zsh" "$temporary" &&
-            /usr/bin/plutil -insert WorkingDirectory -string "$project_root" "$temporary" &&
-            /usr/bin/plutil -insert StandardOutPath -string "$project_root/logs/xplanet.log" "$temporary" &&
-            /usr/bin/plutil -insert StandardErrorPath -string "$project_root/logs/xplanet-error.log" "$temporary" &&
-            mv -f -- "$temporary" "$state/desktop.plist"
-        ) || fail "cannot prepare desktop plist"
-        launchctl bootstrap "$desktop_domain" "$state/desktop.plist" || {
+        desktop_agent_prepare "${1:-}" || return $?
+        # A failed bootstrap can mean a concurrent registration won. Never
+        # kickstart by Label alone: validate the final loaded path and identity.
+        launchctl bootstrap "$desktop_domain" "$desktop_plist" || {
             launchctl print "$desktop_domain/$desktop_label" >/dev/null 2>&1 || fail "could not register desktop job"
         }
         for ((attempt = 0; attempt < 20; attempt++)); do
-            launchctl print "$desktop_domain/$desktop_label" >/dev/null 2>&1 && break
+            job_info=$(launchctl print "$desktop_domain/$desktop_label" 2>/dev/null) && break
             sleep 0.25
         done
-        launchctl print "$desktop_domain/$desktop_label" >/dev/null 2>&1 ||
-            fail "desktop job registration is not visible in $desktop_domain; start was not requested"
+        [[ -n "$job_info" ]] || fail "desktop job registration is not visible in $desktop_domain; start was not requested"
     fi
+    # Recheck even the already-running path; no -k, so start is idempotent.
+    job_info=$(launchctl print "$desktop_domain/$desktop_label" 2>/dev/null) || fail "desktop job disappeared before start"
+    desktop_job_owned "$job_info" && [[ "$REPLY" == "$project_root" && "$desktop_job_path" == "$desktop_plist" ]] ||
+        fail "desktop job changed or has an unverified registration; start was not requested"
     launchctl kickstart "$desktop_domain/$desktop_label" || fail "could not start desktop job"
     interactive_note "Xplanet desktop start requested; launchd accepted the request. Rendering is asynchronous."
 }
@@ -317,13 +280,15 @@ xplanet_pids() {
 }
 
 _stop_xplanet() {
-    local listing pid remaining attempt kill_bin job_error=0
+    local listing pid remaining attempt kill_bin job_info job_error=0
     kill_bin=$(whence -p kill) || fail "cannot locate the PID-specific kill command"
     [[ "$kill_bin" == /* && -x "$kill_bin" ]] ||
         fail "cannot use the PID-specific kill command"
     # Remove the managed job before broad termination so a queued start cannot
     # recreate it. No KeepAlive or background supervisor respawns the renderer.
-    if launchctl print "$desktop_domain/$desktop_label" >/dev/null 2>&1; then
+    desktop_agent_paths read
+    if job_info=$(launchctl print "$desktop_domain/$desktop_label" 2>/dev/null); then
+        desktop_job_owned "$job_info" || fail "desktop job is foreign or unverified; refusing to stop it"
         if launchctl bootout "$desktop_domain/$desktop_label"; then
             # Removal may still be visible after bootout returns. Observe the
             # exact target before allowing restart to register a replacement.
@@ -367,8 +332,13 @@ _restart_xplanet() {
         desktop_command
         [[ -z "${EARTH_MAP_PRE:-}" ]] || select_earth_map --check >/dev/null
     ) || return $?
+    desktop_agent_preflight restart
+    local job_info
+    if job_info=$(launchctl print "$desktop_domain/$desktop_label" 2>/dev/null); then
+        desktop_job_owned "$job_info" || fail "desktop job is foreign or unverified; refusing restart before stop"
+    fi
     _stop_xplanet quiet || return $?
-    _start_xplanet
+    _start_xplanet restart
 }
 
 start_xplanet() { desktop_lifecycle _start_xplanet "$@"; }
