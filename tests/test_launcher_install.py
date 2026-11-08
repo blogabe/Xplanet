@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import sys
 
+from .build_options_support import INSTALL_BREW_FIXTURE
 from .support import copy_launcher, PROJECT, Sandbox, wait_for_prompt
 
 
@@ -24,7 +25,7 @@ class LauncherInstallTests(Sandbox):
         self.prepare_real_setup()
         original = self.personal_definition("/prior/xplanet")
         self.definition.write_text(original)
-        process = subprocess.Popen([str(self.launcher), "install"], cwd=self.base,
+        process = subprocess.Popen([str(self.launcher), "install", "--defaults"], cwd=self.base,
                                    env=self.environment, stdin=subprocess.PIPE,
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         try:
@@ -68,6 +69,7 @@ class LauncherInstallTests(Sandbox):
             self.bin / "brew",
             '#!/bin/sh\n'
             'printf "brew %s\\n" "$*" >> "$TM_TRACE"\n'
+            + INSTALL_BREW_FIXTURE +
             'if [ "$1" = "--prefix" ]; then printf "%s\\n" "$TM_PREFIX"; fi\n'
             'if [ "$TM_FAIL" = "$1" ]; then exit 17; fi\n'
             'if [ "$TM_FAIL" = "install-python" ] && [ "$1 $2" = "install python" ]; then exit 17; fi\n'
@@ -124,7 +126,7 @@ class LauncherInstallTests(Sandbox):
 
     def run_install(self, answers="", **environment):
         return subprocess.run(
-            [str(self.launcher), "install"], cwd=self.base,
+            [str(self.launcher), "install", "--defaults"], cwd=self.base,
             env={**self.environment, **environment}, input=answers,
             text=True, capture_output=True, timeout=5)
 
@@ -135,7 +137,11 @@ class LauncherInstallTests(Sandbox):
         return [
             "brew tap blogabe/xplanet",
             "brew trust blogabe/xplanet",
-            "brew install --formula --build-from-source blogabe/xplanet/xplanet --without-giflib --with-cspice",
+            "brew --prefix --installed blogabe/xplanet/xplanet",
+            "brew formula blogabe/xplanet/xplanet",
+            "brew info --json=v2 --formula blogabe/xplanet/xplanet",
+            "brew install --formula --build-from-source blogabe/xplanet/xplanet",
+            "brew --prefix --installed blogabe/xplanet/xplanet",
             "brew install python",
             "brew --prefix blogabe/xplanet/xplanet",
         ]
@@ -161,7 +167,7 @@ class LauncherInstallTests(Sandbox):
     def test_python_failure_stops_before_setup(self):
         result = self.run_install(TM_FAIL="install-python")
         self.assertEqual(result.returncode, 1)
-        self.assertEqual(self.calls(), self.expected_brew_calls()[:4])
+        self.assertEqual(self.calls(), self.expected_brew_calls()[:8])
 
     def test_existing_config_requires_explicit_replacement(self):
         self.prepare_real_setup()
@@ -174,6 +180,7 @@ class LauncherInstallTests(Sandbox):
         self.assertEqual(self.calls(), self.expected_brew_calls())
 
         self.trace.unlink()
+        (self.prefix / "INSTALL_RECEIPT.json").unlink(missing_ok=True)
         result = self.run_install("n\ny\ny\nq\n")
         self.assertEqual(result.returncode, 3, result.stderr)
         self.assert_definition_binary(self.prefix / "bin/xplanet")
@@ -216,6 +223,7 @@ class LauncherInstallTests(Sandbox):
         for name in ("xp.def", "xp.conf", "totalmarker.toml", "earth"):
             self.assertFalse((self.config / name).exists(), name)
         self.trace.unlink()
+        (self.prefix / "INSTALL_RECEIPT.json").unlink(missing_ok=True)
         accepted = self.run_install("n\ny\nq\n")
         self.assertEqual(accepted.returncode, 3, accepted.stderr)
         self.assert_definition_binary(self.prefix / "bin/xplanet")
@@ -241,6 +249,7 @@ class LauncherInstallTests(Sandbox):
         self._script(self.bin / "brew",
                      '#!/bin/sh\n'
                      'printf "brew %s\\n" "$*" >> "$TM_TRACE"\n'
+                     + INSTALL_BREW_FIXTURE +
                      'if [ "$1" = --prefix ]; then\n'
                      '  if [ "$#" -eq 1 ]; then printf "%s\\n" "$TM_BREW_PREFIX";\n'
                      '  else printf "%s\\n" "$TM_PREFIX"; fi\n'
@@ -250,7 +259,7 @@ class LauncherInstallTests(Sandbox):
                      '  ln -sf "$TM_PYTHON" "$TM_BREW_PREFIX/bin/python3"\n'
                      'fi\n'
                      'exit 0\n')
-        for name in ("ln", "cat", "mkdir", "chmod", "rm", "mktemp"):
+        for name in ("ln", "cat", "mkdir", "chmod", "rm", "mktemp", "cp", "shasum"):
             tool = self.bin / name
             if not tool.exists():
                 tool.symlink_to(shutil.which(name))
@@ -277,3 +286,32 @@ class LauncherInstallTests(Sandbox):
             env=self.environment, text=True, capture_output=True, timeout=5)
         self.assertEqual(result.returncode, 2)
         self.assertEqual(self.calls(), [])
+
+    def test_noninteractive_install_requires_explicit_choices_before_renderer_build(self):
+        result = subprocess.run([str(self.launcher), "install"], cwd=self.base,
+                                env=self.environment, input="", capture_output=True, text=True)
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("requires --defaults", result.stderr)
+        self.assertFalse(any(call.startswith("brew install") for call in self.calls()))
+
+    def test_explicit_feature_choices_reach_brew_and_receipt(self):
+        result = subprocess.run([str(self.launcher), "install", "--with-cspice", "--without-giflib"],
+                                cwd=self.base, env=self.environment, input="n\n",
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        build = next(call for call in self.calls() if call.startswith("brew install --formula"))
+        self.assertIn("--with-cspice", build)
+        self.assertIn("--without-giflib", build)
+
+    def test_formula_change_during_review_stops_before_build(self):
+        result = self.run_install(TM_CHANGE_RECIPE="1")
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("formula changed during review", result.stderr)
+        self.assertFalse(any(call.startswith("brew install") for call in self.calls()))
+
+    def test_installed_recipe_must_match_review_before_python_and_setup(self):
+        result = self.run_install(TM_CHANGE_INSTALLED_RECIPE="1")
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("differs from the reviewed recipe", result.stderr)
+        self.assertNotIn("brew install python", self.calls())
+        self.assertFalse(any(call.startswith("setup") for call in self.calls()))

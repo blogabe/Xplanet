@@ -392,3 +392,52 @@ Review their named `local.xplanet.*` files in `~/Library/LaunchAgents` and use
 macOS's normal job-management tools if disabling them. Preserve custom settings,
 saved scenes and data before removing an installation. There is no automatic
 uninstall or permission-reset command.
+
+
+## Xplanet build choices
+
+Before a fresh build, install shows the available features using the same shell
+menu style as management. Defaults come from the tap: JPEG, PNG, GIF and TIFF
+are enabled; CSPICE, Pango and PNM are optional. PNG remains checked because
+macOS wallpaper handoff requires it. FreeType and required build tools are included. This is independent of TotalMarker and the configurator.
+Use Up/Down to move, Space to toggle, and Enter on **Continue with these choices**.
+On compact terminals, type a feature number to toggle it or press Enter to
+continue. **Details** shows the corresponding Homebrew flags. Cancel, Ctrl-C and
+Ctrl-D stop before building; prior tap or repository updates may already remain.
+The feature choices live in the installed Homebrew receipt, not another project
+configuration file.
+
+For unattended installation, choose defaults explicitly:
+
+```sh
+./scripts/xplanet.sh install --defaults
+```
+
+Or supply exact options from `brew options blogabe/xplanet/xplanet`, for example:
+
+```sh
+./scripts/xplanet.sh install --with-cspice --without-giflib
+```
+
+These are choices for that invocation, not public defaults. Bootstrap accepts
+the same install options and forwards them to the cloned checkout. Noninteractive
+install without an explicit choice stops before building. Subsequent setup retains
+its own confirmations; these switches do not authorize all setup actions.
+
+
+During `update`, the installed Homebrew receipt supplies the current choices.
+When a changed formula needs a rebuild, the interactive review summarizes them
+and offers Continue or Cancel. An unchanged formula needs no confirmation. Explicit
+saved options are preserved; features left at defaults follow the current formula. It does
+not offer switches that Homebrew would silently retain against the user's choice.
+The receipt is checked again after rebuilding, including the old JPEG option
+alias and the older all-optional-features shorthand. The formula is only rebuilt
+when its recipe changes; unchanged recipes do not restart the display.
+
+Noninteractive `update`, or `update --keep-options`, keeps installed choices.
+Changing an existing feature profile remains a direct Homebrew operation; this
+workflow does not edit receipts or uninstall a working renderer. Missing receipts,
+unknown flags or a renderer from another tap require manual review rather than
+silently substituting default features. `setup` can continue to use an existing
+renderer without migrating its installation. Binary feature reports are useful
+for inspection but do not establish Homebrew provenance or original build flags.

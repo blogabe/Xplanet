@@ -97,27 +97,31 @@ update_tap_formula() {
         fail "installed Xplanet formula commit is unavailable; review its build options and reinstall manually"
     current_blob=$("$git_bin" -C "$tap_root" rev-parse --verify "HEAD:$current_rel") ||
         fail "current tap formula is not committed; cannot compare recipes"
+    local receipt_digest
+    receipt_digest=$(shasum -a 256 "$receipt") || fail "could not snapshot the installed build choices"
+    local build_options_changed=false
+    local -a build_options
+    load_helpers build-options
     if [[ "$installed_blob" == "$current_blob" ]]; then
+        choose_build_options update "$receipt" --keep-options || return $?
+    else
+        choose_build_options update "$receipt" "$@" || return $?
+    fi
+    if [[ "$installed_blob" == "$current_blob" && "$build_options_changed" == false ]]; then
         print -- "Xplanet tap formula unchanged; no reinstall needed."
         return 0
     fi
-    count=$(/usr/bin/plutil -extract used_options raw -o - "$receipt") ||
-        fail "installed Xplanet build options are unavailable; refusing to lose them"
-    [[ "$count" == <-> && "$count" -le 32 ]] ||
-        fail "installed Xplanet build options are invalid"
-    options=()
-    for ((index = 0; index < count; index++)); do
-        option=$(/usr/bin/plutil -extract "used_options.$index" raw -o - "$receipt") ||
-            fail "could not read installed Xplanet build option $index"
-        [[ "$option" =~ '^--(with|without)-[A-Za-z0-9-]+$' ]] ||
-            fail "installed Xplanet build option is not supported for automatic reinstall: $option"
-        options+=("$option")
-    done
+    [[ "$(shasum -a 256 "$receipt")" == "$receipt_digest" ]] ||
+        fail "the installed build changed during review; run update again"
+    # Pin the reviewed recipe across the interactive choice screen.
+    [[ "$("$git_bin" -C "$tap_root" rev-parse --verify "HEAD:$current_rel")" == "$current_blob" &&
+       -z "$("$git_bin" -C "$tap_root" status --porcelain=v1 -- "$current_rel")" ]] ||
+        fail "the tap formula changed during review; run update again"
     running_before=$(desktop_status) ||
         fail "could not inspect this user's Xplanet processes before reinstall"
     print -- "Xplanet tap formula changed; rebuilding from source with installed options."
     HOMEBREW_NO_AUTO_UPDATE=1 "$brew_bin" reinstall --formula --build-from-source \
-        blogabe/xplanet/xplanet "${options[@]}" ||
+        blogabe/xplanet/xplanet "${build_options[@]}" ||
         fail "Xplanet formula reinstall failed; the Git checkout may already be updated"
     refreshed_prefix=$(HOMEBREW_NO_AUTO_UPDATE=1 "$brew_bin" --prefix --installed blogabe/xplanet/xplanet) ||
         fail "Xplanet reinstall returned success, but no installed formula was found"
@@ -132,7 +136,8 @@ update_tap_formula() {
         fail "Xplanet reinstall provenance cannot be verified"
     [[ "$refreshed_blob" == "$current_blob" ]] ||
         fail "Xplanet reinstall did not record the updated formula; check Homebrew before retrying"
-    print -- "Xplanet tap formula reinstall verified."
+    verify_build_options "$refreshed_receipt" || fail "Xplanet rebuild options could not be verified; no automatic restart was attempted"
+    print -- "Xplanet tap formula and build options verified."
     if [[ -n "$running_before" ]]; then
         print -- "Restarting the running Xplanet display with the updated formula..."
         restart_xplanet || fail "Xplanet was reinstalled, but the display could not be restarted"

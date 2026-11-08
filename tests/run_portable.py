@@ -5,6 +5,7 @@ MACOS_MODULES = {
     'tests.configurator.test_handoff_shell',
     'tests.configurator.test_scene_desktop',
     'tests.test_bootstrap',
+    'tests.test_build_options',
     'tests.test_health_launcher',
     'tests.test_launchd_examples',
     'tests.test_launchd_setup',

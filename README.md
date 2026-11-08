@@ -46,8 +46,10 @@ cd ~/.xplanet
 ```
 
 Use a destination that does not already exist; open an existing checkout in place.
-Direct `install` provisions dependencies and continues into setup; `setup` reuses
-installed prerequisites. After setup, run `./scripts/xplanet.sh start` if you skipped
+Direct `install` reviews Xplanet build features, provisions dependencies and continues
+into setup; `setup` reuses installed prerequisites. Fresh builds start with the tap’s
+defaults, not a personal feature profile. See [build choices](docs/management.md#xplanet-build-choices)
+for customization and noninteractive installation. After setup, run `./scripts/xplanet.sh start` if you skipped
 its start offer, then `./scripts/xplanet.sh health` to inspect saved source status.
 Start acceptance is asynchronous; see the [first-run sequence](docs/management.md#quick-start)
 for what to expect and how to diagnose missing wallpaper.

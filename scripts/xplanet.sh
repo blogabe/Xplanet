@@ -5,9 +5,15 @@ set -u
 
 # A downloaded entry point has no checkout-local dependencies yet.
 if [[ "${1:-}" == bootstrap ]]; then
-    if (( $# != 1 )); then
-        print -u2 -- "xplanet.sh: bootstrap takes no arguments"
-        exit 2
+    if [[ "${2:-}" == --defaults ]]; then
+        (( $# == 2 )) || { print -u2 -- 'xplanet.sh: --defaults cannot be combined with build flags'; exit 2; }
+    else
+        for bootstrap_option in "${@:2}"; do
+            [[ "$bootstrap_option" =~ '^--(with|without)-[A-Za-z0-9-]+$' ]] || {
+                print -u2 -- 'xplanet.sh: bootstrap accepts --defaults or exact formula build flags'
+                exit 2
+            }
+        done
     fi
     bootstrap_ref=${XPLANET_BOOTSTRAP_REF:-main}
     if [[ ! "$bootstrap_ref" =~ '^[A-Za-z0-9][A-Za-z0-9._/-]*$' ]]; then
@@ -29,7 +35,7 @@ if [[ "${1:-}" == bootstrap ]]; then
     curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' \
         --output "$bootstrap_tmp/xp-bootstrap.sh" \
         "https://raw.githubusercontent.com/blogabe/Xplanet/$bootstrap_ref/scripts/xp-bootstrap.sh" || exit 1
-    /bin/zsh "$bootstrap_tmp/xp-bootstrap.sh" "$bootstrap_ref"
+    /bin/zsh "$bootstrap_tmp/xp-bootstrap.sh" "$bootstrap_ref" "${@:2}"
     exit $?
 fi
 script_dir=$(CDPATH= cd -- "$(dirname -- "${0:A}")" && pwd -P)
@@ -62,7 +68,7 @@ Explore and configure
 
 Install and maintain
   bootstrap    Clone into ~/.xplanet, then run install (Homebrew required)
-  install      Install Xplanet and Python, offer approval run, then setup
+  install      Review build choices, install Xplanet/Python, then setup
   setup        Prepare files, refresh markers and register optional automation
   update       Fast-forward Git, then check the blogabe Xplanet tap formula
 
@@ -97,8 +103,9 @@ Housekeeping and development
 Unavailable
   santa        STUB: invocation-time Santa on/off is pending
 
-Detailed help: config --help, config --guide, setup --help, health --help,
-               diagnostics --help, log-view --help, log-trim --help
+Detailed help: install --help, update --help, config --help, config --guide,
+               setup --help, health --help, diagnostics --help,
+               log-view --help, log-trim --help
 Use config --prepare to prepare the isolated scene-studio UI environment.
 
 Workflow notes (macOS)
@@ -111,7 +118,8 @@ Workflow notes (macOS)
 
   Update uses only the current branch's upstream. It refuses tracked changes
   and untracked/ignored collisions, then updates Homebrew tap metadata. It
-  rebuilds only when this tap's formula recipe changes; no setup runs. A
+  rebuilds only when this tap's formula recipe changes. Installed build
+  choices are preserved; no setup runs. A
   formula reinstall restarts the display only if Xplanet was already
   running.
 
@@ -126,7 +134,7 @@ Workflow notes (macOS)
 USAGE
 }
 
-if (( $# > 1 )) && [[ "$1" != setup && "$1" != health && "$1" != log-trim && "$1" != log-view && "$1" != config && "$1" != diagnostics ]]; then
+if (( $# > 1 )) && [[ "$1" != setup && "$1" != health && "$1" != log-trim && "$1" != log-view && "$1" != config && "$1" != diagnostics && "$1" != install && "$1" != update ]]; then
     fail "expected exactly one command; use --help"
 fi
 if (( $# == 0 )); then
@@ -154,8 +162,8 @@ fi
 case "$switch" in
     config) load_helpers configurator ;;
     diagnostics) load_helpers diagnostics ;;
-    install) load_helpers install ;;
-    update) load_helpers display update ;;
+    install) load_helpers install build-options ;;
+    update) load_helpers display update build-options ;;
     preview|render|start|restart|stop|earth) load_helpers display ;;
 esac
 
@@ -172,11 +180,18 @@ case "$switch" in
         configure_xplanet "$@"
         ;;
     install)
-        install_xplanet
+        shift
+        build_options_arguments "$@" || exit $?
+        [[ "${1:-}" != --help ]] || { build_options_help; exit 0; }
+        install_xplanet "$@"
         ;;
     update)
+        shift
+        build_options_arguments "$@" || exit $?
+        [[ "${1:-}" != --help ]] || { build_options_help; exit 0; }
+        [[ $# == 0 || ( $# == 1 && "$1" == --keep-options ) ]] || fail "update preserves installed options; use --keep-options to skip review"
         update_repository
-        update_tap_formula
+        update_tap_formula "$@"
         ;;
     test)
         "$script_dir/run-totalmarker" --test

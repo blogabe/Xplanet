@@ -9,8 +9,16 @@ fail() {
     exit 2
 }
 
-(( $# == 1 )) || fail "expected a repository branch or tag from xplanet.sh"
+(( $# >= 1 )) || fail "expected a repository branch or tag from xplanet.sh"
 ref=$1
+shift
+if [[ "${1:-}" == --defaults ]]; then
+    (( $# == 1 )) || fail "--defaults cannot be combined with build flags"
+else
+    for option in "$@"; do
+        [[ "$option" =~ '^--(with|without)-[A-Za-z0-9-]+$' ]] || fail "unsupported install option"
+    done
+fi
 [[ "$ref" =~ '^[A-Za-z0-9][A-Za-z0-9._/-]*$' ]] || fail "invalid repository ref"
 [[ "${HOME:-}" == /* && -d "$HOME" ]] || fail "HOME must be an existing absolute directory"
 destination="$HOME/.xplanet"
@@ -30,4 +38,4 @@ print -- "Cloning Xplanet ($ref) into $destination..."
     fail "clone failed; inspect $destination before removing it and retrying"
 [[ -f "$destination/scripts/xplanet.sh" && -x "$destination/scripts/xplanet.sh" ]] ||
     fail "checkout has no executable scripts/xplanet.sh; inspect $destination"
-exec "$destination/scripts/xplanet.sh" install
+exec "$destination/scripts/xplanet.sh" install "$@"

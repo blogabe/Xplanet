@@ -14,6 +14,7 @@ import struct
 
 from pathlib import Path
 
+from .build_options_support import INSTALL_BREW_FIXTURE
 from .support import PROJECT, Sandbox, copy_launcher
 
 DASHBOARD='snapshot\t2026-11-04 12:00Z\n'+'\n'.join('unknown\t'+title+'\tsource-detail; freshness not assessed' for title in ('Clouds','Earthquakes','Storms','Volcanoes','Satellites','Eclipses','Santa'))
@@ -281,8 +282,9 @@ class ManagementTests(Sandbox):
 
     def test_missing_dependencies_install_only_after_review_then_setup_and_exit(self):
         (self.bin / 'xplanet').unlink()
-        self.env.update(PYTHON_RESULT='2', FIXTURE_BIN=str(self.bin))
+        self.env.update(PYTHON_RESULT='2', FIXTURE_BIN=str(self.bin), TM_PREFIX=str(self.bin.parent))
         self.write_script(self.bin / 'brew',
+                          INSTALL_BREW_FIXTURE +
                           'if [ "$1" = --prefix ]; then echo "$FIXTURE_BIN/.."; exit 0; fi\n'
                           'echo "brew $*" >> "$TRACE"\n'
                           'if [ "$1" = install ] && [ "$2" = --formula ]; then\n'
@@ -292,11 +294,11 @@ class ManagementTests(Sandbox):
                           '[ -f "$FIXTURE_BIN/python-ready" ] || exit 2\necho /fixture/python\n')
         (self.scripts / 'lib/xplanet/python-runtime.zsh').write_bytes(
             (PROJECT / 'scripts/lib/xplanet/python-runtime.zsh').read_bytes())
-        code, output = self.terminal('1\ny\n1\ny\ny\nn\n ')
+        code, output = self.terminal('1\ny\n\n1\ny\ny\nn\n ')
         self.assertEqual(code, 0, output)
         self.assertEqual(self.calls(), [
             'brew tap blogabe/xplanet', 'brew trust blogabe/xplanet',
-            'brew install --formula --build-from-source blogabe/xplanet/xplanet --without-giflib --with-cspice',
+            'brew install --formula --build-from-source blogabe/xplanet/xplanet',
             'brew install python', 'setup'])
         self.assertEqual(output.count('Xplanet management'), 1)
 
