@@ -79,7 +79,9 @@ not perform a live first install. A tag checkout is intentionally detached and c
 use branch fast-forward update; select a branch for installations that use `update`.
 
 `install` installs Xplanet and offers an interactive Python choice (Homebrew is
-recommended; uv is an alternative). Noninteractive install retains Homebrew
+recommended; uv is an alternative). Renderer features are reviewed first; see
+[build choices](management.md#xplanet-build-choices). Noninteractive installation
+requires explicit renderer defaults/options and retains Homebrew
 provisioning. It offers a one-frame Xplanet launch for macOS security approval,
 then continues into interactive setup. See [Python runtime](python-runtime.md). Setup creates
 missing personal files from examples and preserves existing files. The example

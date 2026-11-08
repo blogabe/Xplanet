@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import sys
 
+from .build_options_support import FORMULA_JSON
 from .support import copy_launcher, PROJECT, Sandbox, stub_desktop_launchctl
 
 
@@ -65,6 +66,9 @@ with open(os.environ["TM_BREW_TRACE"], "a") as trace:
     trace.write(json.dumps(args) + "\n")
 tap = Path(os.environ["TM_BREW_TAP"])
 prefix = Path(os.environ["TM_BREW_PREFIX"])
+if args == ["info", "--json=v2", "--formula", "blogabe/xplanet/xplanet"]:
+    print(os.environ["TM_FORMULA_INFO"])
+    sys.exit(0)
 if args == ["update"]:
     sys.exit(int(os.environ.get("TM_BREW_UPDATE_EXIT", "0")))
 if args == ["--repository", "blogabe/xplanet"]:
@@ -83,7 +87,7 @@ elif args[:4] == ["reinstall", "--formula", "--build-from-source",
     data = json.loads(receipt.read_text())
     data["source"]["tap_git_head"] = subprocess.check_output(
         ["git", "-C", str(tap), "rev-parse", "HEAD"], text=True).strip()
-    data["used_options"] = args[4:]
+    data["used_options"] = [] if os.environ.get("TM_BREW_LOSE_OPTIONS") else args[4:]
     receipt.write_text(json.dumps(data))
     with open(os.environ["TM_EVENT_TRACE"], "a") as events:
         events.write("reinstall\n")
@@ -96,6 +100,7 @@ else:
             "TM_BREW_TRACE": str(self.trace),
             "TM_BREW_TAP": str(self.tap),
             "TM_BREW_PREFIX": str(self.prefix),
+            "TM_FORMULA_INFO": FORMULA_JSON,
         })
 
     def prepare_renderer_fixture(self):
@@ -365,7 +370,8 @@ sys.exit(4)
         self.assertIn("formula unchanged", result.stdout)
         self.assertEqual(self.brew_calls(), [["update"], ["--repository", "blogabe/xplanet"],
                          ["--prefix", "--installed", "blogabe/xplanet/xplanet"],
-                         ["formula", "blogabe/xplanet/xplanet"]])
+                         ["formula", "blogabe/xplanet/xplanet"],
+                         ["info", "--json=v2", "--formula", "blogabe/xplanet/xplanet"]])
 
     def test_same_revision_formula_change_reinstalls_once_with_installed_options(self):
         self.change_formula()
@@ -373,11 +379,13 @@ sys.exit(4)
         result = self.update()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("formula changed; rebuilding from source", result.stdout)
-        self.assertIn("reinstall verified", result.stdout)
+        self.assertIn("build options verified", result.stdout)
         calls = self.brew_calls()
         self.assertEqual(calls[-1], ["--prefix", "--installed", "blogabe/xplanet/xplanet"])
-        self.assertIn(["reinstall", "--formula", "--build-from-source",
-                       "blogabe/xplanet/xplanet", *original_options], calls)
+        rebuild = next(call for call in calls if call[0] == "reinstall")
+        self.assertEqual(rebuild[:4], ["reinstall", "--formula", "--build-from-source",
+                                      "blogabe/xplanet/xplanet"])
+        self.assertCountEqual(rebuild[4:], original_options)
         self.assertEqual(json.loads(self.receipt.read_text())["source"]["tap_git_head"],
                          self.git(self.tap, "rev-parse", "HEAD"))
         second = self.update()
@@ -485,5 +493,23 @@ sys.exit(4)
                            options=("--with-cspice", "--custom-option"))
         result = self.update()
         self.assertEqual(result.returncode, 2)
-        self.assertIn("not supported for automatic reinstall", result.stderr)
+        self.assertIn("unsupported build option", result.stderr)
         self.assertFalse(any(call[0] == "reinstall" for call in self.brew_calls()))
+
+    def test_changed_options_after_rebuild_are_not_reported_as_success_or_restarted(self):
+        self.change_formula()
+        self.running.write_text(json.dumps(["101"]))
+        result = self.update(TM_BREW_LOSE_OPTIONS="1")
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("different build options", result.stderr)
+        self.assertEqual(json.loads(self.running.read_text()), ["101"])
+        self.assertEqual(self.events.read_text().splitlines(), ["reinstall"])
+
+    def test_update_rejects_option_changes_before_git_or_brew(self):
+        for flag in ("--defaults", "--with-pango", "--without-giflib"):
+            result = subprocess.run([str(self.launcher), "update", flag], cwd=self.base,
+                                    env=self.environment, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 2, result.stderr)
+            self.assertIn("preserves installed options", result.stderr)
+            self.assertFalse(self.trace.exists())
+            self.assertNotIn("Checking the configured Git upstream", result.stdout)

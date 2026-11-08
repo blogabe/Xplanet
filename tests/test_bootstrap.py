@@ -35,7 +35,7 @@ class BootstrapTests(unittest.TestCase):
         self.installer = self.base / "installer"
         self.installer.write_text(
             '#!/bin/zsh\nprint -r -- "$1" > "$HOME/install-command"\n'
-            'read -r answer\nprint -r -- "$answer" > "$HOME/install-answer"\n'
+            'shift; print -rl -- "$@" > "$HOME/install-options"\nread -r answer\nprint -r -- "$answer" > "$HOME/install-answer"\n'
             'exit "${INSTALL_EXIT:-0}"\n')
         self.installer.chmod(0o755)
         self.env = {
@@ -241,3 +241,17 @@ raise SystemExit(subprocess.call(
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(self.calls(), [])
         self.assertFalse((self.home / ".xplanet").exists())
+
+    def test_build_choices_are_forwarded_to_installer(self):
+        result = self.run_bootstrap("bootstrap", "--with-cspice", "--without-giflib")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.home / "install-options").read_text().splitlines(),
+                         ["--with-cspice", "--without-giflib"])
+
+    def test_conflicting_build_modes_are_rejected_before_download(self):
+        for flags in (("--defaults", "--with-cspice"), ("--defaults", "--defaults"),
+                      ("--with-cspice", "--defaults")):
+            result = self.run_bootstrap("bootstrap", *flags)
+            self.assertEqual(result.returncode, 2, result.stderr)
+            self.assertEqual(self.calls(), [])
+            self.assertFalse((self.home / ".xplanet").exists())
