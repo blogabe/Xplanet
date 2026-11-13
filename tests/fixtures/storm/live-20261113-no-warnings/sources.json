@@ -1,0 +1,43 @@
+{
+  "responses": [
+    {
+      "file": "nhc-current.json",
+      "url": "https://www.nhc.noaa.gov/CurrentStorms.json",
+      "date": "Fri, 13 Nov 2026 04:08:46 GMT",
+      "retrieved_at": "2026-11-13T04:08:46.288289+00:00",
+      "bytes": 24,
+      "sha256": "faea5cf4718512d456018c5081c2b274d7709e4f7f69e4d0bb2556d0d33360d7"
+    },
+    {
+      "file": "jtwc-rss.xml",
+      "url": "https://www.metoc.navy.mil/jtwc/rss/jtwc.rss",
+      "date": "Fri, 13 Nov 2026 04:08:47 GMT",
+      "retrieved_at": "2026-11-13T04:08:46.561930+00:00",
+      "bytes": 2399,
+      "sha256": "f6d6bd3f2f64d3cc575f0da319f11d77985c68fac5e4f40e802b07c154c40131"
+    },
+    {
+      "file": "jtwc-abio.txt",
+      "url": "https://www.metoc.navy.mil/jtwc/products/abioweb.txt",
+      "date": "Fri, 13 Nov 2026 04:08:47 GMT",
+      "retrieved_at": "2026-11-13T04:08:46.831566+00:00",
+      "bytes": 1599,
+      "sha256": "c65648e0b44ce59a43d2ddd6d3d4f6fd66da4ae48684202536da9e04bfe4050d"
+    },
+    {
+      "file": "jtwc-abpw.txt",
+      "url": "https://www.metoc.navy.mil/jtwc/products/abpwweb.txt",
+      "date": "Fri, 13 Nov 2026 04:08:48 GMT",
+      "retrieved_at": "2026-11-13T04:08:47.111590+00:00",
+      "bytes": 1814,
+      "sha256": "6b1fb3fb948e9c3878271ba4e4df3f4b8eb6e19a3df3a32cba777a5657051e26"
+    }
+  ],
+  "rejected_response": {
+    "file": "rejected-jtwc-rss.xml",
+    "captured_at": 1794539405.264886,
+    "sha256": "55256eb1d98ced6cce908df62e7755abefc07efd0db716c6beeaf0780cac0b26",
+    "bytes": 2399,
+    "url": "https://www.metoc.navy.mil/jtwc/rss/jtwc.rss"
+  }
+}
