@@ -220,6 +220,14 @@ def parse_jtwc_rss(body):
         "Current Northwest Pacific/North Indian Ocean* Tropical Systems": "north",
         "Current Southern Hemisphere Tropical Systems": "south",
     }
+    # JTWC collapses the regional warning categories into this single item
+    # when no warnings are active. This says nothing about advisory invests.
+    worldwide_empty_title = (
+        "No Active Tropical Warnings in the Northwest Pacific, North Indian Ocean, "
+        "Central Pacific, Eastern Pacific, or Southern Hemisphere")
+    worldwide_empty_description = (
+        "There are no active tropical warnings in the Northwest Pacific/North Indian "
+        "Ocean, Central/Eastern Pacific, or Southern Hemisphere at this time.")
     items = {}
     advisories = None
     for item in root.findall("./channel/item"):
@@ -246,6 +254,15 @@ def parse_jtwc_rss(body):
             if set(found) != set(JTWC_ADVISORIES):
                 raise FeedError("Storm JTWC RSS lacks both significant advisories")
             advisories = found
+            continue
+        if " ".join(title.split()) == worldwide_empty_title:
+            if items:
+                raise FeedError("Storm JTWC RSS duplicates a coverage category")
+            description = item.findtext("description", "")
+            if " ".join(description.split()) != worldwide_empty_description:
+                raise FeedError("Storm JTWC RSS does not confirm worldwide empty warnings")
+            date = _http_stamp(item.findtext("pubDate"))
+            items.update(north=(date, []), south=(date, []))
             continue
         if title not in titles:
             continue

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+    <channel>
+        <title>JTWC TROPICAL CYCLONE INFORMATION FEED</title>
+        <link>https://s3.amazonaws.com/www.metoc.navy.mil/jtwc/jtwc.html</link>
+        <description>JTWC Tropical Cyclone Information</description>
+        <pubDate>Fri, 13 Nov 2026 04:08:02 +0000</pubDate>
+        <lastBuildDate>Fri, 13 Nov 2026 04:08:02 +0000</lastBuildDate>
+        <generator>ContentFeeder 2.0</generator>
+        <image>
+            <url>https://s3.amazonaws.com/www.metoc.navy.mil/jtwc/jtwc.html</url>
+            <title>JTWC TROPICAL CYCLONE INFORMATION FEED</title>
+            <link>https://s3.amazonaws.com/www.metoc.navy.mil/jtwc/jtwc.html</link>
+        </image>
+        <item>
+            <title>No Active Tropical Warnings in the Northwest Pacific, North Indian Ocean, Central Pacific, Eastern Pacific, or Southern Hemisphere</title>
+            <link>https://s3.amazonaws.com/www.metoc.navy.mil/jtwc/jtwc.html</link>
+            <description><![CDATA[There are no active tropical warnings in the Northwest Pacific/North Indian Ocean, Central/Eastern Pacific, or Southern Hemisphere at this time.]]></description>
+            <author>CDO.JTWC.fct@navy.mil (JTWC CDO)</author>
+            <guid>https://s3.amazonaws.com/www.metoc.navy.mil/jtwc/jtwc.html</guid>
+            <pubDate>Fri, 13 Nov 26 04:08:02 +0000</pubDate>
+        </item>
+        <item>
+            <title>Current Significant Tropical Weather Advisories</title>
+            <link>https://s3.amazonaws.com/www.metoc.navy.mil/jtwc/jtwc.html</link>
+            <description><![CDATA[<ul>
+      <li><b><a href="https://www.metoc.navy.mil/jtwc/products/abpwweb.txt" target='newwin'>ABPW10 (Western/South Pacific Ocean)</a><br>
+
+      <font color=red>Reissued at 12/1200Z</font></li>
+      <li><b><a href="https://www.metoc.navy.mil/jtwc/products/abioweb.txt" target='newwin'>ABIO10 (Indian Ocean)</a><br>
+
+      <font color=red>Reissued at 13/0000Z</font></li>
+<li><a href='https://www.metoc.navy.mil/jtwc/products/abpwsair.jpg' target='newwin'>Satellite Image</a></li>
+</ul>]]></description>
+            <author>CDO.JTWC.fct@navy.mil (JTWC CDO)</author>
+            <category>Significant Tropical Weather Advisories</category>
+            <guid>TROPICAL-ADVISORIES</guid>
+            <pubDate>Fri, 13 Nov 26 04:08:02 +0000</pubDate>
+        </item>
+    </channel>
+</rss>

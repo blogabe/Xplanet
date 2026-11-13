@@ -62,3 +62,13 @@ ABPW retains an explicitly cross-referenced final warning for 30W after RSS
 retires that warning. The snapshot still includes the active 99W and 94S
 invests. Final-warning recognition must not excuse a missing active warning,
 ambiguous reference, expired source interval or failed publication.
+
+`live-20261113-no-warnings/` preserves unmodified public NHC/JTWC responses
+captured November 13 at 04:08 UTC with URL, response Date, retrieval timestamp,
+byte count and SHA-256 in `sources.json`. JTWC combines all regions into one
+explicit no-active-warning item instead of separate north/south categories.
+Both significant advisories remain required: this real packet contains invests
+92B and 95P, so it is not a globally empty storm dataset. The separate rejected
+RSS is byte-identical to the response saved by TotalMarker at the November 13
+03:10 UTC failed refresh (its capture timestamp and hash are in the receipt).
+The globally empty advisory test is synthetic, not a natural empty-feed claim.
