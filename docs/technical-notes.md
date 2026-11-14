@@ -91,7 +91,13 @@ provider fetch does not veto scheduled retries when the operator enables that
 source. Re-running setup validates on-disk personal plists with plutil and leaves
 already registered labels unchanged. Loaded settings are explicitly unverified;
 label presence does not prove configuration equality. Setup does not replace
-personal schedules.
+personal schedules. All selected jobs are preflighted before registration: one
+invalid personal plist blocks the whole batch, including marker refresh jobs.
+A running desktop alone does not confirm those jobs were registered. Setup reports
+the offending file/field and resolved versus expected path. Correct that personal
+plist (and its `ABE-CFG` source, if used), preserving its schedule, then rerun setup.
+Paths such as `./Users/...` are relative to `WorkingDirectory`, not `/Users/...`.
+Setup deliberately does not guess repairs or replace personal plists.
 
 To rerun setup, use `./scripts/xplanet.sh setup`. With an existing `config/xp.def`,
 `XPLANET_BIN` must point to the installed Xplanet executable. Set

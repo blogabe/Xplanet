@@ -74,13 +74,25 @@ prepare_launchd_files() (
     [[ -x "$project_root/scripts/xplanet.sh" ]] || fail "The Xplanet launcher must be executable"
     [[ -x /usr/bin/plutil ]] || fail "macOS plutil is unavailable"
 
+    # Keep inherited personal settings intact; tell the operator exactly what
+    # to fix instead of silently guessing a replacement path.
+    path_failure() {
+        local file="$1" key="$2" value="$3" resolved="$4" expected="$5"
+        print -ru2 -- "Launchd path in $file:"
+        print -ru2 -- "  $key: $value"
+        print -ru2 -- "  resolved: $resolved"
+        print -ru2 -- "  expected: $expected"
+        print -ru2 -- 'Relative paths are resolved from WorkingDirectory; ./Users/... is not /Users/... .'
+        fail "Review local launchd $key: $file"
+    }
+
     verify_log() {
-        local value="$1" working="$2" path resolved
+        local value="$1" working="$2" file="${3:-}" key="${4:-log path}" path resolved
         path="$value"
         [[ "$path" == /* ]] || path="$working/$path"
         resolved="${path:A}"
         [[ "${resolved:h}" == "$project_root/logs" ]] ||
-            fail "Review local launchd log path $value: it must resolve under $project_root/logs"
+            path_failure "$file" "$key (log path)" "$value" "$resolved" "a log path under $project_root/logs"
         if entry_exists "$path"; then
             regular "$path"
         fi
@@ -115,14 +127,14 @@ prepare_launchd_files() (
         if [[ "$kind" == local ]]; then
             value=$(plist_get "$path" WorkingDirectory)
             [[ "$value" == /* && "${value:A}" == "$working" ]] ||
-                fail "Review local launchd WorkingDirectory: $value (resolved: ${value:A}; expected: $working)"
+                path_failure "$path" WorkingDirectory "$value" "${value:A}" "$working"
             value=$(plist_get "$path" ProgramArguments.0)
             [[ "$value" == /* || "$value" == */* ]] ||
                 fail "Review local launchd ProgramArguments.0: $path"
             launcher="$value"
             [[ "$launcher" == /* ]] || launcher="$working/$launcher"
             [[ "${launcher:A}" == "$project_root/scripts/xplanet.sh" ]] ||
-                fail "Review local launchd ProgramArguments.0: $path"
+                path_failure "$path" ProgramArguments.0 "$value" "${launcher:A}" "$project_root/scripts/xplanet.sh"
         fi
         for key in StandardOutPath StandardErrorPath; do
             [[ "$(plist_type "$path" "$key")" == string ]] ||
@@ -132,7 +144,7 @@ prepare_launchd_files() (
                 [[ "$value" == __XPLANET_ROOT__/logs/* ]] || fail "Unexpected $key in $path"
                 value="$project_root/${value#__XPLANET_ROOT__/}"
             fi
-            verify_log "$value" "$working"
+            verify_log "$value" "$working" "$path" "$key"
         done
         if plist_has "$path" EnvironmentVariables; then
             [[ "$(plist_type "$path" EnvironmentVariables)" == dictionary ]] ||
@@ -178,7 +190,7 @@ prepare_launchd_files() (
             value=$(plist_get "$example" "$key")
             resolved="$project_root/${value#__XPLANET_ROOT__/}"
             resolved="${resolved:A}"
-            verify_log "$resolved" "$working"
+            verify_log "$resolved" "$working" "$temporary" "$key"
             plist_set "$temporary" "$key" "$resolved"
         done
         verify_plist "$temporary" "$job" "$command" "$working" local
@@ -691,8 +703,11 @@ if ask "Step 3) Install and register Xplanet automation?"; then
         print -u2 -- "HOME must be an absolute path; no jobs were registered."
         failures+=("launchd home")
     elif ! prepare_launchd_files "${arguments[@]}"; then
-        print -u2 -- "launchd file preparation failed; no jobs were registered."
-        failures+=("launchd preparation")
+        print -u2 -- "launchd file preparation failed; no jobs were registered by this setup attempt."
+        print -u2 -- "The entire selected automation batch was blocked: ${(j:, :)jobs}."
+        print -u2 -- "Existing launchd registrations and personal plists were left unchanged; a running desktop does not prove marker jobs are registered."
+        print -ru2 -- "Resolve the reported launchd preparation error. If editing a personal plist, preserve its schedule and update its ABE-CFG source, if used; then retry: ${(q)launcher} setup"
+        failures+=("launchd preparation: selected automation batch not registered; see the plist error above")
     else
         for job in "${jobs[@]}"; do
             agent="$HOME/Library/LaunchAgents/local.xplanet.$job.plist"
