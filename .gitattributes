@@ -6,3 +6,7 @@ tests/fixtures/gvp_weekly_20261019_structural.html -text
 # Byte-pinned provider fixtures: preserve the indexed response bytes.
 tests/fixtures/usgs_quake_selected_20261019.geojson -text
 tests/fixtures/storm/jtwc-rss-20261027-reissue.xml -text
+
+# Preserve authentic corrected-advisory packet and its source whitespace.
+tests/fixtures/storm/live-20261114-corrected/*.txt -text -whitespace
+tests/fixtures/storm/live-20261114-corrected/*.xml -text -whitespace

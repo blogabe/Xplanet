@@ -72,3 +72,9 @@ Both significant advisories remain required: this real packet contains invests
 RSS is byte-identical to the response saved by TotalMarker at the November 13
 03:10 UTC failed refresh (its capture timestamp and hash are in the receipt).
 The globally empty advisory test is synthetic, not a natural empty-feed claim.
+
+`live-20261114-corrected/` captures the November 14 16:48 UTC public packet,
+with URLs, HTTP dates and hashes in `sources.json`. ABPW uses `CORRECTED`,
+a `COR` header suffix and a correction-justification footer. Its TCFA for 95P
+is still an invest, not a numbered warning or forecast track. Tests cover
+strict date/section validation and first-run creation of both output files.
