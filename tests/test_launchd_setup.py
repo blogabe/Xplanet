@@ -137,7 +137,7 @@ class LaunchdSetupTests(Sandbox):
         for key in ("ProgramArguments.0", "StandardOutPath", "StandardErrorPath"):
             with self.subTest(key=key):
                 broken = plistlib.loads(plistlib.dumps(document))
-                value = "./Users/abe/.xplanet/" + (
+                value = "./Users/example/.xplanet/" + (
                     "scripts/xplanet.sh" if key == "ProgramArguments.0" else "logs/monthly.log")
                 if key == "ProgramArguments.0":
                     broken["ProgramArguments"][0] = value
@@ -148,7 +148,7 @@ class LaunchdSetupTests(Sandbox):
                 result = self.prepare()
                 self.assertEqual(result.returncode, 2, result.stderr)
                 for detail in (str(local), key, value, "resolved:", "expected:",
-                               str(self.root / "images/Users/abe/.xplanet"),
+                               str(self.root / "images/Users/example/.xplanet"),
                                "Relative paths are resolved from WorkingDirectory"):
                     self.assertIn(detail, result.stderr)
                 self.assertEqual(local.read_bytes(), original)
