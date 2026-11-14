@@ -14,7 +14,7 @@ from .storm_model import Storm, TrackPoint
 
 MONTH = {name: number for number, name in enumerate(
     ("JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"), 1)}
-ISSUE = re.compile(r"(?m)\b(REISSUED|ISSUED)/([0-9]{2})([0-9]{2})([0-9]{2})Z-"
+ISSUE = re.compile(r"(?m)\b(REISSUED|ISSUED|CORRECTED)/([0-9]{2})([0-9]{2})([0-9]{2})Z-"
                    r"([0-9]{2})([0-9]{2})([0-9]{2})Z([A-Z]{3})(20[0-9]{2})//[ \t]*\r?$")
 INDIAN_REGION = r"INDIAN(?:[ \t]+|[ \t]*\r?\n[ \t]*)OCEAN"
 SUBJECT_ISSUE = re.compile(
@@ -22,12 +22,12 @@ SUBJECT_ISSUE = re.compile(
     rf"({INDIAN_REGION}|WESTERN AND SOUTH\s+PACIFIC OCEANS)/"
     r"([0-9]{2})([0-9]{2})([0-9]{2})Z-[ \t]*(?:\r?\n[ \t]*)?"
     r"([0-9]{2})([0-9]{2})([0-9]{2})Z([A-Z]{3})(20[0-9]{2})//[ \t]*\r?$")
-ISSUE_CUE = re.compile(r"\b(?:REISSUED|ISSUED)(?=/|[ \t]+[0-9]{6}Z-)")
+ISSUE_CUE = re.compile(r"\b(?:REISSUED|ISSUED|CORRECTED)(?=/|[ \t]+[0-9]{6}Z-)")
 SUBJECT_CUE = re.compile(r"(?m)^SUBJ/")
 REISSUE_SUBJECT = re.compile(
     r"(?m)^SUBJ/SIGNIFICANT TROPICAL WEATHER ADVISORY FOR THE "
     rf"({INDIAN_REGION}|WESTERN AND SOUTH\s+PACIFIC OCEANS)(?:/|\s+)"
-    r"(REISSUED|ISSUED)/")
+    r"(REISSUED|ISSUED|CORRECTED)/")
 AREA = re.compile(r"(?m)^([12])\.\s+(NORTH INDIAN OCEAN AREA|SOUTH INDIAN OCEAN AREA|"
                   r"WESTERN NORTH PACIFIC AREA|SOUTH PACIFIC AREA)\b[^\n]*:")
 SUMMARY = re.compile(r"(?m)^\s*([ABC])\.\s+(TROPICAL CYCLONE SUMMARY|"
@@ -95,6 +95,7 @@ def _issue_interval(text, kind):
             raise FeedError(missing_issue)
         region, *parts = subject[0].groups()
         reissued = False
+        corrected = False
     else:
         if len(issue_cues) != 1 or len(explicit) != 1:
             raise FeedError(missing_issue)
@@ -109,6 +110,7 @@ def _issue_interval(text, kind):
         if subject_cues and heading[2] != status:
             raise FeedError(missing_issue)
         reissued = status == "REISSUED"
+        corrected = status == "CORRECTED"
     if region is not None:
         expected_region = ("INDIAN OCEAN" if kind == "abio" else
                            "WESTERN AND SOUTH PACIFIC OCEANS")
@@ -134,11 +136,15 @@ def _issue_interval(text, kind):
             starts.append(start)
     if len(starts) != 1:
         raise FeedError("Storm JTWC advisory validity interval is invalid")
-    headers = re.findall(r"(?m)^" + kind.upper() + r"10[ \t]+PGTW[ \t]+([0-9]{6})[ \t]*\r?$", text)
-    if len(headers) != 1:
+    # The observed correction pairs COR with CORRECTED and keeps its issue time.
+    # Do not grant it the later-header allowance reserved for a verified reissue.
+    headers = re.findall(r"(?m)^" + kind.upper() +
+                         r"10[ \t]+PGTW[ \t]+([0-9]{6})([ \t]+COR)?[ \t]*\r?$", text)
+    if len(headers) != 1 or bool(headers[0][1]) != corrected:
         raise FeedError("Storm JTWC advisory header disagrees with issue time")
     start = starts[0]
-    header_day, header_hour, header_minute = int(headers[0][:2]), int(headers[0][2:4]), int(headers[0][4:])
+    header = headers[0][0]
+    header_day, header_hour, header_minute = int(header[:2]), int(header[2:4]), int(header[4:])
     issued = set()
     for year_month in {(start.year, start.month), (until.year, until.month)}:
         try:
@@ -266,7 +272,7 @@ def parse_advisory(raw, kind):
         # The last basin can be followed by a numbered justification footer.
         # Subtropical records have no adapter yet: require explicit empty
         # coverage rather than silently treating a populated C section as none.
-        subtropical = re.split(r"(?m)^3\.\s+JUSTIFICATION FOR REISSUE:",
+        subtropical = re.split(r"(?m)^3\.\s+JUSTIFICATION FOR (?:REISSUE|CORRECTION):",
                                subtropical, maxsplit=1)[0].strip()
         subtropical = re.sub(r"(?m)^NNNN\s*$", "", subtropical).strip()
         subtropical = subtropical.removesuffix("//").strip()
