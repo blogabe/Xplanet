@@ -126,6 +126,43 @@ class LaunchdSetupTests(Sandbox):
                 self.assertEqual(local.read_bytes(), changed)
         local.write_bytes(plistlib.dumps(baseline))
 
+    def test_copied_monthly_paths_refuse_before_writes_and_preserve_repaired_schedule(self):
+        local = self.source / "local.xplanet.earth-map.plist"
+        document = plistlib.loads((self.source / (local.name + ".example")).read_bytes())
+        document["WorkingDirectory"] = str(self.root / "images")
+        document["StartCalendarInterval"] = {"Day": 1, "Hour": 0, "Minute": 1}
+        document["ProgramArguments"][0] = str(self.root / "scripts/xplanet.sh")
+        document["StandardOutPath"] = str(self.root / "logs/monthly.log")
+        document["StandardErrorPath"] = str(self.root / "logs/monthly-error.log")
+        for key in ("ProgramArguments.0", "StandardOutPath", "StandardErrorPath"):
+            with self.subTest(key=key):
+                broken = plistlib.loads(plistlib.dumps(document))
+                value = "./Users/abe/.xplanet/" + (
+                    "scripts/xplanet.sh" if key == "ProgramArguments.0" else "logs/monthly.log")
+                if key == "ProgramArguments.0":
+                    broken["ProgramArguments"][0] = value
+                else:
+                    broken[key] = value
+                original = plistlib.dumps(broken)
+                local.write_bytes(original)
+                result = self.prepare()
+                self.assertEqual(result.returncode, 2, result.stderr)
+                for detail in (str(local), key, value, "resolved:", "expected:",
+                               str(self.root / "images/Users/abe/.xplanet"),
+                               "Relative paths are resolved from WorkingDirectory"):
+                    self.assertIn(detail, result.stderr)
+                self.assertEqual(local.read_bytes(), original)
+                self.assertFalse(self.agents.exists())
+                self.assertEqual(list(self.source.glob("*.plist")), [local])
+        repaired = plistlib.dumps(document)
+        local.write_bytes(repaired)
+        result = self.prepare()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(local.read_bytes(), repaired)
+        self.assertEqual((self.agents / local.name).readlink(), local)
+        for job in ("quake", "storm", "volcano"):
+            self.assertTrue((self.agents / f"local.xplanet.{job}.plist").is_symlink())
+
     def test_explicit_python_override_can_differ_but_must_be_supported(self):
         self.assertEqual(self.prepare().returncode, 0)
         local = self.source / "local.xplanet.start.plist"
