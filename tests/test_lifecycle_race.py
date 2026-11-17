@@ -246,8 +246,19 @@ raise SystemExit(4)
 
     def test_stuck_removal_fails_without_bootstrap_or_kickstart(self):
         self.removal_fixture(stuck=True)
-        child=self.invoke(self.entry,'restart','A');out,err=child.communicate(timeout=10)
+        # Exercise every removal poll without spending five seconds sleeping.
+        # Python launchctl fixture startup adds variable CI overhead; elapsed
+        # wall time is not the behavior this test promises to verify.
+        sleeps=self.base/'removal-sleeps'
+        self.env['REMOVAL_SLEEPS']=str(sleeps)
+        self.script(self.bin/'sleep', 'printf "%s\\n" "$*" >> "$REMOVAL_SLEEPS"\n')
+        child=self.invoke(self.entry,'restart','A')
+        try:
+            out,err=child.communicate(timeout=30)
+        finally:
+            if child.poll() is None:child.kill();child.communicate()
         self.assertEqual(child.returncode,2,(out,err))
+        self.assertEqual(sleeps.read_text().splitlines(), ['0.25']*20)
         self.assertIn('desktop job removal',err)
         calls=[json.loads(line) for line in self.trace.read_text().splitlines()]
         self.assertFalse(any(c[0] in ('bootstrap','kickstart') for c in calls))

@@ -23,7 +23,7 @@ PYTHONPATH=scripts:. .state/configurator/venv/bin/python -B -m unittest discover
 
 Fixtures are offline/synthetic or attributed public captures. Preserve raw fixture
 bytes and `.gitattributes`. Optional private NORAD captures remain under ignored
-`dev/validation`; missing optional evidence is reported as a skip, not invented.
+`dev/workbench/validation`; missing optional evidence is reported as a skip, not invented.
 Tests use disposable roots and stub operations; do not point them at a working
 installation. See [architecture](../docs/architecture.md#verification-boundaries).
 
