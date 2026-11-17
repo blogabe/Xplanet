@@ -61,6 +61,11 @@ You can also open a shipped scene directly:
 ./scripts/xplanet.sh config --view "$PWD/scripts/configurator/samples/scenes/moon-from-earth.conf"
 ```
 
+For visual inspiration, **Gallery recipes…** explains the official upstream examples
+and their ingredients offline. **Browse related stock scene** opens a filtered
+stock library, not the historical command; inspect it before choosing Open.
+Browsing alone preserves the draft. See [coverage and limits](gallery-recipes.md).
+
 Only generated, recognized scenes can be opened as studio drafts. Arbitrary
 `xp2.conf`/`xp3.conf` files may instead need **Inspect native files…** or the
 bounded **Edit native values…** tool. A valid working configuration can be

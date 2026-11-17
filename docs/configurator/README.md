@@ -6,7 +6,7 @@ select an immutable revision for the next desktop start. The studio uses Python
 Saving, selection and desktop restart are separate actions.
 
 - **Start here:** [User guide](user-guide.md), [stock scenes](stock-scenes.md),
-  [settings reference](reference.md).
+  [settings reference](reference.md), [gallery recipes](gallery-recipes.md).
 - **Preview and diagnose:** [resources and prerequisites](../resources.md),
   [resource/build evidence](diagnostics.md),
   [comparison sheets](comparisons.md), [durable image export](export.md).

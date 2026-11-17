@@ -42,6 +42,7 @@ from .recovery_ui import RecoveryScreen
 from .comparison import plan as comparison_plan,reason as comparison_reason,render_set
 from .comparison_ui import ComparisonReview,MonthComparisonReview
 from .help_ui import StudioHelp
+from .recipes_ui import RecipeBrowser
 from .export_ui import RenderExport
 from .render_export import export_snapshot,default_destination
 from .binary_diagnostics import cached as cached_binary_evidence,store as store_binary_evidence
@@ -267,7 +268,9 @@ class ConfiguratorApp(App):
         yield Header()
         with VerticalScroll(id='content'):
             yield Static(self.source_description(), id='view-source', markup=False)
-            yield Button('Help (F1)',id='help')
+            with Horizontal():
+                yield Button('Help (F1)',id='help')
+                yield Button('Gallery recipes…',id='recipes')
             with Horizontal():
                 yield Button('Open saved view…', id='load')
                 yield Button('Scene library…',id='library')
@@ -546,6 +549,13 @@ class ConfiguratorApp(App):
             return ('Saved scene loaded as a snapshot. The local renderer selection was retained; '
                     'the executable named in a file is never adopted automatically.')
         return 'Ready. No personal configuration was read.'
+
+    def browse_recipe_stock(self, name):
+        if name is None:return
+        if self.workspace.busy or self.leaving or self.exit_prompting:
+            self.status('Wait for the active operation before opening a related stock scene. Draft unchanged.');return
+        self.capture_edit()
+        self.push_screen(SceneLibrary(STOCK_LIBRARY, self.history.dirty, stock=True, initial_filter=name), self.load)
 
     def load(self, source):
         self.run_worker(self.load_document(source))
@@ -895,6 +905,8 @@ class ConfiguratorApp(App):
             self.push_screen(NativePatchPath(str(self.root/'config/xp.conf')),self.open_native_values)
         elif action == 'inspect-native':
             self.push_screen(OpenView(str(self.document.source or self.root/'config/xp.conf'),inspection=True),self.inspect_source)
+        elif action == 'recipes':
+            self.push_screen(RecipeBrowser(), self.browse_recipe_stock)
         elif action in ('library','stock'):
             self.capture_edit()
             stock=action=='stock'
