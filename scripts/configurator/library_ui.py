@@ -17,8 +17,9 @@ class SceneLibrary(ModalScreen[str|None]):
     """
     BINDINGS=[('escape','back','Back')]
 
-    def __init__(self,library,dirty=False,stock=False):
+    def __init__(self,library,dirty=False,stock=False,initial_filter=""):
         super().__init__();self.library,self.dirty,self.stock=library,dirty,stock;self.updating=False
+        self.initial_filter=initial_filter
         self.all_choices=[];self.choices=[];self.error=None
         self.loading=True;self.closing=False;self.pending=None;self.inspection_worker=None
         self.inspected=None;self.inspection_text='';self.inspection_valid=False
@@ -28,7 +29,7 @@ class SceneLibrary(ModalScreen[str|None]):
             yield Static(('Stock scenes: ' if self.stock else 'Saved scenes: ')+str(self.library),markup=False)
             yield Static('Open a snapshot, experiment, and save a new copy. Browsing never renames, deletes or activates a scene.')
             if self.dirty:yield Static('Opening a valid pair replaces unsaved editor changes. Source files remain unchanged.')
-            yield Input('',placeholder='Filter scene names',id='library-filter')
+            yield Input(self.initial_filter,placeholder='Filter scene names',id='library-filter')
             yield Static('',id='library-count',markup=False)
             yield Select([(p.stem,str(p)) for p in self.choices],allow_blank=True,value=str(self.choices[0]) if self.choices else Select.NULL,id='library-selection')
             yield Static('',id='library-summary',markup=False)

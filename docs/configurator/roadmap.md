@@ -64,6 +64,16 @@ Future ideas below use these evidence labels:
 Evidence can overlap: a flight sequence may combine an Engine camera option,
 Conditional ephemeris data and an Exploratory timeline editor.
 
+## Gallery-informed review
+
+The [gallery recipe catalogue](gallery-recipes.md) now provides offline visual-intent,
+view/body-scope and prerequisite explanations for 24 upstream examples, with separate
+related-stock browsing where useful. It does not execute historical commands or
+claim the stock scenes reproduce them. Use it to inform manual scene feedback;
+advanced atmosphere/trajectory/SPICE capabilities remain conditional future work.
+Existing inactive choices, opaque native content and source files must survive any
+future basic/advanced presentation.
+
 ## The tick-tock rhythm
 
 Alternate useful workflow improvements with visible new capabilities. A workflow
