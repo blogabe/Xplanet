@@ -13,7 +13,7 @@ from totalmarker.errors import FeedError
 from totalmarker.features.storm import run
 from totalmarker.storm_advisory import parse_advisory
 from totalmarker.storm_model import render_bodies, StormStyle
-from totalmarker.storm_sources import (REQUIRED_GROUPS, collect_snapshot,
+from totalmarker.storm_sources import (JTWC_RSS, REQUIRED_GROUPS, collect_snapshot,
                                        parse_jtwc_formation_alert, parse_jtwc_rss,
                                        parse_jtwc_warning)
 from .support import Sandbox
@@ -165,6 +165,98 @@ class FormationAlertTests(Sandbox):
             b"PACIFIC OCEANS/200600Z", b"INDIAN OCEAN/200600Z")
         with self.assertRaises(FeedError):
             parse_advisory(bad_advisory, "abpw")
+
+
+class TracklessFormationAlertTests(Sandbox):
+    """Authentic 96S TCFA without a KMZ alongside two tracked cyclone warnings."""
+
+    capture = Path(__file__).parent / 'fixtures/storm/live-20261118-tcfa'
+    at = datetime(2026, 11, 18, 4, 0, tzinfo=timezone.utc).timestamp()
+
+    def packet(self):
+        from .support_storm import ReceiptPacket
+        return ReceiptPacket(self.capture)
+
+    def test_captured_packet_integrity_and_complete_snapshot(self):
+        packet = self.packet()
+        for record in packet.records:
+            body = packet.payloads[record['url']]
+            self.assertEqual((len(body), hashlib.sha256(body).hexdigest()),
+                             (record['bytes'], record['sha256']))
+        products, _, _ = parse_jtwc_rss(packet.payloads[JTWC_RSS])
+        alert = next(p for p in products if p.kind == 'formation_alert')
+        self.assertEqual(alert.identity, 'SH962027')
+        self.assertIsNone(alert.kmz_url)
+        snapshot = collect_snapshot(packet, now=self.at)
+        self.assertEqual({s.id for s in snapshot.storms},
+                         {'IO052026', 'SH042027', 'SH962027'})
+        for storm in snapshot.storms:
+            if storm.id == alert.identity:
+                self.assertEqual((storm.current.lat, storm.current.lon), (-5.6, 90.2))
+                self.assertEqual((storm.history, storm.forecast, storm.forecast_status),
+                                 ((), (), 'not_issued'))
+            else:
+                self.assertTrue(storm.history)
+                self.assertTrue(storm.forecast)
+                self.assertEqual(storm.forecast_status, 'issued')
+        self.assertEqual(set(packet.calls), set(packet.payloads))
+        self.assertFalse(any(url.endswith('sh9627.kmz') for url in packet.calls))
+
+    def test_numbered_warnings_still_require_their_own_kmz(self):
+        raw = self.packet().payloads[JTWC_RSS]
+        for name in (b'io0526.kmz', b'sh0427.kmz'):
+            with self.subTest(product=name):
+                changed = raw.replace(name, b'unrelated.kmz')
+                self.assertNotEqual(raw, changed)
+                with self.assertRaisesRegex(FeedError, 'warning lacks a KMZ track'):
+                    parse_jtwc_rss(changed)
+        with self.assertRaisesRegex(FeedError, 'product type is ambiguous'):
+            parse_jtwc_rss(raw.replace(b'TCFA Text', b'Unknown Text'))
+
+    def test_subject_spacing_does_not_weaken_identity_validation(self):
+        raw = self.packet().payloads[JTWC + 'sh9627web.txt']
+        self.assertIn(b'ALERT(INVEST 96S)', raw)
+        for spacing in (b'', b' ', b'  ', b'\t'):
+            with self.subTest(spacing=spacing):
+                point, code = parse_jtwc_formation_alert(
+                    raw.replace(b'ALERT(INVEST', b'ALERT' + spacing + b'(INVEST'),
+                    'SH962027', self.at)
+                self.assertEqual((point.lat, point.lon, code), (-5.6, 90.2, '96S'))
+        for changed in (
+            raw.replace(b'(INVEST 96S)', b'(INVEST 95S)', 1),
+            raw.replace(b'(INVEST 96S)', b'(INVEST 96W)', 1),
+            raw.replace(b'ALERT(INVEST', b'ALERT EXTRA(INVEST'),
+            raw.replace(b'ALERT(INVEST', b'ALERT\n(INVEST'),
+            raw.replace(b'ALERT(INVEST', b'ALERT( INVEST'),
+        ):
+            with self.subTest(subject=changed.splitlines()[2]):
+                with self.assertRaises(FeedError):
+                    parse_jtwc_formation_alert(changed, 'SH962027', self.at)
+
+    def test_failed_refresh_preserves_last_good_tracked_publication(self):
+        settings = self.config('StormCheckIntervalSeconds=0\n')
+        result = run(self.fs, settings, fetcher=self.packet(), now=self.at)
+        self.assertEqual((result.outcome, result.count), ('changed', 3), result.message)
+        paths = (settings.storm.marker, settings.storm.arc, settings.labels)
+        previous = [self.fs.read(path) for path in paths]
+        for failure in ('missing_warning_track', 'conflicting_invest', 'stale'):
+            packet = self.packet()
+            if failure == 'missing_warning_track':
+                packet.payloads[JTWC_RSS] = packet.payloads[JTWC_RSS].replace(
+                    b'io0526.kmz', b'unrelated.kmz')
+            elif failure == 'conflicting_invest':
+                url = JTWC + 'sh9627web.txt'
+                packet.payloads[url] = packet.payloads[url].replace(
+                    b'IS NOW LOCATED NEAR 5.6S', b'IS NOW LOCATED NEAR 6.6S')
+            at = self.at + (48 * 3600 if failure == 'stale' else 1)
+            with self.subTest(failure=failure):
+                failed = run(self.fs, settings, fetcher=packet, now=at)
+                self.assertEqual(failed.outcome, 'failed')
+                self.assertEqual([self.fs.read(path) for path in paths[:2]], previous[:2])
+                if failure != 'stale':
+                    self.assertEqual(self.fs.read(settings.labels), previous[2])
+                else:
+                    self.assertIn(b'color=Red', self.fs.read(settings.labels))
 
 
 if __name__ == "__main__":

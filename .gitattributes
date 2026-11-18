@@ -10,3 +10,7 @@ tests/fixtures/storm/jtwc-rss-20261027-reissue.xml -text
 # Preserve authentic corrected-advisory packet and its source whitespace.
 tests/fixtures/storm/live-20261114-corrected/*.txt -text -whitespace
 tests/fixtures/storm/live-20261114-corrected/*.xml -text -whitespace
+
+# Preserve the authentic trackless-TCFA packet byte for byte.
+tests/fixtures/storm/live-20261118-tcfa/*.txt -text -whitespace
+tests/fixtures/storm/live-20261118-tcfa/*.rss -text -whitespace
