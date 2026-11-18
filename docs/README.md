@@ -7,7 +7,7 @@
 - [Python runtime](python-runtime.md): explicit Homebrew/uv interpreter selection
 - [Installed satellite icons](installed-satellite-icons.md): explicit local import with source receipts
 - [Resources and prerequisites](resources.md): installed data, project assets, lookup and optional features
-- [Configuration examples](../examples/README.md): recipes and native templates
+- [TotalMarker template](../config/totalmarker.example.toml) and [cloud provider selection](management.md#choose-a-cloud-provider)
 - [TotalMarker independently](totalmarker-standalone.md): data generation without desktop setup
 - [Data operations](technical-notes.md) and [desktop troubleshooting](management.md#troubleshooting)
 

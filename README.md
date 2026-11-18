@@ -21,7 +21,7 @@ TotalMarker uses only the Python standard library.
 and maintained the original Perl TotalMarker, which inspired this Python version;
 see [credits and third-party terms](docs/asset-credits.md).
 
-See the [documentation index](docs/README.md) and [configuration examples](examples/README.md).
+See the [documentation index](docs/README.md) and [TotalMarker configuration template](config/totalmarker.example.toml).
 
 ## Install on macOS
 

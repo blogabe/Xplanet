@@ -31,7 +31,7 @@ def check_source_paths(entries):
                 (name.startswith(("maps/", "assets/")) and
                  (not metadata.startswith(("100644 ", "100755 ")) or
                   any(excluded_name(part) for part in PurePosixPath(name).parts[1:]))) or
-                (name.startswith("examples/") and name != "examples/README.md" and not name.endswith(".example.toml")) or
+                name.startswith("examples/") or
                 (name.startswith("config/") and name not in allowed_config) or
                 name.startswith("dev/") or
                 (name.startswith("scripts/launchd/") and

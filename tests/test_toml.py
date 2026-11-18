@@ -156,15 +156,14 @@ hours = 72
             with self.assertRaisesRegex(ConfigError, "more than one"):
                 self.toml(text)
 
-    def test_safe_toml_examples_load_without_network_or_rewrite(self):
-        examples = sorted((PROJECT / "examples").glob("*.example.toml"))
-        self.assertTrue({"custom.example.toml", "xeric.example.toml"} <=
-                        {path.name for path in examples})
-        for path in examples:
-            with self.subTest(example=path.name):
-                raw = path.read_bytes()
+    def test_canonical_cloud_variants_load_without_rewrite(self):
+        from .support import cloud_template
+        for provider in ("custom", "xeric"):
+            with self.subTest(provider=provider):
+                raw = cloud_template(provider).encode()
                 (self.root / "example.toml").write_bytes(raw)
                 settings = load(self.fs, "example.toml")
+                self.assertEqual(settings.provider, provider)
                 self.assertEqual((self.root / "example.toml").read_bytes(), raw)
                 if settings.provider == "custom":
                     self.assertTrue(settings.url.startswith("https://cloud.example.invalid/"))

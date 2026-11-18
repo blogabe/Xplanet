@@ -19,7 +19,7 @@ class DocsNavigationTests(unittest.TestCase):
         return anchors
 
     def test_all_public_markdown_local_links_and_anchors_resolve(self):
-        paths=[PROJECT/'README.md',*sorted((PROJECT/'docs').rglob('*.md')),PROJECT/'examples/README.md',PROJECT/'maps/README.md']
+        paths=[PROJECT/'README.md',*sorted((PROJECT/'docs').rglob('*.md')),PROJECT/'maps/README.md']
         for path in paths:
             text=re.sub(r'^```.*?^```[^\n]*','',path.read_text(),flags=re.M|re.S)
             for target in re.findall(r'!?\[[^\]]+\]\(([^)]+)\)',text):
@@ -29,6 +29,6 @@ class DocsNavigationTests(unittest.TestCase):
                 with self.subTest(document=str(path.relative_to(PROJECT)),target=target):
                     self.assertTrue(destination.exists(),target)
                     if anchor and destination.suffix=='.md':self.assertIn(anchor,self.anchors(destination))
-    def test_readme_links_to_docs_and_examples_indexes(self):
+    def test_readme_links_to_docs_and_canonical_configuration(self):
         text=(PROJECT/'README.md').read_text()
-        self.assertIn('(docs/README.md)',text);self.assertIn('(examples/README.md)',text)
+        self.assertIn('(docs/README.md)',text);self.assertIn('(config/totalmarker.example.toml)',text)

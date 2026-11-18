@@ -29,9 +29,6 @@
 /scripts/launchd/*.plist
 !/tests/
 !/tests/**
-!/examples/
-!/examples/README.md
-!/examples/*.example.toml
 !/maps/
 !/maps/README.md
 # Existing maps stay tracked; adding maps requires deliberate git add -f.
