@@ -634,14 +634,9 @@ performed on exit, with selection uncertainty preserved independently.
 path edits are data-only and never follow resources. Review and exclusive
 same-directory publication retain the existing source/owned-cleanup checks.
 
-The zsh management dashboard checks process-name presence and job registration
-separately. It verifies only the selector/deployment metadata hash and local root
-for the next start, without certifying resources or identifying the running scene.
-Normal lifecycle validation remains authoritative. The explicit Saved health action
-asks TotalMarker for compact, control-free records derived from its existing health
-semantics. Management caches that dated snapshot in memory; entry/navigation never
-starts Python, performs a feed request or polls. Unknown evidence stays unknown.
-
+The management dashboard belongs to the shell layer, not the configurator.
+See the [dashboard inspection and input contract](../architecture.md#management-dashboard-and-terminal-input).
+Its next-start metadata does not establish which scene is currently displaying.
 
 ## Private recovery and owned shutdown
 

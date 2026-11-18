@@ -11,7 +11,7 @@ from totalmarker.storm_model import (ForecastPoint, Storm, StormSnapshot,
                                      render_marker)
 from totalmarker.storm_sources import REQUIRED_GROUPS
 from .support import Sandbox
-from .test_storm_sources import MappedFetcher, NOW
+from .support_storm import MappedFetcher, NOW
 
 
 class FailingFetcher:

@@ -15,7 +15,7 @@ from totalmarker.http import Response
 from totalmarker.storm_advisory import parse_advisory
 from totalmarker.storm_sources import collect_snapshot, parse_jtwc_rss
 from .support import Sandbox
-from .test_storm_formation_alert import live_fetcher
+from .support_storm import formation_fetcher
 
 
 CAPTURE = Path(__file__).parent / "fixtures/storm/live-20261020-promotion"
@@ -240,7 +240,7 @@ class StormPromotionTests(Sandbox):
 
     def test_older_last_good_pair_survives_rejected_promotion(self):
         settings = self.config("StormCheckIntervalSeconds=0\n")
-        first = run(self.fs, settings, fetcher=live_fetcher(), now=EARLIER_AT)
+        first = run(self.fs, settings, fetcher=formation_fetcher(), now=EARLIER_AT)
         self.assertEqual(first.outcome, "changed")
         saved = (self.fs.read(settings.storm.marker), self.fs.read(settings.storm.arc))
         bad = (CAPTURE / "jtwc-abio-advisory.txt").read_bytes().replace(

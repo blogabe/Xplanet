@@ -499,10 +499,7 @@ class SetupTests(Sandbox):
         bin_dir.mkdir()
         calls = self.base / "launchctl-calls.txt"
         launchctl = bin_dir / "launchctl"
-        stub_launchctl(launchctl)
-        launchctl.write_text(launchctl.read_text().replace(
-            "if args[:2] == ['load', '-w']:",
-            "if args[:2] == ['load', '-w']:\n    print('MOCK: loading job', flush=True)"))
+        stub_launchctl(launchctl, load_message="MOCK: loading job")
         env.update(HOME=str(home), PATH=f"{bin_dir}:/usr/bin:/bin",
                    TM_LAUNCHCTL_CALLS=str(calls), TM_LIST_FAIL_LABEL="")
         command = [str(scripts / "xplanet.sh"), "setup"]

@@ -13,28 +13,15 @@ from totalmarker.errors import FeedError
 from totalmarker.features.storm import run
 from totalmarker.storm_advisory import parse_advisory
 from totalmarker.storm_model import render_bodies, StormStyle
-from totalmarker.storm_sources import (JTWC_RSS, REQUIRED_GROUPS, collect_snapshot,
+from totalmarker.storm_sources import (REQUIRED_GROUPS, collect_snapshot,
                                        parse_jtwc_formation_alert, parse_jtwc_rss,
                                        parse_jtwc_warning)
 from .support import Sandbox
-from .test_storm_sources import JTWC, MappedFetcher
+from .support_storm import JTWC, formation_fetcher
 
 
 LIVE = Path(__file__).parent / "fixtures/storm/live-20261020"
 NOW = datetime(2026, 10, 20, 6, 5, tzinfo=timezone.utc).timestamp()
-
-
-def live_fetcher():
-    fetcher = MappedFetcher()
-    for url, name in (
-        (JTWC_RSS, "jtwc-rss.xml"),
-        (JTWC + "wp2926web.txt", "wp292026-warning.txt"),
-        (JTWC + "sh9327web.txt", "sh932027-warning.txt"),
-        (JTWC + "abpwweb.txt", "jtwc-abpw-advisory.txt"),
-        (JTWC + "abioweb.txt", "jtwc-abio-advisory.txt"),
-    ):
-        fetcher.payloads[url] = (LIVE / name).read_bytes()
-    return fetcher
 
 
 class FormationAlertTests(Sandbox):
@@ -65,7 +52,7 @@ class FormationAlertTests(Sandbox):
                          [("SH932027", -3.9, 55.5)])
         self.assertEqual([code for area in abpw.areas for code in area.warned_codes],
                          ["29W"])
-        snapshot = collect_snapshot(live_fetcher(), now=NOW)
+        snapshot = collect_snapshot(formation_fetcher(), now=NOW)
         self.assertEqual([storm.id for storm in snapshot.storms],
                          ["EP212026", "WP292026", "SH932027"])
         marker, arc = render_bodies(snapshot, StormStyle(), required_groups=REQUIRED_GROUPS)
@@ -90,7 +77,7 @@ class FormationAlertTests(Sandbox):
                                                identity, rss_at)
 
     def test_newer_advisory_fix_supersedes_alert_without_invented_track(self):
-        fetcher = live_fetcher()
+        fetcher = formation_fetcher()
         path = JTWC + "abioweb.txt"
         fetcher.payloads[path] = (fetcher.payloads[path]
                                   .replace(b"ABIO10 PGTW 192000", b"ABIO10 PGTW 200600")
@@ -111,14 +98,14 @@ class FormationAlertTests(Sandbox):
         output = io.StringIO()
         with patch("totalmarker.cli.run_storm",
                    side_effect=lambda fs, settings: run(fs, settings,
-                                                        fetcher=live_fetcher(), now=NOW)):
+                                                        fetcher=formation_fetcher(), now=NOW)):
             with redirect_stdout(output):
                 status = cli_main(["--root", str(self.root), "--config", "config.ini", "storm"])
         self.assertEqual(status, 0)
         self.assertEqual(json.loads(output.getvalue())["outcome"], "changed")
         settings = self.config("StormCheckIntervalSeconds=0\n")
         original = (self.fs.read(settings.storm.marker), self.fs.read(settings.storm.arc))
-        bad = live_fetcher()
+        bad = formation_fetcher()
         path = JTWC + "sh9327web.txt"
         bad.payloads[path] = bad.payloads[path].replace(
             b"IS NOW LOCATED NEAR 3.9S 55.5E", b"IS NOW LOCATED NEAR 4.9S 55.5E")
@@ -135,11 +122,11 @@ class FormationAlertTests(Sandbox):
 
     def test_mismatch_or_ambiguous_source_preserves_last_good_publication(self):
         settings = self.config("StormCheckIntervalSeconds=0\n")
-        first = run(self.fs, settings, fetcher=live_fetcher(), now=NOW)
+        first = run(self.fs, settings, fetcher=formation_fetcher(), now=NOW)
         self.assertEqual(first.outcome, "changed")
         saved = (self.fs.read(settings.storm.marker), self.fs.read(settings.storm.arc),
                  self.fs.read(settings.labels))
-        invalid = live_fetcher()
+        invalid = formation_fetcher()
         path = JTWC + "sh9327web.txt"
         invalid.payloads[path] = invalid.payloads[path].replace(
             b"IS NOW LOCATED NEAR 3.9S 55.5E", b"IS NOW LOCATED NEAR 4.9S 55.5E")
@@ -148,7 +135,7 @@ class FormationAlertTests(Sandbox):
         self.assertIn("conflicting same-time position", failed.message)
         self.assertEqual((self.fs.read(settings.storm.marker), self.fs.read(settings.storm.arc),
                           self.fs.read(settings.labels)), saved)
-        different_suffix = live_fetcher()
+        different_suffix = formation_fetcher()
         path = JTWC + "sh9327web.txt"
         different_suffix.payloads[path] = (different_suffix.payloads[path]
                                            .replace(b"WTXS21", b"WTPS21")
@@ -158,7 +145,7 @@ class FormationAlertTests(Sandbox):
         self.assertIn("has a different advisory invest code", failed.message)
         self.assertEqual((self.fs.read(settings.storm.marker), self.fs.read(settings.storm.arc),
                           self.fs.read(settings.labels)), saved)
-        older_advisory = live_fetcher()
+        older_advisory = formation_fetcher()
         older_advisory.payloads[path] = older_advisory.payloads[path].replace(
             b"WTXS21 PGTW 192000", b"WTXS21 PGTW 200000")
         failed = run(self.fs, settings, fetcher=older_advisory, now=NOW + 100)
@@ -166,7 +153,7 @@ class FormationAlertTests(Sandbox):
         self.assertIn("is newer than ABIO advisory fix", failed.message)
         self.assertIn("SH932027 (93S)", failed.message)
         self.assertIn("2026-10-20T00:00:00+00:00 > 2026-10-19T20:00:00+00:00", failed.message)
-        missing = live_fetcher()
+        missing = formation_fetcher()
         path = JTWC + "abioweb.txt"
         missing.payloads[path] = missing.payloads[path].replace(b"INVEST 93S", b"INVEST 94S")
         failed = run(self.fs, settings, fetcher=missing, now=NOW + 120)

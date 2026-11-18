@@ -93,7 +93,7 @@ class StormModelTests(Sandbox):
 
     def test_oversized_detail_failure_preserves_entire_last_good_pair(self):
         from totalmarker.features.storm import run
-        from .test_storm_sources import MappedFetcher, NOW
+        from .support_storm import MappedFetcher, NOW
         settings = self.config("StormCheckIntervalSeconds=0\n")
         good = run(self.fs, settings, fetcher=MappedFetcher(), now=NOW)
         self.assertEqual(good.outcome, "changed")

@@ -144,7 +144,7 @@ import sys
 from unittest.mock import patch
 from totalmarker.cli import main
 from totalmarker.http import HTTPTransport
-from tests.test_storm_sources import MappedFetcher, JTWC, LIVE_ABIO, LIVE_NOW
+from tests.support_storm import MappedFetcher, JTWC, LIVE_ABIO, LIVE_NOW
 fetcher = MappedFetcher()
 fetcher.payloads[JTWC + "abioweb.txt"] = LIVE_ABIO.read_bytes()
 with (patch("totalmarker.features.storm.Fetcher", return_value=fetcher),
