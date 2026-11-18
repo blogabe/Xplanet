@@ -376,13 +376,50 @@ history is less useful for development and historical comparisons.
 - Missing or changed selected revision: inspect Selected scene / handoff, reopen
   the saved scene and explicitly review/select it again. There is no silent fallback.
 - Accepted start without visible wallpaper: inspect `logs/xplanet-error.log` and
-  macOS Finder automation permission. Acceptance is asynchronous, not proof of a frame.
+  [Finder Automation permission](#finder-automation-permission). Acceptance is
+  asynchronous, not proof of a frame.
 - Restart reports that `local.xplanet.desktop` was not found: let any in-flight
   lifecycle request finish, then retry `restart` once. Restart uses the stop scope
   above. If it recurs, retain the exact error and desktop log rather than repeatedly
   stopping/starting or assuming the earlier intermittent incident was fixed.
 - Source problems: run saved `health` first, then explicitly choose `health --live`
   if provider access should be checked. Retained output is not proof of freshness.
+
+### Finder Automation permission
+
+Xplanet uses Finder to update the desktop. If macOS asks to allow that control,
+choose **Allow** for desktop updates. If already authorized, no action is needed.
+A `macOS error -1743` warning in `logs/xplanet-error.log` means the Apple event
+was not permitted; a rendered image alone does not prove a desktop update.
+
+First open **System Settings > Privacy & Security > Automation** and enable
+**Finder** for the sender associated with your Xplanet run. Restart through your
+usual launcher and verify an actual desktop update. Terminal-launched and
+launchd runs may require separate approvals; check each launch method you use.
+
+If the switch remains stuck, even after reboot, resetting Automation decisions
+can allow a fresh approval. **Last resort only:** the following resets the
+current user’s Apple Events permissions for **all apps**, not just Xplanet.
+Both allows and denials are cleared; other apps and unattended workflows may
+need reauthorization before they work again. Pause affected automation first.
+Run this yourself in the affected user’s Terminal, **without sudo**, only if you
+accept that impact:
+
+```sh
+/usr/bin/tccutil reset AppleEvents
+```
+
+This does not grant access automatically and is not a guaranteed fix. Restart
+Xplanet through its intended launcher in the logged-in desktop session, approve
+the expected Finder request, and verify the desktop updates. Review other apps’
+permission prompts before resuming their workflows. Do not automate this reset
+or substitute the broader `tccutil reset All` command. If denial persists, retain
+the exact error, macOS version and launch method rather than repeating resets.
+
+An optional `tccutil` bundle ID identifies the **sending app**, not Finder; do
+not guess one for a standalone binary or use `com.apple.finder` to target its
+callers. See [Apple’s Automation settings guide](https://support.apple.com/guide/mac-help/mchl07817563/mac)
+and `man tccutil` for the settings and reset scope.
 
 ## Disable desktop automation
 
