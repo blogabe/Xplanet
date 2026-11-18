@@ -127,6 +127,38 @@ uses Python/Textual as an explicit UI boundary; lifecycle remains zsh. Interpret
 to Homebrew/uv without owning package or machine migration; see
 [Python runtime](python-runtime.md).
 
+## Management dashboard and terminal input
+
+[Management](management.md#using-management) owns the operator instructions.
+The shell dashboard reads process/job and next-start metadata independently;
+none identifies the running scene. Setup status counts personal files rather
+than evaluating `xp.def`. Selector metadata is hash-checked; start owns executable
+and asset revalidation. Invalid metadata is not a custom-configuration fallback.
+
+Interactive entry with a TotalMarker configuration starts the selected Python
+for one local saved-health assessment. A disposable worker group and bounded
+capture impose a five-second menu budget, including interpreter discovery.
+Failure or timeout leaves health unknown; no provider access, publication recovery,
+installation or renderer execution occurs. Without configuration or a terminal,
+entry does not run health. The explicit Saved health action repeats assessment.
+Navigation, action return and resize reuse the dated snapshot. `health --dashboard`
+is an internal presentation format; direct health/verbose/JSON/live behavior is
+unchanged. There is no idle input or status polling.
+
+Navigation repaints changed rows when terminal capabilities permit. Geometry is
+checked on the next key after resize, retaining that key across the full redraw.
+Narrow terminals preserve full text with compact spacing or numbered scrollback.
+The menu does not parse provider/installer output or create a new log store.
+
+Continuation prompts ignore queued submission newlines. Arrow/function-key escape
+sequences are consumed as one key with a bounded 50 ms wait per continuation byte;
+ordinary input never advances on a timer. Subsequent input belongs to the next
+menu choice. Direct commands do not acquire an interactive pause. Exit, EOF,
+interruption and fatal errors restore the alternate screen and terminal modes;
+zsh single-key reads make no persistent mode changes. `NO_COLOR`, including an
+empty value, disables color. Limited terminals use plain output without requiring
+Unicode or emoji support.
+
 ## Asset and license boundary
 
 Finished runtime textures, including all planetary maps, remain committed and

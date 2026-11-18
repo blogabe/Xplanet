@@ -95,7 +95,7 @@ personal schedules. All selected jobs are preflighted before registration: one
 invalid personal plist blocks the whole batch, including marker refresh jobs.
 A running desktop alone does not confirm those jobs were registered. Setup reports
 the offending file/field and resolved versus expected path. Correct that personal
-plist (and its `ABE-CFG` source, if used), preserving its schedule, then rerun setup.
+plist (and any source template you maintain), preserving its schedule, then rerun setup.
 Paths such as `./Users/...` are relative to `WorkingDirectory`, not `/Users/...`.
 Setup deliberately does not guess repairs or replace personal plists.
 

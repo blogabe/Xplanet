@@ -152,9 +152,9 @@ raise SystemExit(4)
 ''')
     path.chmod(0o700)
 
-def stub_launchctl(path):
+def stub_launchctl(path, *, load_message=None):
     """Registered-job dictionaries and load state live only beside this stub."""
-    path.write_text('#!' + sys.executable + '\n' + r'''import json, os, plistlib, sys
+    path.write_text('#!' + sys.executable + '\nLOAD_MESSAGE = ' + repr(load_message) + '\n' + r'''import json, os, plistlib, sys
 from pathlib import Path
 args = sys.argv[1:]
 if os.environ.get('TM_LAUNCHCTL_CALLS'):
@@ -162,6 +162,7 @@ if os.environ.get('TM_LAUNCHCTL_CALLS'):
 state_file = Path(__file__).with_suffix('.json')
 state = json.loads(state_file.read_text()) if state_file.exists() else {}
 if args[:2] == ['load', '-w']:
+    if LOAD_MESSAGE is not None: print(LOAD_MESSAGE, flush=True)
     doc = plistlib.loads(Path(args[2]).read_bytes())
     state[doc['Label']] = doc
     state_file.write_text(json.dumps(state))

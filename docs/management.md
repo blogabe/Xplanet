@@ -1,5 +1,27 @@
 # Terminal management
 
+Use this guide for macOS setup, desktop control and troubleshooting. For Linux or
+data-only use, see [standalone TotalMarker](totalmarker-standalone.md).
+
+## Quick start
+
+1. Install through the [README one-liner](../README.md#install-on-macos), or clone
+   into a new directory and run `./scripts/xplanet.sh` for guided management.
+2. Follow Guided setup: prepare personal files, choose data sources and review
+   the proposed schedules. Keep unconfigured products disabled; cloud access
+   needs your source and credentials, and volcano needs an explicit source choice.
+3. Accept the optional start offer, or run `./scripts/xplanet.sh start` afterward.
+   This asks launchd to run the configured renderer; it does not certify a frame.
+4. Expect the desktop image to update asynchronously. If it does not, inspect
+   `logs/xplanet-error.log` and [Finder Automation permission](#finder-automation-permission) before retrying.
+5. Run `./scripts/xplanet.sh health` for saved data status. Only an explicit
+   `health --live` checks provider access. Failed refreshes retain older output.
+6. To explore scenes independently, run `./scripts/xplanet.sh config --prepare`
+   once, then `./scripts/xplanet.sh config`. Saving, selecting and restarting are
+   separate actions; the [studio guide](configurator/user-guide.md) explains them.
+
+## Using management
+
 Run `scripts/xplanet.sh` without arguments in a terminal to open management.
 Opening management assesses saved health once when configured; it does not refresh providers or change configuration. Leaving or cancelling makes no operational changes. `q` or EOF exits;
 Ctrl-C interrupts. In capable terminals, Up/Down moves the highlight, digits 1–9 or h
@@ -32,19 +54,12 @@ and the optional start offer, new/partial flows acknowledge the summary and exit
 return to management. macOS may require approval for an installed renderer;
 review such prompts yourself.
 
-`config` opens the [scene configurator](configurator/reference.md). It previews temporarily
-and saves new native scenes. Explicit reviewed Apply can select an immutable
-revision separately from saving and restart; it never changes the running display
-or schedules. Completed saves/selections persist when the editor closes. Its
-Textual dependencies require explicit isolated preparation. Deliberate configurator
-interruptions are reported as interruptions, preserving completed saves/selections;
-they are not presented as rollback or command failure. See the [studio exit and
-recovery contract](configurator/recovery.md). Missing prerequisites
-leave management usable.
-
-Management retains installation, plist generation/registration and lifecycle.
-Configurator selection uses the [guarded scene handoff](configurator/apply-design.md);
-it is not another installer.
+`config` opens the separate [scene studio](configurator/user-guide.md). Prepare
+its isolated dependencies explicitly; missing prerequisites leave management usable.
+Saving, [selecting for next start](configurator/apply-design.md) and restarting are
+separate actions. Closing or interrupting the editor does not roll back completed
+saves/selections; see [exit and recovery](configurator/recovery.md). Management
+retains installation, schedules and desktop lifecycle.
 
 Setup's apply-mode exit status is explicit: **0 completed**, **3 cancelled or
 stopped**, **1 failed core steps**, **2 invalid setup or ended input**. Exit 3 is
@@ -70,68 +85,38 @@ job and stops this user's normal/configured renderer processes, including finite
 renders, and restart performs that same stop first.
 The foreground launchd renderer has no automatic respawn after intentional stop.
 
-The screen separates desktop process/job status, next-start selection and saved data health. It
-refreshes status after actions and terminal resizing; there is no polling dashboard.
-Navigation repaints only the old and new selected rows. Narrow terminals or missing
-cursor capabilities use a full redraw with cached status. Geometry is checked on
-the next key after a resize, before repainting; that key is retained across the
-full refresh. There is no idle input/status polling. The data-health
-area is populated once on standalone interactive entry from saved TotalMarker
-state and local output checks. A brief loading message appears first; the menu
-worker has a five-second time budget and a bounded disposable capture. Timeout,
-missing Python or inspection failure leaves health unknown with a clear retry
-hint; it never starts installation, publication recovery or provider access.
-Option 7 explicitly repeats the local assessment and shows details. Navigation,
-action return and resize use the cached dated snapshot rather than rerunning it.
-Current, failed/stale, uncertain and disabled sources retain normal health
-semantics. This is saved evidence, never a live access check or refresh.
-Direct `health`, `--verbose`, `--json` and explicit `--live` remain unchanged;
-`health --dashboard` records are a presentation format, not a diagnostic replacement.
-Automatic saved health may start the selected Python; it never executes `xp.def`,
-a renderer, provider refresh or lifecycle command. Without a terminal, bare
-invocation still prints usage and does not run health. Wide dashboards align
-labels and values with horizontal spacing; narrow screens preserve the full text
-with compact spacing rather than truncation.
-Custom setup status counts files; it does not validate settings. Next-start scene
-metadata is hash-checked and labeled separately; assets and the executable are
-revalidated only by the start path. Invalid/unavailable selectors are shown as
-such, without claiming a custom fallback. **Running scene: not identified** remains
-explicit: a registered job or normal Xplanet process cannot establish which scene
-is actually displaying. The menu does not execute `xp.def` to guess.
-The separate configurator opens chosen samples/saved scenes; opening management
-does not automatically discover or import the selected desktop scene.
+The screen separates desktop process/job status, next-start selection and saved
+data health. Opening management assesses saved health once, locally, with a
+five-second budget. This may start the selected Python, but never executes
+`xp.def`, a renderer, provider refresh or lifecycle command. Missing configuration
+shows a setup hint; timeout or inspection failure leaves health unknown.
+Choose **Saved health (7)** to retry or inspect details. Navigation and resizing
+reuse the dated snapshot; this is not a live access check or polling dashboard.
+
+Setup status indicates file presence, not validated settings. Next-start selection
+is separate from the running display: **Running scene: not identified** means the
+menu cannot establish which scene is displaying. Start revalidates selected assets
+and the executable; invalid selection is not silently replaced with a custom scene.
+Opening management does not import the selected scene into the configurator.
+See [dashboard implementation](architecture.md#management-dashboard-and-terminal-input)
+for the inspection, caching and input contracts.
 
 Desktop facts are read-only: normal `xplanet` process-name detection for the current
 user, and registration of `local.xplanet.desktop`. Registration does not establish
 that a renderer is running. “Not detected” is neutral, and does not exclude a
 custom executable with a different process name; inspection failure says unknown.
 
-Capable terminals keep menus and actions in one alternate screen, using restrained
-color and fixed-width ASCII status symbols with text labels. Each action starts
-on a clean screen at the top, including its heading, confirmations and output.
-Short results and cancellations return automatically. Saved health, completed Python selection, executed updates, errors and completed setup pause for **any key** so details remain readable. Successful new/partial setup acknowledges
-its summary before exiting. A persistent last-action result distinguishes
-completion, cancellation, unavailable features and errors. Real decisions still
-require confirmation; there is no timed pause. The continuation prompt ignores already queued submission newlines; Ctrl-D exits
-and Ctrl-C interrupts. No Enter is required. A newly pressed Enter also continues.
-Arrow/function-key escape sequences are consumed as one key, with a bounded
-50 ms wait per continuation byte; ordinary input never advances on a timer.
-Input after the acknowledgement belongs to the next menu choice. Direct/noninteractive
-commands never acquire this pause.
+Capable terminals keep menus and actions in one alternate screen. Short results
+and cancellations return automatically; saved health, completed Python selection,
+executed updates, errors and completed setup pause for **any key**. Ctrl-D exits
+and Ctrl-C interrupts. There is no timed pause; real decisions still require
+confirmation. Direct/noninteractive commands never acquire this pause.
 
-Output streams normally without truncation; long operations can scroll within
-the interactive screen. Scrollback availability there depends on the terminal.
-Use the corresponding named command directly when a complete scrollback transcript
-is needed; management does not insert a pager into interactive installer prompts.
-Exiting management restores the original terminal screen, rather than adding
-action output below previous shell commands.
-The menu does not parse provider/installer output or create a new log store.
-Completion describes the selected command, not renderer readiness or data health.
-Exit, EOF, interruption and fatal errors restore the original screen. The menu makes no persistent terminal-mode changes and does not hide the cursor.
-Zsh's single-key read temporarily handles input during key input and
-restores the prior terminal modes on exit/interruption. `NO_COLOR` disables
-color, including when empty; a missing/dumb terminal or unavailable capabilities
-falls back to plain output. No Unicode/emoji support is required.
+Long output can scroll within the interactive screen, depending on the terminal.
+For a complete scrollback transcript, run the corresponding named command directly.
+Exiting management restores the original screen and terminal modes. `NO_COLOR`
+disables color; limited terminals use plain output. Completion describes the
+selected command, not renderer readiness or data health.
 
 Guided setup separates prerequisites, missing dependency installation,
 configuration/data/schedules, and optional desktop start with headings and spacing.
@@ -139,23 +124,6 @@ Its final summary reports whether setup completed and start was skipped, succeed
 or failed. Cancelling or stopping still retains any preparation already completed.
 Installer failures keep their output on screen until acknowledged; direct install
 and setup retain their documented exit statuses.
-
-## Quick start
-
-1. Install through the [README one-liner](../README.md#install-on-macos), or clone
-   into a new directory and run `./scripts/xplanet.sh` for guided management.
-2. Follow Guided setup: prepare personal files, choose data sources and review
-   the proposed schedules. Keep unconfigured products disabled; cloud access
-   needs your source and credentials, and volcano needs an explicit source choice.
-3. Accept the optional start offer, or run `./scripts/xplanet.sh start` afterward.
-   This asks launchd to run the configured renderer; it does not certify a frame.
-4. Expect the desktop image to update asynchronously. If it does not, inspect
-   `logs/xplanet-error.log` and Finder automation permission before retrying.
-5. Run `./scripts/xplanet.sh health` for saved data status. Only an explicit
-   `health --live` checks provider access. Failed refreshes retain older output.
-6. To explore scenes independently, run `./scripts/xplanet.sh config --prepare`
-   once, then `./scripts/xplanet.sh config`. Saving, selecting and restarting are
-   separate actions; the [studio guide](configurator/user-guide.md) explains them.
 
 ## Desktop commands
 

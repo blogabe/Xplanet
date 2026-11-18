@@ -1,34 +1,22 @@
 """Final-warning retirement using independently downloaded official responses."""
 from datetime import datetime, timezone
 import hashlib
-import json
 from pathlib import Path
 
 from totalmarker.errors import FeedError
 from totalmarker.features.storm import run
-from totalmarker.http import Response
 from totalmarker.storm_advisory import parse_advisory
 from totalmarker.storm_sources import collect_snapshot
 from .support import Sandbox
-from .test_storm_sources import MappedFetcher, NOW
+from .support_storm import ReceiptPacket, MappedFetcher, NOW
 
 FIXTURE = Path(__file__).parent / 'fixtures/storm/live-20261106-final-warning'
 AT = datetime(2026, 11, 6, 6, 57, tzinfo=timezone.utc).timestamp()
 
 
-class PublicPacket:
-    def __init__(self):
-        self.records = json.loads((FIXTURE / 'sources.json').read_text())['responses']
-        self.payloads = {r['url']: (FIXTURE / r['file']).read_bytes() for r in self.records}
-
-    def fetch(self, url, **kwargs):
-        record = next(r for r in self.records if r['url'] == url)
-        return Response(200, {'date': record['date']}, self.payloads[url])
-
-
 class FinalWarningTests(Sandbox):
     def test_public_packet_integrity_and_retired_warning(self):
-        packet = PublicPacket()
+        packet = ReceiptPacket(FIXTURE)
         for record in packet.records:
             body = packet.payloads[record['url']]
             self.assertEqual(len(body), record['bytes'])
@@ -40,7 +28,7 @@ class FinalWarningTests(Sandbox):
         self.assertEqual([s.id for s in result.storms], ['WP992026', 'SH942027'])
 
     def test_missing_active_warning_still_rejected(self):
-        packet = PublicPacket()
+        packet = ReceiptPacket(FIXTURE)
         url = next(u for u in packet.payloads if u.endswith('abpwweb.txt'))
         packet.payloads[url] = packet.payloads[url].replace(b'FINAL WARNING', b'WARNING').replace(
             b'FINAL \r\nWARNING', b'WARNING')
@@ -77,13 +65,13 @@ class FinalWarningTests(Sandbox):
 
     def test_final_warning_does_not_bypass_source_expiry(self):
         with self.assertRaises(FeedError):
-            collect_snapshot(PublicPacket(), now=AT + 48 * 3600)
+            collect_snapshot(ReceiptPacket(FIXTURE), now=AT + 48 * 3600)
 
     def test_rejected_transition_preserves_last_good_publication(self):
         settings = self.config('StormCheckIntervalSeconds=0\n')
-        self.assertEqual(run(self.fs, settings, fetcher=PublicPacket(), now=AT).outcome, 'changed')
+        self.assertEqual(run(self.fs, settings, fetcher=ReceiptPacket(FIXTURE), now=AT).outcome, 'changed')
         previous = {p: self.fs.read(p) for p in (settings.storm.marker, settings.storm.arc)}
-        bad = PublicPacket()
+        bad = ReceiptPacket(FIXTURE)
         url = next(u for u in bad.payloads if u.endswith('abpwweb.txt'))
         bad.payloads[url] = bad.payloads[url].replace(b'NARR/REF A IS', b'NARR/REF C IS')
         failed = run(self.fs, settings, fetcher=bad, now=AT + 1)

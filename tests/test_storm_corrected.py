@@ -1,34 +1,22 @@
 """Authentic corrected JTWC bulletin, including clean-root publication."""
 from datetime import datetime, timezone
 import hashlib
-import json
 from pathlib import Path
 
 from totalmarker.errors import FeedError
 from totalmarker.features.storm import run
-from totalmarker.http import Response
 from totalmarker.storm_advisory import parse_advisory
 from totalmarker.storm_sources import collect_snapshot, _fresh_advisory
 from .support import Sandbox
-from .test_storm_sources import JTWC
+from .support_storm import ReceiptPacket, JTWC
 
 FIXTURE = Path(__file__).parent / 'fixtures/storm/live-20261114-corrected'
 AT = datetime(2026, 11, 14, 16, 49, tzinfo=timezone.utc).timestamp()
 
 
-class Packet:
-    def __init__(self):
-        self.records = json.loads((FIXTURE / 'sources.json').read_text())['responses']
-        self.payloads = {r['url']: (FIXTURE / r['file']).read_bytes() for r in self.records}
-
-    def fetch(self, url, **kwargs):
-        record = next(r for r in self.records if r['url'] == url)
-        return Response(200, {'date': record['date']}, self.payloads[url])
-
-
 class CorrectedAdvisoryTests(Sandbox):
     def test_authentic_packet_integrity_and_complete_snapshot(self):
-        packet = Packet()
+        packet = ReceiptPacket(FIXTURE)
         for record in packet.records:
             body = packet.payloads[record['url']]
             self.assertEqual((len(body), hashlib.sha256(body).hexdigest()),
@@ -74,11 +62,11 @@ class CorrectedAdvisoryTests(Sandbox):
         settings = self.config('StormCheckIntervalSeconds=0\n')
         paths = (settings.storm.marker, settings.storm.arc)
         self.assertTrue(all(not (self.root / p).exists() for p in paths))
-        malformed = Packet()
+        malformed = ReceiptPacket(FIXTURE)
         malformed.payloads[JTWC + 'abpwweb.txt'] = b'broken'
         self.assertEqual(run(self.fs, settings, fetcher=malformed, now=AT).outcome, 'failed')
         self.assertTrue(all(not (self.root / p).exists() for p in paths))
-        success = run(self.fs, settings, fetcher=Packet(), now=AT + 1)
+        success = run(self.fs, settings, fetcher=ReceiptPacket(FIXTURE), now=AT + 1)
         self.assertEqual((success.outcome, success.count), ('changed', 3), success.message)
         before = [self.fs.read(p) for p in paths]
         self.assertIn(b'Invest 95P', before[0])
