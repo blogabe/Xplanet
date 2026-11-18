@@ -55,8 +55,6 @@
 
 !/docs/configurator/
 !/docs/configurator/*.md
-!/docs/configurator.md
-!/docs/configurator-user-guide.md
 
 /tests/**/.tmp/
 /tests/**/.tmp/**
