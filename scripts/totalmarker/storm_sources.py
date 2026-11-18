@@ -152,7 +152,7 @@ def parse_nhc_forecast(body, identity, current_at):
 class JtwcProduct:
     identity: str
     warning_url: str
-    kmz_url: str
+    kmz_url: str | None
     group: str
     kind: str = "warning"
 
@@ -293,10 +293,10 @@ def parse_jtwc_rss(body):
                 raise FeedError("Storm JTWC RSS product is in the wrong region")
             basename = filename[:-7]
             kmz_name = basename + ".kmz"
-            if kmz_name not in product_links:
-                raise FeedError("Storm JTWC RSS warning lacks a KMZ track")
             if label == "TC Warning Text":
                 kind = "warning"
+                if kmz_name not in product_links:
+                    raise FeedError("Storm JTWC RSS warning lacks a KMZ track")
             elif label == "TCFA Text":
                 kind = "formation_alert"
             else:
@@ -304,7 +304,8 @@ def parse_jtwc_rss(body):
             group = ("jtwc_south" if category == "south" else
                      "jtwc_west" if prefix == "wp" else "jtwc_indian")
             products.append(JtwcProduct(prefix.upper() + number + "20" + year,
-                                        url, product_links[kmz_name][0], group, kind))
+                                        url, product_links[kmz_name][0] if kmz_name in product_links else None,
+                                        group, kind))
         # A category with no warning link must say so explicitly. Unrecognized
         # templating or a partly published RSS item cannot erase last-good data.
         if not products and not re.search(r"\b(?:no active|none active|no current)\b",
@@ -347,7 +348,7 @@ def parse_jtwc_formation_alert(body, identity, rss_at):
     subjects = [line for line in lines if line.startswith("SUBJ/")]
     if len(subjects) != 1:
         raise FeedError("Storm JTWC formation alert lacks one subject")
-    subject = re.fullmatch(r"SUBJ/TROPICAL CYCLONE FORMATION ALERT "
+    subject = re.fullmatch(r"SUBJ/TROPICAL CYCLONE FORMATION ALERT[ \t]*"
                            r"\(INVEST ([0-9]{2}[A-Z])\)//", subjects[0])
     if not subject or not _jtwc_code_matches(identity, subject[1]):
         raise FeedError("Storm JTWC formation alert identity disagrees with RSS")
