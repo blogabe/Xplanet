@@ -3,7 +3,7 @@ import tomllib
 
 from totalmarker.config import load
 from totalmarker.errors import ConfigError, StorageError
-from .support import PROJECT, Sandbox
+from .support import PROJECT, Sandbox, cloud_template
 
 
 class CloudTemplateTests(Sandbox):
@@ -12,8 +12,7 @@ class CloudTemplateTests(Sandbox):
         return load(self.fs, "templates.toml")
 
     def example(self, provider="custom"):
-        text = (PROJECT / "examples/custom.example.toml").read_text()
-        return text.replace('provider = "custom"', 'provider = "' + provider + '"', 1)
+        return cloud_template(provider)
 
     def test_one_resolution_changes_url_and_local_output_for_both_providers(self):
         for provider in ("xeric", "custom"):
@@ -176,9 +175,10 @@ class CloudTemplateTests(Sandbox):
             with self.assertRaises(ConfigError):
                 self.load_text(text)
 
-    def test_both_safe_toml_examples_include_both_providers_and_shared_settings(self):
-        for name in ("custom.example.toml", "xeric.example.toml"):
-            doc = tomllib.loads((PROJECT / "examples" / name).read_text())
+    def test_canonical_cloud_variants_include_both_providers_and_shared_settings(self):
+        for selected in ("custom", "xeric"):
+            doc = tomllib.loads(cloud_template(selected))
+            self.assertEqual(doc["cloud"]["provider"], selected)
             self.assertIn("xeric", doc["cloud"])
             self.assertIn("custom", doc["cloud"])
             self.assertEqual(doc["cloud"]["resolution"], 4096)

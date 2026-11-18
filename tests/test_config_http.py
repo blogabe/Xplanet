@@ -87,13 +87,14 @@ class ConfigurationTests(Sandbox):
         with self.assertRaises(StorageError):
             self.config("CloudOutput=dev/reference/original.jpg\n")
 
-    def test_safe_toml_examples_load_without_rewriting(self):
-        from .support import PROJECT
-        for path in sorted((PROJECT / "examples").glob("*.example.toml")):
-            with self.subTest(example=path.name):
-                raw = path.read_bytes()
+    def test_canonical_cloud_variants_load_without_rewrite(self):
+        from .support import cloud_template
+        for provider in ("custom", "xeric"):
+            with self.subTest(provider=provider):
+                raw = cloud_template(provider).encode()
                 (self.root / "example.toml").write_bytes(raw)
                 settings = load(self.fs, "example.toml")
+                self.assertEqual(settings.provider, provider)
                 self.assertEqual((self.root / "example.toml").read_bytes(), raw)
                 if settings.provider == "xeric":
                     self.assertEqual(settings.auth.mode, "basic")

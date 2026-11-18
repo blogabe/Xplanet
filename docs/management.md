@@ -20,6 +20,25 @@ data-only use, see [standalone TotalMarker](totalmarker-standalone.md).
    once, then `./scripts/xplanet.sh config`. Saving, selecting and restarting are
    separate actions; the [studio guide](configurator/user-guide.md) explains them.
 
+## Choose a cloud provider
+
+Setup copies the [complete TotalMarker template](../config/totalmarker.example.toml)
+only when personal `config/totalmarker.toml` is missing. Edit that personal file,
+not the shipped template; do not replace an existing configuration with a recipe.
+
+- **Custom:** keep `provider = "custom"` in `[cloud]` and replace the `.invalid`
+  `url_template` in `[cloud.custom]` with your permitted HTTPS source. Leave
+  credentials empty for `auth_mode = "none"`; use supported authentication only
+  when your source requires it.
+- **Xeric:** set `provider = "xeric"` in `[cloud]`. The fixed HTTPS URL and Basic
+  authentication settings already exist in `[cloud.xeric]`; supply your subscription
+  credentials there or name the environment variables holding them. Never commit
+  personal credentials. LaunchAgents do not inherit your interactive shell environment.
+
+Set `[cloud].resolution` once; the URL and output filename templates follow it.
+Configure the source before enabling refreshes. Keep existing paths, labels and
+other products unchanged unless you deliberately want to change them.
+
 ## Using management
 
 Run `scripts/xplanet.sh` without arguments in a terminal to open management.

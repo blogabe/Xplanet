@@ -44,8 +44,7 @@ class ReleaseContentTests(unittest.TestCase):
                                        "scripts/xp-bootstrap.sh",
                                        "scripts/run-totalmarker", "scripts/run-configurator",
                                        "scripts/import-satellite-icons"})
-        self.assertFalse(any(name.startswith("examples/") and name.endswith(".ini")
-                             for name in names))
+        self.assertFalse(any(name.startswith("examples/") for name in names))
 
     def test_privacy_policy_rejects_private_names_inside_source_directories(self):
         from . import release_policy as release
@@ -59,13 +58,13 @@ class ReleaseContentTests(unittest.TestCase):
             "tests/private.pem", "tests/private.ini", "tests/module.pyc",
             "tests/module.pyo", "tests/module.pyd",
             "output/preview/earth-render.png", "output/exports/copy/export.json",
-            "output/future-private-file.txt",
+            "output/future-private-file.txt", "examples/custom.example.toml",
         )
         for name in unsafe:
             with self.subTest(name=name), self.assertRaisesRegex(RuntimeError, "unsafe source entry"):
                 release.check_source_paths({name: "100644 blob " + "0" * 40})
         safe = (
-            "config/totalmarker.example.toml", "examples/custom.example.toml",
+            "config/totalmarker.example.toml",
             "tests/fixtures/example.toml", "tests/fixtures/example.json",
             "tests/fixtures/cache/response.json", "tests/test_log_trim.py",
             "scripts/launchd/local.xplanet.start.plist.example", ".gitignore",
@@ -102,7 +101,7 @@ class ReleaseContentTests(unittest.TestCase):
             "dev/recovery/archive", "dev/validation/frame.png",
             "dev/todel/snapshot", "dev/preview/earth-render.png",
             "output/preview/earth-manual.png", "output/preview/earth-render.png",
-            "output/exports/copy/export.json", "output/future-private-file.txt",
+            "output/exports/copy/export.json", "output/future-private-file.txt", "examples/custom.example.toml",
             "tests/.tmp/capture", "maps/personal.png",
             ".state/totalmarker/state.json", "logs/totalmarker/events.jsonl",
         )
@@ -154,7 +153,6 @@ class ReleaseContentTests(unittest.TestCase):
 
     def test_public_toml_examples_contain_no_credentials(self):
         examples = [PROJECT / "config/totalmarker.example.toml"]
-        examples.extend((PROJECT / "examples").glob("*.example.toml"))
         for path in examples:
             with self.subTest(path=path.name):
                 cloud = tomllib.loads(path.read_text())["cloud"]

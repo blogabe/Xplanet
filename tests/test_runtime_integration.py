@@ -6,7 +6,7 @@ from pathlib import Path
 import subprocess
 import sys
 
-from .support import PROJECT, Sandbox, jpeg
+from .support import PROJECT, Sandbox, jpeg, cloud_template
 
 
 CLOUD_DRIVER = """
@@ -43,7 +43,7 @@ class RuntimeFixture(Sandbox):
         for name in ("config", "maps", "images", "markers"):
             (self.root / name).mkdir(parents=True, exist_ok=True)
         (self.root / "config/totalmarker.toml").write_bytes(
-            (PROJECT / "examples/custom.example.toml").read_bytes())
+            cloud_template().encode())
         (self.root / "config/earth").write_text(
             '# User-selected cities and optional dates\n'
             '# 12 34 "A commented city"\n'

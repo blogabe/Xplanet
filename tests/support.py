@@ -15,6 +15,17 @@ from totalmarker.paths import RootFS
 PROJECT = Path(__file__).resolve().parents[1]
 
 
+def cloud_template(provider="custom"):
+    """Derive a cloud-only fixture from the shipped canonical template."""
+    if provider not in ("custom", "xeric"):
+        raise ValueError("unknown test provider")
+    text = (PROJECT / "config/totalmarker.example.toml").read_text()
+    cloud_only, separator, _ = text.partition("[quake]")
+    if not separator or cloud_only.count("provider = \"custom\"") != 1:
+        raise AssertionError("canonical cloud template structure changed")
+    return cloud_only.replace("provider = \"custom\"", f"provider = \"{provider}\"", 1)
+
+
 def copy_launcher(destination):
     """Copy the checkout CLI and its private macOS workflows into a sandbox."""
     shutil.copy2(PROJECT / "scripts/xplanet.sh", destination)
