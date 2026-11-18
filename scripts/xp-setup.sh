@@ -709,6 +709,8 @@ if ask "Step 3) Install and register Xplanet automation?"; then
         print -ru2 -- "Resolve the reported launchd preparation error. If editing a personal plist, preserve its schedule and update its ABE-CFG source, if used; then retry: ${(q)launcher} setup"
         failures+=("launchd preparation: selected automation batch not registered; see the plist error above")
     else
+        print -- "If macOS asks to let Xplanet control Finder, choose Allow for desktop updates."
+        print -- "If already authorized, no action is needed."
         for job in "${jobs[@]}"; do
             agent="$HOME/Library/LaunchAgents/local.xplanet.$job.plist"
             label="local.xplanet.$job"
@@ -750,6 +752,5 @@ else
     print -- "Setup complete."
 fi
 if [[ "$automation_requested" == true ]]; then
-    print -- "If macOS asks to let Xplanet control Finder, choose Allow for desktop updates."
     print -- "Allow a few minutes for the first desktop update to appear."
 fi

@@ -500,6 +500,9 @@ class SetupTests(Sandbox):
         calls = self.base / "launchctl-calls.txt"
         launchctl = bin_dir / "launchctl"
         stub_launchctl(launchctl)
+        launchctl.write_text(launchctl.read_text().replace(
+            "if args[:2] == ['load', '-w']:",
+            "if args[:2] == ['load', '-w']:\n    print('MOCK: loading job', flush=True)"))
         env.update(HOME=str(home), PATH=f"{bin_dir}:/usr/bin:/bin",
                    TM_LAUNCHCTL_CALLS=str(calls), TM_LIST_FAIL_LABEL="")
         command = [str(scripts / "xplanet.sh"), "setup"]
@@ -510,8 +513,10 @@ class SetupTests(Sandbox):
         self.assertIn("Setup complete.", done.stdout)
         self.assertIn("If macOS asks to let Xplanet control Finder, choose Allow", done.stdout)
         self.assertIn("Allow a few minutes for the first desktop update", done.stdout)
-        self.assertLess(done.stdout.index("Setup complete."),
-                        done.stdout.index("If macOS asks to let Xplanet control Finder"))
+        notice = "If macOS asks to let Xplanet control Finder"
+        self.assertEqual(done.stdout.count(notice), 1)
+        self.assertLess(done.stdout.index(notice), done.stdout.index("MOCK: loading job"))
+        self.assertIn("If already authorized, no action is needed.", done.stdout)
         self.assertEqual(products.read_text().splitlines(),
                          ["quake", "storm", "volcano", "clouds"])
         jobs = ("start", "earth-map", "quake", "storm", "volcano", "clouds")
@@ -529,6 +534,8 @@ class SetupTests(Sandbox):
                                input="y\n\ny\ny\ny\ny\ny\n", capture_output=True,
                                text=True, check=False)
         self.assertEqual(again.returncode, 0, again.stderr)
+        self.assertNotIn("MOCK: loading job", again.stdout)
+        self.assertIn("If already authorized, no action is needed.", again.stdout)
         self.assertEqual(calls.read_text().splitlines(), [f"print gui/{os.geteuid()}/local.xplanet.{job}" for job in jobs])
         self.assertEqual(again.stdout.count("left unchanged"), len(jobs))
         # A same-label loaded definition is not parsed or reverified;
@@ -869,7 +876,7 @@ class SetupTests(Sandbox):
         self.assertIn("did not confirm registration of storm", done.stderr)
         self.assertIn("Setup finished with 1 failed core step(s):", done.stderr)
         self.assertNotIn("Setup complete", done.stdout)
-        self.assertNotIn("If macOS asks to let Xplanet control Finder", done.stdout)
+        self.assertIn("If macOS asks to let Xplanet control Finder", done.stdout)
         self.assertEqual(sum(line.startswith("load -w ") for line in calls.read_text().splitlines()), 5)
 
     def test_declined_refreshes_and_direct_product_status(self):
@@ -909,7 +916,7 @@ class SetupTests(Sandbox):
         self.assertEqual(done.returncode, 1, done.stderr)
         self.assertIn("did not confirm registration of volcano", done.stderr)
         self.assertNotIn("Setup complete.", done.stdout)
-        self.assertNotIn("If macOS asks to let Xplanet control Finder", done.stdout)
+        self.assertIn("If macOS asks to let Xplanet control Finder", done.stdout)
         self.assertEqual(sum(line.startswith("load -w ") for line in calls.read_text().splitlines()), 5)
         self.assertFalse(products.exists())
 
