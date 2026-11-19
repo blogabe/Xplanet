@@ -14,3 +14,6 @@ tests/fixtures/storm/live-20261114-corrected/*.xml -text -whitespace
 # Preserve the authentic trackless-TCFA packet byte for byte.
 tests/fixtures/storm/live-20261118-tcfa/*.txt -text -whitespace
 tests/fixtures/storm/live-20261118-tcfa/*.rss -text -whitespace
+
+# Preserve captured cancellation text byte for byte.
+tests/fixtures/storm/live-20261119-cancellation/*.txt -text -whitespace
