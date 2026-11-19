@@ -1,0 +1,23 @@
+{
+  "description": "Public JTWC cancellation and advisory text captured without transformation. Complete integration replay packet kept only in disposable scratch; fixture tests do not use network.",
+  "responses": [
+    {
+      "file": "sh9627web.txt",
+      "url": "https://www.metoc.navy.mil/jtwc/products/sh9627web.txt",
+      "date": "Thu, 19 Nov 2026 00:26:39 GMT",
+      "status": 200,
+      "bytes": 1250,
+      "sha256": "9bc6d11ede85a09b7199e0d0996285000badaa194f11369964588fdf33c5e64e",
+      "retrieved_at": "2026-11-19T00:26:38.928361+00:00"
+    },
+    {
+      "file": "abioweb.txt",
+      "url": "https://www.metoc.navy.mil/jtwc/products/abioweb.txt",
+      "date": "Thu, 19 Nov 2026 00:26:40 GMT",
+      "status": 200,
+      "bytes": 2279,
+      "sha256": "43b9fe4483d803d7ab27d87dc7acf108ee782d76e8de1f2c2f4c36ef40cf9351",
+      "retrieved_at": "2026-11-19T00:26:39.124059+00:00"
+    }
+  ]
+}

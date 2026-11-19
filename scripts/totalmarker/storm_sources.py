@@ -338,7 +338,15 @@ def _jtwc_code_matches(identity, code):
 
 
 def parse_jtwc_formation_alert(body, identity, rss_at):
-    """Validate a TCFA as an invest; its point must agree with an advisory."""
+    """Validate an active TCFA; cancellation is a distinct product state."""
+    current, code, cancelled = _parse_jtwc_formation_product(body, identity, rss_at)
+    if cancelled:
+        raise FeedError("Storm JTWC formation alert is cancelled")
+    return current, code
+
+
+def _parse_jtwc_formation_product(body, identity, rss_at):
+    """Validate active/cancelled TCFA identity and fix, never publish it directly."""
     try:
         lines = body.decode("ascii").splitlines()
     except UnicodeError:
@@ -349,9 +357,13 @@ def parse_jtwc_formation_alert(body, identity, rss_at):
     if len(subjects) != 1:
         raise FeedError("Storm JTWC formation alert lacks one subject")
     subject = re.fullmatch(r"SUBJ/TROPICAL CYCLONE FORMATION ALERT[ \t]*"
-                           r"\(INVEST ([0-9]{2}[A-Z])\)//", subjects[0])
+                           r"\(INVEST ([0-9]{2}[A-Z])\)( CANCELLATION)?//", subjects[0])
     if not subject or not _jtwc_code_matches(identity, subject[1]):
         raise FeedError("Storm JTWC formation alert identity disagrees with RSS")
+    cancelled = subject[2] is not None
+    cancellation_cue = bool(re.search(r"\bTHIS CANCELS REF A\b", "\n".join(lines)))
+    if cancelled != cancellation_cue:
+        raise FeedError("Storm JTWC formation alert cancellation is ambiguous")
     if set(re.findall(r"\bINVEST\s+([0-9]{2}[A-Z])\b", "\n".join(lines))) != {subject[1]}:
         raise FeedError("Storm JTWC formation alert repeats a different invest")
     header = re.fullmatch(r"WT[A-Z]{2}[0-9]{2}\s+PGTW\s+([0-9]{6})", lines[0]) if lines else None
@@ -376,7 +388,7 @@ def parse_jtwc_formation_alert(body, identity, rss_at):
     season = observed.year + (identity[:2] == "SH" and observed.month >= 7)
     if int(identity[-4:]) != season:
         raise FeedError("Storm JTWC formation alert season disagrees with RSS")
-    current = list(re.finditer(r"\bIS NOW LOCATED NEAR\s+" + POSITION.pattern,
+    current = list(re.finditer(r"\bIS\s+NOW\s+LOCATED\s+NEAR\s+" + POSITION.pattern,
                               "\n".join(lines)))
     if len(current) != 1:
         raise FeedError("Storm JTWC formation alert lacks one current position")
@@ -385,7 +397,7 @@ def parse_jtwc_formation_alert(body, identity, rss_at):
     longitude = float(lon) * (-1 if ew == "W" else 1)
     if not -90 <= latitude <= 90 or not -180 <= longitude <= 180:
         raise FeedError("Storm JTWC formation alert position is out of range")
-    return TrackPoint(observed.timestamp(), latitude, longitude), subject[1]
+    return TrackPoint(observed.timestamp(), latitude, longitude), subject[1], cancelled
 
 
 def parse_jtwc_warning(body, identity, rss_at):
@@ -589,13 +601,13 @@ def collect_snapshot(fetcher, *, now, timeout=30, max_bytes=16 * 1024 * 1024):
     formation_alerts = {}
     for product in discovered:
         if product.kind == "formation_alert":
-            current, code = parse_jtwc_formation_alert(
+            current, code, cancelled = _parse_jtwc_formation_product(
                 get(product.warning_url).body, product.identity,
                 rss_times[product.group])
             if product.identity in formation_alerts or code in warning_codes:
                 raise FeedError("Storm JTWC formation alerts repeat a storm")
             _fresh(current.at, now, 30 * 3600, "JTWC formation alert")
-            formation_alerts[product.identity] = (current, code)
+            formation_alerts[product.identity] = (current, code, cancelled)
             deadlines.append(current.at + 30 * 3600)
             source_times[product.group] = min(source_times[product.group], current.at)
             continue
@@ -641,9 +653,13 @@ def collect_snapshot(fetcher, *, now, timeout=30, max_bytes=16 * 1024 * 1024):
     # may remain in a bulletin after RSS retires them, or briefly remain listed.
     if (advisory_codes - final_codes) - warning_codes or warning_codes - advisory_codes:
         raise FeedError("Storm JTWC warnings disagree with significant advisories")
-    for identity, (alert, code) in formation_alerts.items():
+    for identity, (alert, code, cancelled) in formation_alerts.items():
         matching = [invest for invest in advisory_invests if invest.id == identity]
-        disagreement = f"Storm JTWC formation alert disagrees with significant advisories: {identity} ({code}) "
+        # Cancellation retires the formation alert, not necessarily the invest.
+        # Both states need independent fresh advisory evidence. A cancelled
+        # product cannot erase an invest, create a track, or override its fix.
+        product_name = "formation alert cancellation" if cancelled else "formation alert"
+        disagreement = f"Storm JTWC {product_name} disagrees with significant advisories: {identity} ({code}) "
         if not matching:
             promoted = advisory_promotions.get(code)
             if promoted is not None:
