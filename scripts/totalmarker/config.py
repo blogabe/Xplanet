@@ -137,6 +137,12 @@ class VolcanoOptions:
     detail_align: str = "Below"
     detail_color: str = "Brown"
 
+    @property
+    def enabled(self):
+        # The unconfigured CAP sentinel used by guided setup (including old copies).
+        return not (self.provider == "cap"
+                    and self.url == "https://volcano.example.invalid/WeeklyVolcanoCAP.xml")
+
 
 @dataclass(frozen=True)
 class QuakeOptions:

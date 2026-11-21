@@ -52,6 +52,9 @@ def _validate_weekly_coverage(coverage_end_at, now):
 
 def run(fs, settings, *, fetcher=None, now=None):
     options = settings.volcano
+    if not options.enabled:
+        return Result("disabled", "No volcano source selected in config/totalmarker.toml",
+                      None, None, None, None, provider=options.provider)
     with fs.lock(settings.lock):
         now = time.time() if now is None else now
         recover_pending(fs, settings)

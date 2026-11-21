@@ -9,7 +9,8 @@ data-only use, see [standalone TotalMarker](totalmarker-standalone.md).
    into a new directory and run `./scripts/xplanet.sh` for guided management.
 2. Follow Guided setup: prepare personal files, choose data sources and review
    the proposed schedules. Keep unconfigured products disabled; cloud access
-   needs your source and credentials, and volcano needs an explicit source choice.
+   needs your source and credentials. For volcanoes, keep the Weekly Report
+   default, select CAP, or skip.
 3. Accept the optional start offer, or run `./scripts/xplanet.sh start` afterward.
    This asks launchd to run the configured renderer; it does not certify a frame.
 4. Expect the desktop image to update asynchronously. If it does not, inspect
@@ -41,18 +42,21 @@ other products unchanged unless you deliberately want to change them.
 
 ## Choose a volcano source
 
-When interactive setup creates your first `config/totalmarker.toml` from the
-shipped placeholder, choose Smithsonian GVP **Official CAP feed**, **Weekly
-Report (HTML)**, or **Skip volcanoes for now** (the default). Choosing a source
-does not contact it; setup asks separately before a live refresh.
+When setup creates your first `config/totalmarker.toml`, it defaults to the
+Smithsonian GVP **Weekly Report (HTML)**. In an interactive terminal, press Enter
+to keep it, or choose **Official CAP feed** or **Skip volcanoes for now**.
+Without an interactive terminal, the fresh template uses the Weekly Report.
+Choosing a source does not contact it; setup asks separately before a live
+refresh and before installing automation.
 
-If you skip, or run setup without an interactive terminal using the unchanged
-placeholder, setup does not offer a volcano refresh or register a new volcano
-job. Existing personal settings and registered jobs are left alone. To enable
-volcanoes later, edit your personal `[volcano]` settings: choose `weekly_html`,
-or use `cap` with an explicit [CAP URL](technical-notes.md#volcano-sources).
-Run setup again. An eligible source can be scheduled with the automation bundle
-even if you decline the immediate refresh; eligibility is not proof of access.
+If you skip, future setup runs do not offer a volcano refresh or register a new
+volcano job, and direct refresh and live health do not contact a placeholder.
+Existing personal settings and registered jobs are not migrated or removed.
+To enable volcanoes later, edit your personal `[volcano]` settings: choose
+`weekly_html` and clear the unused URL, or use `cap` with an explicit
+[CAP URL](technical-notes.md#volcano-sources). Run setup again. An eligible
+source can be scheduled with the automation bundle even if you decline the
+immediate refresh; eligibility is not proof of access.
 
 ## Optional ISS and solar-eclipse overlays
 
