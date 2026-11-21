@@ -1,6 +1,7 @@
 """Preparation writes only to isolated project fixture roots."""
 from pathlib import Path
 import plistlib
+import errno
 import os
 import pty
 import select
@@ -10,8 +11,12 @@ import shlex
 import shutil
 import subprocess
 import sys
+import tomllib
 
 from .support import PROJECT, Sandbox, wait_for_prompt, copy_launcher, stub_launchctl
+
+
+CAP_CONFIG = b'[volcano]\nprovider = "cap"\nurl = "https://volcano.si.edu/news/WeeklyVolcanoCAP.xml"\n'
 
 
 class SetupTests(Sandbox):
@@ -111,7 +116,7 @@ class SetupTests(Sandbox):
             "XPLANET_BIN=" + shlex.quote(str(xplanet)) + "\n"
             "XPLANET_HOME=" + shlex.quote(str(self.root)) + "\n"
             "XPLANET_CONFIG=" + shlex.quote(str(config)) + "\n")
-        (config / "totalmarker.example.toml").write_bytes(b"personal example\n")
+        (config / "totalmarker.example.toml").write_bytes(CAP_CONFIG)
         (config / "earth.example").write_bytes(b"earth example\n")
         self.sources = {
             "maps/lights/earth_lights_4800.tiff": b"lights",
@@ -143,7 +148,7 @@ class SetupTests(Sandbox):
         self.assertTrue((self.root / "arcs").is_dir())
         self.assertTrue((self.root / "logs/totalmarker").is_dir())
         self.assertTrue((self.root / ".state/totalmarker").is_dir())
-        self.assertEqual((self.root / "config/totalmarker.toml").read_bytes(), b"personal example\n")
+        self.assertEqual((self.root / "config/totalmarker.toml").read_bytes(), CAP_CONFIG)
         self.assertEqual((self.root / "config/earth").read_bytes(), b"earth example\n")
         self.assertEqual((self.root / "config/totalmarker.toml").stat().st_mode & 0o777, 0o600)
         self.assertEqual((self.root / "config/earth").stat().st_mode & 0o777, 0o600)
@@ -487,6 +492,125 @@ class SetupTests(Sandbox):
                "TM_FAIL_STATUS": "1", "TM_PYTHON": sys.executable}
         return scripts, env, products
 
+    def _volcano_automation_fixture(self):
+        scripts, env, products = self._shell_fixture()
+        shutil.copytree(PROJECT / "scripts/launchd", scripts / "launchd",
+                        ignore=shutil.ignore_patterns("*.plist"))
+        shutil.copy2(PROJECT / "config/totalmarker.example.toml",
+                     self.root / "config/totalmarker.example.toml")
+        home = self.base / "home"
+        home.mkdir()
+        bin_dir = self.base / "bin"
+        bin_dir.mkdir()
+        calls = self.base / "launchctl-calls.txt"
+        stub_launchctl(bin_dir / "launchctl")
+        env.update(HOME=str(home), PATH=f"{bin_dir}:/usr/bin:/bin",
+                   TM_LAUNCHCTL_CALLS=str(calls), TM_LIST_FAIL_LABEL="")
+        return scripts, env, products, home, calls
+
+    def _setup_tty(self, scripts, env, answers):
+        master, slave = pty.openpty()
+        process = subprocess.Popen([str(scripts / "xp-setup.sh")], env=env,
+                                   stdin=slave, stdout=slave, stderr=slave)
+        try:
+            os.close(slave)
+            os.write(master, answers.encode())
+            chunks = []
+            deadline = time.monotonic() + 10
+            while time.monotonic() < deadline:
+                if select.select([master], [], [], 0.1)[0]:
+                    try:
+                        data = os.read(master, 65536)
+                    except OSError as error:
+                        if error.errno != errno.EIO:  # PTY master sees EIO after the slave exits.
+                            raise
+                        break
+                    if not data:
+                        break
+                    chunks.append(data)
+                elif process.poll() is not None:
+                    break
+            result = b"".join(chunks).decode()
+            self.assertEqual(process.wait(timeout=2), 0, result)
+            return result
+        finally:
+            if process.poll() is None:
+                process.kill()
+                process.wait()
+            os.close(master)
+
+    def test_fresh_interactive_volcano_source_choices(self):
+        scripts, env, products, home, calls = self._volcano_automation_fixture()
+        config = self.root / "config/totalmarker.toml"
+        source_template = (self.root / "config/totalmarker.example.toml").read_bytes()
+        for choice, provider, official in (("1", "cap", True), ("2", "weekly_html", False),
+                                            ("", "cap", False)):
+            with self.subTest(choice=choice):
+                config.unlink(missing_ok=True)
+                products.unlink(missing_ok=True)
+                calls.unlink(missing_ok=True)
+                for directory in (home / "Library/LaunchAgents", scripts / "launchd"):
+                    for file in directory.glob("*.plist"):
+                        file.unlink()
+                selected = choice in ("1", "2")
+                answers = f"y\n{choice}\n\nn\nn\n" + ("y\n" if selected else "") + "n\ny\n"
+                output = self._setup_tty(scripts, env, answers)
+                self.assertIn("Official CAP feed (https://volcano.si.edu/news/WeeklyVolcanoCAP.xml)", output)
+                self.assertIn("Weekly Report (HTML)", output)
+                self.assertIn("Skip volcanoes for now", output)
+                current = config.read_bytes()
+                self.assertEqual(tomllib.loads(current.decode())["volcano"]["provider"], provider)
+                self.assertEqual(b"https://volcano.si.edu/news/WeeklyVolcanoCAP.xml" in
+                                 next(line for line in current.splitlines()
+                                      if line.startswith(b"url = ")), official)
+                self.assertEqual("Refresh volcano markers now?" in output, selected)
+                self.assertEqual(products.exists(), selected)
+                if selected:
+                    self.assertEqual(products.read_text().splitlines(), ["volcano"])
+                else:
+                    self.assertEqual(current, source_template)
+                self.assertEqual("local.xplanet.volcano" in calls.read_text(), selected)
+                agent = home / "Library/LaunchAgents/local.xplanet.volcano.plist"
+                self.assertEqual(agent.is_symlink(), selected)
+
+    def test_unconfigured_pipe_omits_volcano_and_preserves_existing_agent(self):
+        scripts, env, products, home, calls = self._volcano_automation_fixture()
+        config = self.root / "config/totalmarker.toml"
+        outcome = self._inspect(scripts, env, input="y\n\nn\nn\ny\nn\ny\n")
+        self.assertEqual(outcome.returncode, 0, outcome.stderr)
+        self.assertIn("skipping its refresh and new automation", outcome.stdout)
+        self.assertNotIn("Volcano source [", outcome.stdout)
+        self.assertNotIn("Refresh volcano markers now?", outcome.stdout)
+        self.assertFalse(products.exists())
+        self.assertNotIn("local.xplanet.volcano", calls.read_text())
+        original = config.read_bytes()
+        agent = home / "Library/LaunchAgents/local.xplanet.volcano.plist"
+        self.assertFalse(agent.exists())
+        agent.write_bytes(b"preexisting custom job")
+        calls.unlink()
+        outcome = self._inspect(scripts, env, input="y\n\nn\nn\ny\nn\ny\n")
+        self.assertEqual(outcome.returncode, 0, outcome.stderr)
+        self.assertEqual(agent.read_bytes(), b"preexisting custom job")
+        self.assertNotIn("local.xplanet.volcano", calls.read_text())
+        self.assertEqual(config.read_bytes(), original)
+
+    def test_existing_volcano_sources_are_preserved_and_styling_alone_is_not_a_source(self):
+        scripts, env, products = self._shell_fixture()
+        config = self.root / "config/totalmarker.toml"
+        for content, ready in ((b'[volcano]\nurl = "https://custom.test/path"\n', True),
+                               (b'[legacy]\nVolcanoProvider="weekly_html"\n', True),
+                               (b'[volcano]\nname_color = "Red"\n', False),
+                               (b'[volcano]\nurl = "https://different.example.invalid/p"\n', False)):
+            with self.subTest(content=content):
+                products.unlink(missing_ok=True)
+                config.write_bytes(content)
+                outcome = self._inspect(scripts, env,
+                                        input="y\n\nn\nn\ny\nn\nn\n")
+                self.assertEqual(outcome.returncode, 0, outcome.stderr)
+                self.assertNotIn("Volcano source [", outcome.stdout)
+                self.assertEqual(products.exists(), ready)
+                self.assertEqual(config.read_bytes(), content)
+
     def test_interactive_automation_uses_stub_only(self):
         scripts, env, products = self._shell_fixture()
         examples = scripts / "launchd"
@@ -701,7 +825,8 @@ class SetupTests(Sandbox):
         (self.root / "config/totalmarker.toml").write_text(
             '[quake]\noutput = "markers/personal-quake"\n'
             '[storm]\noutput = "markers/personal-storm"\narc_output = "arcs/personal-storm"\n'
-            '[volcano]\noutput = "markers/personal-volcano"\n'
+            '[volcano]\nurl = "https://volcano.si.edu/news/WeeklyVolcanoCAP.xml"\n'
+            'output = "markers/personal-volcano"\n'
             '[cloud]\nlocal_image_name = "personal-cloud.jpg"\n')
         outputs = {
             "quake": ("markers/personal-quake",),

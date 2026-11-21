@@ -107,6 +107,11 @@ Detailed help: install --help, update --help, config --help, config --guide,
                setup --help, health --help, diagnostics --help,
                log-view --help, log-trim --help
 Use config --prepare to prepare the isolated scene-studio UI environment.
+For planetary examples, open Stock scenes in the studio or see
+docs/configurator/stock-scenes.md.
+NORAD and eclipse need opt-in and separate Earth display settings. Setup does
+not refresh or schedule them. See Optional ISS and solar-eclipse overlays in
+docs/management.md.
 
 Workflow notes (macOS)
   Install may request macOS security approvals. Setup installs no packages
