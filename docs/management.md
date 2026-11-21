@@ -39,6 +39,104 @@ Set `[cloud].resolution` once; the URL and output filename templates follow it.
 Configure the source before enabling refreshes. Keep existing paths, labels and
 other products unchanged unless you deliberately want to change them.
 
+## Choose a volcano source
+
+When interactive setup creates your first `config/totalmarker.toml` from the
+shipped placeholder, choose Smithsonian GVP **Official CAP feed**, **Weekly
+Report (HTML)**, or **Skip volcanoes for now** (the default). Choosing a source
+does not contact it; setup asks separately before a live refresh.
+
+If you skip, or run setup without an interactive terminal using the unchanged
+placeholder, setup does not offer a volcano refresh or register a new volcano
+job. Existing personal settings and registered jobs are left alone. To enable
+volcanoes later, edit your personal `[volcano]` settings: choose `weekly_html`,
+or use `cap` with an explicit [CAP URL](technical-notes.md#volcano-sources).
+Run setup again. An eligible source can be scheduled with the automation bundle
+even if you decline the immediate refresh; eligibility is not proof of access.
+
+## Optional ISS and solar-eclipse overlays
+
+These Earth overlays are off by default. Guided setup does not enable, refresh or
+schedule them; start, restart and update do not fetch them. Edit your existing
+personal `config/totalmarker.toml` and `config/xp.conf`, not the
+[shipped template](../config/totalmarker.example.toml). Change the keys in their
+existing TOML sections instead of adding a second section. The refresh commands
+write data; the native Earth configuration tells Xplanet what to draw.
+
+### Show the ISS
+
+In `[norad]`, set `enabled = true` and keep `catalog_ids = "25544"` for the
+International Space Station. The shipped ISS profile supplies the caption and
+style; an [imported icon](installed-satellite-icons.md) is optional. Run from
+your checkout:
+
+```sh
+./scripts/xplanet.sh norad
+```
+
+With the default output path, a successful refresh produces
+`satellites/totalmarker` and its matching `satellites/totalmarker.tle`.
+Add the following line under the existing `[earth]` section in your personal
+`config/xp.conf`:
+
+```ini
+satellite_file=totalmarker
+```
+
+Keep the two files together and use current elements; the installed sample TLE
+is historical. Xplanet estimates position from the elements, not from live
+telemetry. Refresh explicitly and check `./scripts/xplanet.sh health --verbose`
+before interpreting the overlay. A failed refresh can leave older files in
+place; the running custom desktop does not enforce TotalMarker’s TLE expiry.
+
+### Show a central solar-eclipse path
+
+In `[eclipse]`, set `enabled = true`. Leave `path_url = ""` to discover a
+current or upcoming central event, or set it to a NASA GSFC central-path table,
+such as the [February 6, 2027 annular solar eclipse](https://eclipse.gsfc.nasa.gov/SEpath/SEpath2001/SE2027Feb06Apath.html).
+Total, annular and hybrid paths are supported; partial-only events are not.
+Run:
+
+```sh
+./scripts/xplanet.sh eclipse
+```
+
+With the default output paths, add the following under the existing `[earth]`
+section of `config/xp.conf`:
+
+```ini
+marker_file=eclipse arc_file=eclipse
+```
+
+These references draw `markers/eclipse` and `arcs/eclipse`. The producer writes
+header-only files outside its display window, from the first timed path sample
+minus `notify_hours` (48 hours by default) through one hour after the last timed
+sample. A successful refresh of a distant event can therefore leave nothing to
+draw. The overlay shows a published prediction, not a rendering of the eclipse
+itself. Neither native overlay requires SPICE or an external ephemeris.
+
+After editing the native configuration, try `./scripts/xplanet.sh preview` to
+render a separate custom Earth frame before restarting the desktop. Visibility
+also depends on framing, scene time and whether the object or path is in view.
+
+### Explore separately in the scene studio
+
+The [astronomy capture guide](configurator/astronomy-capture.md) covers explicit
+copies of existing validated output. Capture does not fetch or schedule data.
+Frozen ISS is Earth/Now preview-only; it cannot be selected for the desktop while
+active. To explore the 2027 eclipse before the producer’s display window, use
+[local NASA-format path import](configurator/astronomy-capture.md#offline-local-nasa-format-path-import)
+with the [saved February 6 NASA table](../tests/fixtures/nasa/2027-02-06-annular.html)
+and its event URL above. Leave the optional first-row date blank for this
+same-day table. Choose **Fixed UTC** `2027-02-06T16:00:00Z`, within the
+14:08–17:52 UTC samples. This preview does not need a producer refresh and does
+not change the desktop.
+
+For a planet rather than an Earth overlay, open **Stock scenes…** and try
+`mars-from-phobos`. The [stock scene catalogue](configurator/stock-scenes.md)
+and [planetary limits](configurator/planetary.md) explain the bundled examples,
+viewpoints and date bounds. These are finite views, not precision ephemerides.
+
 ## Using management
 
 Run `scripts/xplanet.sh` without arguments in a terminal to open management.
@@ -66,7 +164,8 @@ this is not a readiness or health check. Shell-style executable definitions are
 left for setup to validate rather than evaluated while opening management.
 Existing configurations are not automatically reinstalled. Setup retains its
 confirmations for preparation, live refresh and the selected automation bundle
-(core jobs, with clouds only when enabled). It leaves registered jobs alone.
+(login, monthly map, quake and storm; volcano only with a configured source and
+clouds only when selected). It leaves registered jobs alone.
 Only after setup completes does management offer an explicit desktop start.
 Cancelling/stopping setup returns directly to the menu. After completed setup
 and the optional start offer, new/partial flows acknowledge the summary and exit; existing installations

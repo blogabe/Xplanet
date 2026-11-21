@@ -5,6 +5,7 @@
 - [Install](../README.md#install-on-macos) and [first-run sequence](management.md#quick-start)
 - [Terminal management](management.md): setup, updates, desktop control and saved health
 - [Python runtime](python-runtime.md): explicit Homebrew/uv interpreter selection
+- [Optional ISS and solar-eclipse overlays](management.md#optional-iss-and-solar-eclipse-overlays): enable, refresh and draw the native Earth overlays
 - [Installed satellite icons](installed-satellite-icons.md): explicit local import with source receipts
 - [Resources and prerequisites](resources.md): installed data, project assets, lookup and optional features
 - [TotalMarker template](../config/totalmarker.example.toml) and [cloud provider selection](management.md#choose-a-cloud-provider)

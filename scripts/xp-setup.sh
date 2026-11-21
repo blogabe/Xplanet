@@ -57,12 +57,18 @@ prepare_launchd_files() (
     plist_has() { plist_type "$1" "$2" >/dev/null; }
     plist_set() { /usr/bin/plutil -replace "$2" -string "$3" -- "$1" >/dev/null || fail "Cannot render $1"; }
 
-    (( $# == 2 || $# == 3 )) || fail "expected --home PATH [--include-clouds]"
+    (( $# >= 2 && $# <= 4 )) || fail "expected --home PATH [--include-clouds] [--exclude-volcano]"
     [[ "$1" == --home ]] || fail "expected --home PATH"
     home="$2"
-    if (( $# == 3 )); then
-        [[ "$3" == --include-clouds ]] || fail "unknown option: $3"
-    fi
+    shift 2
+    local include_clouds=false include_volcano=true
+    for flag in "$@"; do
+        case "$flag" in
+            --include-clouds) include_clouds=true ;;
+            --exclude-volcano) include_volcano=false ;;
+            *) fail "unknown option: $flag" ;;
+        esac
+    done
     [[ "$home" == /* && "$home" == "${home:A}" ]] ||
         fail "HOME must be an absolute directory without symlink ancestors"
     real_dir "$home"
@@ -200,8 +206,9 @@ prepare_launchd_files() (
         (( prepared += 1 ))
     }
 
-    jobs=(start earth-map quake storm volcano)
-    (( $# == 3 )) && jobs+=(clouds)
+    jobs=(start earth-map quake storm)
+    [[ "$include_volcano" == false ]] || jobs+=(volcano)
+    [[ "$include_clouds" == false ]] || jobs+=(clouds)
     agents="$home/Library/LaunchAgents"
     for directory in "$home/Library" "$agents"; do
         if entry_exists "$directory"; then real_dir "$directory"; fi
@@ -504,13 +511,25 @@ fi
 [[ "$XPLANET_BIN" == /* && -x "$XPLANET_BIN" ]] ||
     fail "$definition: XPLANET_BIN must name an absolute installed executable; edit that setting or run scripts/xplanet.sh install"
 
+volcano_choice=''
+volcano_helper="$script_dir/lib/xplanet/volcano-setup.py"
+[[ -f "$volcano_helper" && ! -L "$volcano_helper" ]] || fail "Missing regular volcano setup helper; restore it before setup"
+volcano_config="$project_root/config/totalmarker.toml"
+volcano_status() {
+    real_dir config
+    "$python_bin" -I -B "$volcano_helper" status "$1" || print -- unconfigured
+}
+
+interactive_setup=false
+if [[ -t 0 && -t 1 ]]; then interactive_setup=true; fi
+
 print -- "Xplanet is expected to be installed. TotalMarker will use $python_bin."
 print -- "Preparation records a compatible interpreter for scheduled TotalMarker; existing choices are preserved."
 if [[ "$shared_python" != "$python_bin" ]]; then
     print -- "TOTALMARKER_PYTHON overrides this setup invocation; unpinned scheduled jobs use $shared_python."
 fi
 print -- "Step 1: create missing personal configs, directories, map links and Earth marker,"
-print -- "        then choose which earthquake, storm and volcano markers to refresh."
+print -- "        then choose which configured markers to refresh."
 print -- "        Review $project_root/config/totalmarker.toml before any refresh."
 print -- "Step 2: optionally update the cloud image through your configured Xeric or custom provider."
 print -- "Step 3: optionally install and register Xplanet launchd jobs; this may start Xplanet."
@@ -581,6 +600,33 @@ for index in "${missing_personal[@]}"; do
                 fi
             done < "$example" > "$entry"
         ) || fail "Preparation stopped at $personal_names[index]; existing files are never replaced"
+    elif [[ "$entry" == "$volcano_config" && "$interactive_setup" == true &&
+            "$(volcano_status "$example")" == placeholder ]]; then
+        print -- "Choose a Smithsonian Global Volcanism Program source for volcano markers."
+        print -- "  1) Official CAP feed (https://volcano.si.edu/news/WeeklyVolcanoCAP.xml)"
+        print -- "  2) Weekly Report (HTML)"
+        print -- "  3) Skip volcanoes for now"
+        while true; do
+            read -r 'answer?Volcano source [1/2/3, default 3]: ' ||
+                fail "input ended before volcano source choice"
+            case "$answer" in
+                1) volcano_choice=cap; break ;;
+                2) volcano_choice=weekly_html; break ;;
+                3|'') volcano_choice=skip; break ;;
+                *) print -- "Choose 1, 2, or 3." ;;
+            esac
+        done
+        real_dir config
+        if [[ "$volcano_choice" == skip ]]; then
+            (setopt noclobber; cat -- "$example" > "$entry") ||
+                fail "Preparation stopped at $personal_names[index]; existing files are never replaced"
+        else
+            # The sentinel preserves the template's trailing newlines through shell capture.
+            selected_toml=$("$python_bin" -I -B "$volcano_helper" render "$example" "$volcano_choice" &&
+                            print -n -- x) || fail "Could not prepare the selected volcano source from the example"
+            (setopt noclobber; print -rn -- "${selected_toml%x}" > "$entry") ||
+                fail "Preparation stopped at $personal_names[index]; existing files are never replaced"
+        fi
     else
         (setopt noclobber; cat -- "$example" > "$entry") ||
             fail "Preparation stopped at $personal_names[index]; existing files are never replaced"
@@ -665,8 +711,22 @@ record_refresh_result() {
     fi
 }
 
-for product in quake storm volcano; do
+volcano_ready() {
+    [[ "$volcano_choice" != skip && "$(volcano_status "$volcano_config")" == ready ]]
+}
+marker_products=(quake storm)
+if volcano_ready; then
+    marker_products+=(volcano)
+else
+    print -- "Volcano source not selected or configured; skipping its refresh and new automation."
+    print -- "To enable it later, choose a source in config/totalmarker.toml and run setup again."
+fi
+for product in "${marker_products[@]}"; do
     if ask "Refresh $product markers now?"; then
+        if [[ "$product" == volcano ]] && ! volcano_ready; then
+            print -- "Volcano source is no longer configured; not refreshing."
+            continue
+        fi
         product_output=$("$script_dir/run-totalmarker" "$product")
         product_status=$?
         [[ -z "$product_output" ]] || print -r -- "$product_output"
@@ -675,6 +735,12 @@ for product in quake storm volcano; do
         fi
     fi
 done
+if [[ "$interactive_setup" == false && ${marker_products[-1]} != volcano ]]; then
+    # Keep scripted yes/no answers for clouds and automation in their original
+    # positions, without giving a skipped volcano answer any side effect.
+    read -r 'answer?Volcano refresh skipped. Continue: ' ||
+        fail "input ended before cloud refresh"
+fi
 
 cloud_selected=false
 if ask "Step 2) Update the cloud image using the configured provider?"; then
@@ -691,7 +757,12 @@ automation_requested=false
 if ask "Step 3) Install and register Xplanet automation?"; then
     automation_requested=true
     arguments=(--home "${HOME:-}")
-    jobs=(start earth-map quake storm volcano)
+    jobs=(start earth-map quake storm)
+    if volcano_ready; then
+        jobs+=(volcano)
+    else
+        arguments+=(--exclude-volcano)
+    fi
     if [[ "$cloud_selected" == true ]]; then
         arguments+=(--include-clouds)
         jobs+=(clouds)

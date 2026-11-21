@@ -71,3 +71,20 @@ PYTHONPATH=scripts:. python3 -B -m tests.native_renderer_cwd /absolute/path/to/x
 This uses disposable configurations, images and a temporary HOME under `/tmp`.
 It neither starts/stops the desktop nor reads or edits a working installation.
 The offline suite remains independent of a native renderer.
+
+## Explicit native overlay check
+
+With an installed Xplanet binary supporting PNG, verify finite renders of the
+ISS and a central solar-eclipse path:
+
+```sh
+PYTHONPATH=scripts:. python3 -B -m tests.native_renderer_overlays /absolute/path/to/xplanet
+```
+
+The check uses a historical public ISS TLE at its recorded epoch and a captured
+NASA annular-eclipse table. It compares overlay-on/off pixels and checks a path
+sample against its expected map position. Each frame has a 30-second timeout.
+The files and temporary HOME are isolated under `/tmp`, with no provider
+requests, wallpaper changes, launchd operations or extra dependencies. This is
+finite renderer evidence, not a live feed, orbital-accuracy or desktop handoff
+test. The offline suite remains renderer-independent.
