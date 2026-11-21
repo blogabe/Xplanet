@@ -333,6 +333,22 @@ class VolcanoProviderTests(Sandbox):
         self.assertIn(b"Volcano recovered", self.fs.read(settings.labels))
         self.assertIsNone(self.fs.read(settings.volcano.journal))
 
+    def test_explicitly_skipped_source_returns_disabled_without_fetching_or_writing(self):
+        (self.root / "config.toml").write_text(
+            '[volcano]\nprovider = "cap"\nurl = "https://volcano.example.invalid/WeeklyVolcanoCAP.xml"\n')
+        settings = load(self.fs, "config.toml")
+        marker = b"previous marker"
+        self.fs.write(settings.volcano.marker, marker)
+        output = io.StringIO()
+        with (patch("totalmarker.features.volcano.Fetcher",
+                    side_effect=AssertionError("disabled source cannot fetch")),
+              redirect_stdout(output)):
+            status = main(["--root", str(self.root), "--config", "config.toml", "volcano"])
+        self.assertEqual(status, 0)
+        self.assertEqual(json.loads(output.getvalue())["outcome"], "disabled")
+        self.assertEqual(self.fs.read(settings.volcano.marker), marker)
+        self.assertIsNone(self.fs.read(settings.state))
+
     def test_toml_options_and_cli_route_remain_offline_in_fixture(self):
         text = ('[cloud]\nprovider = "custom"\nurl = "https://cloud.example.invalid/c.jpg"\n'
                 '[volcano]\nurl = "https://volcano.example.invalid/cap.xml"\n'

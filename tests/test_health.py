@@ -57,6 +57,16 @@ class HealthTests(Sandbox):
         self.assertEqual(cloud['requests'],[])
         self.assertEqual(health.exit_status(report),2)
 
+    def test_explicitly_skipped_volcano_source_has_no_live_probe(self):
+        self.settings = replace(self.settings, volcano=replace(self.settings.volcano,
+            url="https://volcano.example.invalid/WeeklyVolcanoCAP.xml"))
+        with patch("totalmarker.health._live") as probe:
+            result = self.live(lambda: self.fail("no transport can be instantiated"))["volcano"]
+        self.assertFalse(any(call.args[2] == "volcano" for call in probe.call_args_list))
+        self.assertEqual(result["status"], "disabled")
+        self.assertEqual(result["sources"], [])
+        self.assertEqual(result["access"], "not_checked")
+
     def test_saved_health_never_fetches_writes_or_resolves_credentials(self):
         with patch('totalmarker.http.HTTPTransport.request', side_effect=AssertionError('network')):
             before = snapshot(self.root)

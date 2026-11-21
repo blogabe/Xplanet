@@ -600,33 +600,28 @@ for index in "${missing_personal[@]}"; do
                 fi
             done < "$example" > "$entry"
         ) || fail "Preparation stopped at $personal_names[index]; existing files are never replaced"
-    elif [[ "$entry" == "$volcano_config" && "$interactive_setup" == true &&
-            "$(volcano_status "$example")" == placeholder ]]; then
+    elif [[ "$entry" == "$volcano_config" && "$interactive_setup" == true ]] &&
+            "$python_bin" -I -B "$volcano_helper" selectable "$example"; then
         print -- "Choose a Smithsonian Global Volcanism Program source for volcano markers."
         print -- "  1) Official CAP feed (https://volcano.si.edu/news/WeeklyVolcanoCAP.xml)"
-        print -- "  2) Weekly Report (HTML)"
+        print -- "  2) Weekly Report (HTML) [default]"
         print -- "  3) Skip volcanoes for now"
         while true; do
-            read -r 'answer?Volcano source [1/2/3, default 3]: ' ||
+            read -r 'answer?Volcano source [1/2/3, default 2]: ' ||
                 fail "input ended before volcano source choice"
             case "$answer" in
                 1) volcano_choice=cap; break ;;
-                2) volcano_choice=weekly_html; break ;;
-                3|'') volcano_choice=skip; break ;;
+                2|'') volcano_choice=weekly_html; break ;;
+                3) volcano_choice=skip; break ;;
                 *) print -- "Choose 1, 2, or 3." ;;
             esac
         done
         real_dir config
-        if [[ "$volcano_choice" == skip ]]; then
-            (setopt noclobber; cat -- "$example" > "$entry") ||
-                fail "Preparation stopped at $personal_names[index]; existing files are never replaced"
-        else
-            # The sentinel preserves the template's trailing newlines through shell capture.
-            selected_toml=$("$python_bin" -I -B "$volcano_helper" render "$example" "$volcano_choice" &&
-                            print -n -- x) || fail "Could not prepare the selected volcano source from the example"
-            (setopt noclobber; print -rn -- "${selected_toml%x}" > "$entry") ||
-                fail "Preparation stopped at $personal_names[index]; existing files are never replaced"
-        fi
+        # The sentinel preserves the template's trailing newlines through shell capture.
+        selected_toml=$("$python_bin" -I -B "$volcano_helper" render "$example" "$volcano_choice" &&
+                        print -n -- x) || fail "Could not prepare the selected volcano source from the example"
+        (setopt noclobber; print -rn -- "${selected_toml%x}" > "$entry") ||
+            fail "Preparation stopped at $personal_names[index]; existing files are never replaced"
     else
         (setopt noclobber; cat -- "$example" > "$entry") ||
             fail "Preparation stopped at $personal_names[index]; existing files are never replaced"

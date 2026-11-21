@@ -272,11 +272,13 @@ that does not mean an HTTP request failed. Saved health remains network-free.
 
 ## Volcano sources
 
-The official GVP CAP endpoint is
-`https://volcano.si.edu/news/WeeklyVolcanoCAP.xml`; it is the code's default when
-no explicit URL is configured. The shipped personal-config example deliberately
-uses an invalid URL until a source is chosen. Set that official URL explicitly,
-or choose `provider = "weekly_html"` to use the fixed official weekly page.
+The shipped personal-config example uses `provider = "weekly_html"` to retrieve
+the [official GVP Weekly Report](https://volcano.si.edu/reports_weekly.cfm).
+To use CAP instead, set `provider = "cap"` and explicitly use the official URL,
+`https://volcano.si.edu/news/WeeklyVolcanoCAP.xml`. The producer's fallback for
+older configurations without explicit settings is unchanged. Guided setup
+does not migrate existing configurations. Its skip choice, and the original
+unconfigured CAP placeholder, do not trigger provider requests.
 Access restrictions and stale weekly coverage remain failures; neither endpoint
 is guaranteed available. Do not bypass access controls or substitute download
 success for coverage validation. No configuration or provider is changed by

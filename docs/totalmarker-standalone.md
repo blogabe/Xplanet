@@ -9,11 +9,12 @@ cd Xplanet
 cp config/totalmarker.example.toml config/totalmarker.toml
 ```
 
-Edit `config/totalmarker.toml` to choose your sources before refreshing them.
-The example cloud and volcano CAP URLs use `.invalid` placeholders; configure
-a real cloud source and the [official CAP URL](technical-notes.md#volcano-sources),
-or select `provider = "weekly_html"` for volcanoes. Quakes use USGS and storms use NHC/JTWC. NORAD and eclipse stay
-disabled until deliberately configured.
+Review `config/totalmarker.toml` before refreshing your sources. Configure a
+real cloud source to replace the example's `.invalid` cloud URL. Volcanoes use
+the Smithsonian GVP Weekly Report (HTML) by default in the copied example; to
+switch, set `provider = "cap"` in `[volcano]` and use the
+[official CAP URL](technical-notes.md#volcano-sources). Quakes use USGS and
+storms use NHC/JTWC. NORAD and eclipse stay disabled until deliberately configured.
 
 ```sh
 ./scripts/run-totalmarker --help

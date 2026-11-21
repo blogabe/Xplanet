@@ -8,6 +8,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 CAP = "https://volcano.si.edu/news/WeeklyVolcanoCAP.xml"
+# Keep the skip sentinel aligned with VolcanoOptions.enabled.
 PLACEHOLDER = "https://volcano.example.invalid/WeeklyVolcanoCAP.xml"
 MAX_CONFIG = 1024 * 1024
 
@@ -63,28 +64,40 @@ def source(data):
     if provider == "weekly_html":
         return "ready"
     if provider == "cap":
-        if raw == PLACEHOLDER:
-            return "placeholder"
         if hostname != "invalid" and not hostname.endswith(".invalid"):
             return "ready"
     return "unconfigured"
 
 
-def choose(data, choice):
-    if source(data) != "placeholder":
+def template_region(data):
+    # Offer guided choices only for the shipped source, not a customized example.
+    if source(data) != "ready":
         raise ValueError
     start = re.search(r"(?m)^\[volcano\][ \t]*\r?$", data).end()
     end = re.search(r"(?m)^\[", data[start:])
     stop = start + end.start() if end else len(data)
     part = data[start:stop]
-    old, new = {
-        "cap": (f'url = "{PLACEHOLDER}"', f'url = "{CAP}"'),
-        "weekly_html": ('provider = "cap"', 'provider = "weekly_html"'),
-    }[choice]
-    if part.count(old) != 1:
+    for setting in ('provider = "weekly_html"', f'url = "{CAP}"'):
+        if len(re.findall(rf"(?m)^{re.escape(setting)}\r?$", part)) != 1:
+            raise ValueError
+    return start, stop
+
+
+def choose(data, choice):
+    start, stop = template_region(data)
+    if choice == "weekly_html":
+        return data
+
+    def replace_setting(section, old, new):
+        return re.sub(rf"(?m)^{re.escape(old)}(?=\r?$)", new, section, count=1)
+
+    part = replace_setting(data[start:stop], 'provider = "weekly_html"', 'provider = "cap"')
+    if choice == "skip":
+        part = replace_setting(part, f'url = "{CAP}"', f'url = "{PLACEHOLDER}"')
+    elif choice != "cap":
         raise ValueError
-    result = data[:start] + part.replace(old, new, 1) + data[stop:]
-    if source(result) != "ready":
+    result = data[:start] + part + data[stop:]
+    if source(result) != ("unconfigured" if choice == "skip" else "ready"):
         raise ValueError
     return result
 
@@ -94,6 +107,8 @@ def main():
     data = read_config(filename)
     if mode == "status" and not args:
         print(source(data))
+    elif mode == "selectable" and not args:
+        template_region(data)
     elif mode == "render" and len(args) == 1:
         sys.stdout.buffer.write(choose(data, args[0]).encode("utf-8"))
     else:

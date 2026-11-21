@@ -169,7 +169,8 @@ current access. Known limits include:
 
 - Volcano reports through 2026-11-04 included rejected stale CAP coverage and HTTP
   403 from weekly HTML. A fresh install has no volcano markers until retrieval
-  succeeds. Choose a source explicitly; see [volcano sources](docs/technical-notes.md#volcano-sources).
+  succeeds. For new configurations, setup defaults to the Weekly Report (HTML);
+  you can select CAP or skip. See [volcano sources](docs/technical-notes.md#volcano-sources).
 - Storm refreshes fail closed on incomplete coverage or unsupported provider-format
   changes, retaining the last-good marker/track pair.
 - NORAD currently accepts one-to-five-digit catalogue IDs; six-digit IDs are unsupported.

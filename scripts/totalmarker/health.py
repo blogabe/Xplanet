@@ -27,7 +27,7 @@ def _sources(settings):
         'clouds': [settings.url], 'quake': [settings.quake.url],
         'storm': [NHC_INDEX, JTWC_RSS],
         'volcano': [WEEKLY_URL if settings.volcano.provider == 'weekly_html'
-                    else settings.volcano.url],
+                    else settings.volcano.url] if settings.volcano.enabled else [],
         'norad': [norad.CELESTRAK.format(id=number) for number in settings.norad.catalog_ids]
                  + [norad.CELESTRAK_GROUP.format(source=group.source)
                     for group in settings.norad.groups if group.enabled],
@@ -272,7 +272,7 @@ def check(fs, settings, *, live=False, now=None, fetcher_factory=Fetcher):
     for product, sources in _sources(settings).items():
         record = state['products'].get(product, {})
         facts = observation(record)
-        enabled = product not in {'norad', 'eclipse', 'santa'} or getattr(settings, product).enabled
+        enabled = product not in {'volcano', 'norad', 'eclipse', 'santa'} or getattr(settings, product).enabled
         row = {'product': product, 'sources': sources, 'status': 'unknown' if enabled else 'disabled',
                'access': 'not_checked', 'content': 'unknown', 'freshness': 'unknown',
                'last_check_at': facts['checked_at'], 'last_attempt_at': facts['attempted_at'],
