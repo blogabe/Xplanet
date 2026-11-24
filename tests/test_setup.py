@@ -659,6 +659,12 @@ class SetupTests(Sandbox):
         for job in jobs:
             local = examples / f"local.xplanet.{job}.plist"
             self.assertEqual((home / "Library/LaunchAgents" / local.name).readlink(), local)
+        for job in ("norad", "eclipse"):
+            with self.subTest(manual_only=job):
+                filename = f"local.xplanet.{job}.plist"
+                self.assertTrue((examples / f"{filename}.example").is_file())
+                self.assertFalse(os.path.lexists(examples / filename))
+                self.assertFalse(os.path.lexists(home / "Library/LaunchAgents" / filename))
         # A rerun validates on-disk files and leaves every
         # registered job alone. In particular RunAtLoad is not fired again.
         calls.write_text("")
