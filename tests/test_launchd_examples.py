@@ -7,15 +7,17 @@ from .support import PROJECT
 
 
 DIRECTORY = PROJECT / "scripts/launchd"
-JOBS = {"clouds", "earth-map", "quake", "start", "storm", "volcano"}
+ORIGINAL_JOBS = {"clouds", "earth-map", "quake", "start", "storm", "volcano"}
+OPTIONAL_JOBS = {"norad", "eclipse"}
+ALL_EXAMPLES = ORIGINAL_JOBS | OPTIONAL_JOBS
 
 
 class LaunchdExampleTests(unittest.TestCase):
     def test_examples_are_parseable_literal_templates(self):
         examples = {path.name.removeprefix("local.xplanet.").removesuffix(".plist.example")
                     for path in DIRECTORY.glob("*.plist.example")}
-        self.assertEqual(examples, JOBS)
-        for job in sorted(JOBS):
+        self.assertEqual(examples, ALL_EXAMPLES)
+        for job in sorted(ALL_EXAMPLES):
             with self.subTest(job=job):
                 path = DIRECTORY / f"local.xplanet.{job}.plist.example"
                 data = path.read_bytes()
@@ -33,7 +35,7 @@ class LaunchdExampleTests(unittest.TestCase):
 
     def test_example_calendars_keep_the_original_cadences(self):
         schedules = {}
-        for job in JOBS:
+        for job in ORIGINAL_JOBS:
             path = DIRECTORY / f"local.xplanet.{job}.plist.example"
             schedules[job] = plistlib.loads(path.read_bytes()).get(
                 "StartCalendarInterval")
@@ -57,7 +59,7 @@ class LaunchdExampleTests(unittest.TestCase):
         self.assertNotEqual(schedules["clouds"][0], schedules["storm"][0])
 
     def test_examples_delegate_to_the_named_launcher_command(self):
-        for job in sorted(JOBS):
+        for job in sorted(ALL_EXAMPLES):
             with self.subTest(job=job):
                 example = DIRECTORY / f"local.xplanet.{job}.plist.example"
                 fields = plistlib.loads(example.read_bytes())
