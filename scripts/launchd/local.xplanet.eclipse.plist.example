@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>local.xplanet.eclipse</string>
+	<key>WorkingDirectory</key>
+	<string>__XPLANET_ROOT__</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>__XPLANET_ROOT__/scripts/xplanet.sh</string>
+		<string>eclipse</string>
+	</array>
+	<key>StartCalendarInterval</key>
+	<array>
+		<dict>
+			<key>Minute</key>
+			<integer>15</integer>
+			<key>Hour</key>
+			<integer>6</integer>
+		</dict>
+		<dict>
+			<key>Minute</key>
+			<integer>15</integer>
+			<key>Hour</key>
+			<integer>18</integer>
+		</dict>
+	</array>
+	<key>StandardOutPath</key>
+	<string>__XPLANET_ROOT__/logs/xplanet.log</string>
+	<key>StandardErrorPath</key>
+	<string>__XPLANET_ROOT__/logs/xplanet-eclipse.log</string>
+</dict>
+</plist>

@@ -123,6 +123,33 @@ After editing the native configuration, try `./scripts/xplanet.sh preview` to
 render a separate custom Earth frame before restarting the desktop. Visibility
 also depends on framing, scene time and whether the object or path is in view.
 
+### Optional launchd examples
+
+After a manual refresh works, you can choose to schedule either producer using
+the [NORAD LaunchAgent example](../scripts/launchd/local.xplanet.norad.plist.example)
+or the [eclipse LaunchAgent example](../scripts/launchd/local.xplanet.eclipse.plist.example).
+Guided setup does not install or register these templates. They are independent:
+you do not need to enable both. They refresh the overlay files; they do not start,
+stop, or restart Xplanet or edit your display settings.
+
+- **NORAD** runs at :40 every three hours (00:40, 03:40, …, 21:40).
+- **Eclipse** runs at 06:15 and 18:15.
+
+Times are local to the Mac. These are opportunities to run the commands, not
+guaranteed provider requests. TotalMarker applies its own cache and freshness
+rules (default check intervals: two hours for NORAD and 24 hours for eclipse).
+Eclipse can reevaluate when the display window changes; a successful run may
+still draw nothing outside that window.
+
+Make a separate personal copy without the `.example` suffix. In a plist editor,
+replace `__XPLANET_ROOT__` in the working directory, launcher argument, and both
+log paths with the absolute checkout path. The checkout's `logs/` directory must
+exist. Keep the launcher path and its command as separate arguments; do not use
+`~` or shell variables in paths. Review the copy with
+`/usr/bin/plutil -lint -- /absolute/path/to/your.plist` before deliberately
+installing it as a per-user LaunchAgent. Do not overwrite an existing agent.
+Check `logs/xplanet.log` and the product's own error log if a scheduled run fails.
+
 ### Explore separately in the scene studio
 
 The [astronomy capture guide](configurator/astronomy-capture.md) covers explicit
