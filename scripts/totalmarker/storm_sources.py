@@ -4,8 +4,10 @@ NHC supplies AL/EP/CP current positions plus ATCF best and official forecasts.
 JTWC RSS discovers WP/Indian/Southern warning text and KMZ best-track history.
 Missing or stale coverage invalidates the entire snapshot.
 """
+from collections import defaultdict
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 import gzip
 from html.parser import HTMLParser
@@ -20,6 +22,7 @@ import xml.etree.ElementTree as ET
 from .errors import FeedError
 from .xmlsafe import parse as parse_xml
 from .storm_advisory import parse_advisory, reissue_matches_rss
+from .storm_time import nearest_report_time, storm_season
 from .storm_model import (ForecastPoint, Storm, StormSnapshot, TrackPoint,
                           validate_snapshot)
 
@@ -370,22 +373,12 @@ def _parse_jtwc_formation_product(body, identity, rss_at):
     if not header:
         raise FeedError("Storm JTWC formation alert lacks a dated header")
     day, hour, minute = map(int, (header[1][:2], header[1][2:4], header[1][4:]))
-    published = datetime.fromtimestamp(rss_at, timezone.utc)
-    month_start = published.replace(day=1)
-    candidates = []
-    for month in (month_start - timedelta(days=1), month_start,
-                  month_start + timedelta(days=32)):
-        try:
-            candidates.append(datetime(month.year, month.month, day, hour, minute,
-                                       tzinfo=timezone.utc))
-        except ValueError:
-            continue
-    if not candidates:
+    observed = nearest_report_time(day, hour, minute, rss_at)
+    if observed is None:
         raise FeedError("Storm JTWC formation alert date is invalid")
-    observed = min(candidates, key=lambda value: abs(value.timestamp() - rss_at))
     if abs(observed.timestamp() - rss_at) > 48 * 3600:
         raise FeedError("Storm JTWC formation alert date disagrees with RSS")
-    season = observed.year + (identity[:2] == "SH" and observed.month >= 7)
+    season = storm_season(observed, identity[:2])
     if int(identity[-4:]) != season:
         raise FeedError("Storm JTWC formation alert season disagrees with RSS")
     current = list(re.finditer(r"\bIS\s+NOW\s+LOCATED\s+NEAR\s+" + POSITION.pattern,
@@ -420,24 +413,13 @@ def parse_jtwc_warning(body, identity, rss_at):
     if not valid:
         raise FeedError("Storm JTWC warning lacks a dated position")
     day, hour, minute = map(int, valid.groups())
-    published = datetime.fromtimestamp(rss_at, timezone.utc)
-    candidates = []
-    month_start = published.replace(day=1)
-    for month in (month_start - timedelta(days=1), month_start,
-                  month_start + timedelta(days=32)):
-        try:
-            candidate = datetime(month.year, month.month, day, hour, minute,
-                                 tzinfo=timezone.utc)
-        except ValueError:
-            continue
-        candidates.append(candidate)
-    if not candidates:
+    observed = nearest_report_time(day, hour, minute, rss_at)
+    if observed is None:
         raise FeedError("Storm JTWC warning position date is invalid")
-    observed = min(candidates, key=lambda value: abs(value.timestamp() - rss_at))
     base_at = observed.timestamp()
     if abs(base_at - rss_at) > 48 * 3600:
         raise FeedError("Storm JTWC warning position disagrees with RSS date")
-    season = observed.year + (1 if identity[:2] == "SH" and observed.month >= 7 else 0)
+    season = storm_season(observed, identity[:2])
     if int(identity[-4:]) != season:
         raise FeedError("Storm JTWC warning season disagrees with RSS")
     lat, lon = _warning_coordinate(line)
@@ -543,6 +525,69 @@ def _fresh_advisory(advisory, now, kind):
         raise FeedError("Storm JTWC " + kind.upper() + " advisory is stale")
 
 
+@dataclass(frozen=True)
+class FormationAlert:
+    fix: TrackPoint
+    code: str
+    cancelled: bool
+
+
+@dataclass(frozen=True)
+class AdvisoryInvest:
+    storm: Storm
+    bulletin: str
+
+
+def _reconcile_jtwc(
+    warning_codes: set[str],
+    advisory_codes: set[str],
+    final_codes: set[str],
+    formation_alerts: Mapping[str, FormationAlert],
+    advisory_invests: Sequence[AdvisoryInvest],
+    advisory_promotions: Mapping[str, str],
+) -> tuple[Storm, ...]:
+    """Cross-check parsed products without fetching, timing, or publication."""
+    # Active advisories still require warning products. Explicit final warnings
+    # may remain in a bulletin after RSS retires them, or briefly remain listed.
+    if (advisory_codes - final_codes) - warning_codes or warning_codes - advisory_codes:
+        raise FeedError("Storm JTWC warnings disagree with significant advisories")
+    invests_by_id: dict[str, list[AdvisoryInvest]] = defaultdict(list)
+    for invest in advisory_invests:
+        invests_by_id[invest.storm.id].append(invest)
+    for identity, formation in formation_alerts.items():
+        alert, code, cancelled = formation.fix, formation.code, formation.cancelled
+        matching = invests_by_id.get(identity, ())
+        # Cancellation retires the formation alert, not necessarily the invest.
+        # Both states need independent fresh advisory evidence. A cancelled
+        # product cannot erase an invest, create a track, or override its fix.
+        product_name = "formation alert cancellation" if cancelled else "formation alert"
+        disagreement = f"Storm JTWC {product_name} disagrees with significant advisories: {identity} ({code}) "
+        if not matching:
+            promoted = advisory_promotions.get(code)
+            if promoted is not None:
+                # Retain fail-closed behavior until a captured source sequence
+                # establishes when a residual alert can safely be superseded.
+                raise FeedError(disagreement + f"still listed after promotion to {promoted}")
+            raise FeedError(disagreement + "has no active advisory invest")
+        if len(matching) != 1:
+            raise FeedError(disagreement + "matches multiple advisory invests")
+        if matching[0].storm.name != "Invest " + code:
+            raise FeedError(disagreement + "has a different advisory invest code")
+        current = matching[0].storm.current
+        # A newer advisory can update the observed fix; no position is inferred
+        # between the alert and advisory. Same-time observations must agree.
+        if current.at < alert.at:
+            alert_time = datetime.fromtimestamp(alert.at, timezone.utc).isoformat()
+            advisory_time = datetime.fromtimestamp(current.at, timezone.utc).isoformat()
+            kind = matching[0].bulletin
+            raise FeedError(disagreement + f"is newer than {kind} advisory fix "
+                            f"({alert_time} > {advisory_time})")
+        if (current.at == alert.at and
+                (current.lat, current.lon) != (alert.lat, alert.lon)):
+            raise FeedError(disagreement + "has a conflicting same-time position")
+    return tuple(invest.storm for invest in advisory_invests)
+
+
 def collect_snapshot(fetcher, *, now, timeout=30, max_bytes=16 * 1024 * 1024):
     def get(url, limit=max_bytes):
         response = fetcher.fetch(url, timeout=timeout, max_bytes=limit)
@@ -599,7 +644,7 @@ def collect_snapshot(fetcher, *, now, timeout=30, max_bytes=16 * 1024 * 1024):
     _fresh(source_times["nhc"], now, 30 * 3600, "NHC index")
     deadlines.append(source_times["nhc"] + 30 * 3600)
     warning_codes = set()
-    formation_alerts = {}
+    formation_alerts: dict[str, FormationAlert] = {}
     for product in discovered:
         if product.kind == "formation_alert":
             current, code, cancelled = _parse_jtwc_formation_product(
@@ -608,7 +653,7 @@ def collect_snapshot(fetcher, *, now, timeout=30, max_bytes=16 * 1024 * 1024):
             if product.identity in formation_alerts or code in warning_codes:
                 raise FeedError("Storm JTWC formation alerts repeat a storm")
             _fresh(current.at, now, 30 * 3600, "JTWC formation alert")
-            formation_alerts[product.identity] = (current, code, cancelled)
+            formation_alerts[product.identity] = FormationAlert(current, code, cancelled)
             deadlines.append(current.at + 30 * 3600)
             source_times[product.group] = min(source_times[product.group], current.at)
             continue
@@ -628,9 +673,8 @@ def collect_snapshot(fetcher, *, now, timeout=30, max_bytes=16 * 1024 * 1024):
         source_times[product.group] = min(source_times[product.group], current.at)
     advisory_codes = set()
     final_codes = set()
-    advisory_invests = []
+    advisory_invests: list[AdvisoryInvest] = []
     advisory_promotions = {}
-    advisory_invest_sources = {}
     for kind, (url, rss_issue) in advisory_urls.items():
         advisory = parse_advisory(get(url, 256 * 1024).body, kind, rss_issue=rss_issue)
         if (advisory.issued_at != advisory.issue_at
@@ -646,43 +690,9 @@ def collect_snapshot(fetcher, *, now, timeout=30, max_bytes=16 * 1024 * 1024):
                     raise FeedError("Storm JTWC advisories repeat a warning code")
                 advisory_codes.add(code)
             final_codes.update(area.final_codes)
-        advisory_invests.extend(advisory.invests)
-        advisory_invest_sources.update((invest.id, kind.upper()) for invest in advisory.invests)
-    # Active advisories still require warning products. Explicit final warnings
-    # may remain in a bulletin after RSS retires them, or briefly remain listed.
-    if (advisory_codes - final_codes) - warning_codes or warning_codes - advisory_codes:
-        raise FeedError("Storm JTWC warnings disagree with significant advisories")
-    for identity, (alert, code, cancelled) in formation_alerts.items():
-        matching = [invest for invest in advisory_invests if invest.id == identity]
-        # Cancellation retires the formation alert, not necessarily the invest.
-        # Both states need independent fresh advisory evidence. A cancelled
-        # product cannot erase an invest, create a track, or override its fix.
-        product_name = "formation alert cancellation" if cancelled else "formation alert"
-        disagreement = f"Storm JTWC {product_name} disagrees with significant advisories: {identity} ({code}) "
-        if not matching:
-            promoted = advisory_promotions.get(code)
-            if promoted is not None:
-                # Retain fail-closed behavior until a captured source sequence
-                # establishes when a residual alert can safely be superseded.
-                raise FeedError(disagreement + f"still listed after promotion to {promoted}")
-            raise FeedError(disagreement + "has no active advisory invest")
-        if len(matching) != 1:
-            raise FeedError(disagreement + "matches multiple advisory invests")
-        if matching[0].name != "Invest " + code:
-            raise FeedError(disagreement + "has a different advisory invest code")
-        current = matching[0].current
-        # A newer advisory can update the observed fix; no position is inferred
-        # between the alert and advisory. Same-time observations must agree.
-        if current.at < alert.at:
-            alert_time = datetime.fromtimestamp(alert.at, timezone.utc).isoformat()
-            advisory_time = datetime.fromtimestamp(current.at, timezone.utc).isoformat()
-            kind = advisory_invest_sources[identity]
-            raise FeedError(disagreement + f"is newer than {kind} advisory fix "
-                            f"({alert_time} > {advisory_time})")
-        if (current.at == alert.at and
-                (current.lat, current.lon) != (alert.lat, alert.lon)):
-            raise FeedError(disagreement + "has a conflicting same-time position")
-    storms.extend(advisory_invests)
+        advisory_invests.extend(AdvisoryInvest(invest, kind.upper()) for invest in advisory.invests)
+    storms.extend(_reconcile_jtwc(warning_codes, advisory_codes, final_codes,
+                                  formation_alerts, advisory_invests, advisory_promotions))
     snapshot = StormSnapshot(tuple(storms), tuple(sorted(source_times.items())),
                              True, min(deadlines))
     return validate_snapshot(snapshot, required_groups=REQUIRED_GROUPS)

@@ -17,10 +17,7 @@ AT = datetime(2026, 11, 14, 16, 49, tzinfo=timezone.utc).timestamp()
 class CorrectedAdvisoryTests(Sandbox):
     def test_authentic_packet_integrity_and_complete_snapshot(self):
         packet = ReceiptPacket(FIXTURE)
-        for record in packet.records:
-            body = packet.payloads[record['url']]
-            self.assertEqual((len(body), hashlib.sha256(body).hexdigest()),
-                             (record['bytes'], record['sha256']))
+        packet.assert_integrity(self)
         snapshot = collect_snapshot(packet, now=AT)
         self.assertEqual({s.id for s in snapshot.storms},
                          {'IO922026', 'SH962027', 'SH952027'})

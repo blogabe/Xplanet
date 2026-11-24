@@ -1,5 +1,6 @@
 """Plain offline storm fixtures shared by source, publication and runtime tests."""
 from datetime import datetime, timezone
+import hashlib
 import json
 from pathlib import Path
 
@@ -77,12 +78,35 @@ def formation_fetcher():
 class ReceiptPacket:
     """Mutable responses from a captured sources.json packet; never fetch live data."""
 
-    def __init__(self, directory):
-        self.records = json.loads((directory / 'sources.json').read_text())['responses']
-        self.payloads = {r['url']: (directory / r['file']).read_bytes() for r in self.records}
+    def __init__(self, directory, *, default_date=None):
+        self.directory = directory
+        self.manifest = json.loads((directory / 'sources.json').read_text())
+        self.records = self.manifest['responses']
+        self._by_url = {r['url']: r for r in self.records}
+        self.payloads = {
+            url: (directory / r['file']).read_bytes() for url, r in self._by_url.items()
+        }
+        self.default_date = default_date
         self.calls = []
+
+    def assert_integrity(self, test, *, extra_records=()):
+        test.assertEqual(len(self.records), len(self._by_url), 'Duplicate receipt URL')
+        for record in self.records:
+            self._assert_body(test, record, self.payloads[record['url']])
+        for record in extra_records:
+            self._assert_body(test, record, (self.directory / record['file']).read_bytes())
+
+    @staticmethod
+    def _assert_body(test, record, body):
+        with test.subTest(file=record['file']):
+            test.assertEqual((len(body), hashlib.sha256(body).hexdigest()),
+                             (record['bytes'], record['sha256']))
 
     def fetch(self, url, **kwargs):
         self.calls.append(url)
-        record = next(r for r in self.records if r['url'] == url)
-        return Response(200, {'date': record['date']}, self.payloads[url])
+        if url not in self.payloads:
+            raise AssertionError('Unexpected offline storm request: ' + url)
+        record = self._by_url.get(url, {})
+        date = record.get('date', self.default_date)
+        return Response(record.get('status', 200), {'date': date} if date else {},
+                        self.payloads[url])
