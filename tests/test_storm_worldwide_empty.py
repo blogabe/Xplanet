@@ -2,7 +2,6 @@
 from copy import deepcopy
 from datetime import datetime, timezone
 import hashlib
-import json
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
@@ -19,11 +18,7 @@ AT = datetime(2026, 11, 13, 4, 9, tzinfo=timezone.utc).timestamp()
 class WorldwideNoWarningTests(Sandbox):
     def test_public_packet_integrity_and_advisory_invests(self):
         packet = ReceiptPacket(FIXTURE)
-        manifest = json.loads((FIXTURE / 'sources.json').read_text())
-        for record in manifest['responses'] + [manifest['rejected_response']]:
-            body = (FIXTURE / record['file']).read_bytes()
-            self.assertEqual(len(body), record['bytes'])
-            self.assertEqual(hashlib.sha256(body).hexdigest(), record['sha256'])
+        packet.assert_integrity(self, extra_records=(packet.manifest['rejected_response'],))
         products, times, advisories = parse_jtwc_rss(packet.payloads[JTWC_RSS])
         self.assertEqual(products, ())
         self.assertEqual(set(times), {'jtwc_west', 'jtwc_indian', 'jtwc_south'})

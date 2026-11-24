@@ -179,10 +179,7 @@ class TracklessFormationAlertTests(Sandbox):
 
     def test_captured_packet_integrity_and_complete_snapshot(self):
         packet = self.packet()
-        for record in packet.records:
-            body = packet.payloads[record['url']]
-            self.assertEqual((len(body), hashlib.sha256(body).hexdigest()),
-                             (record['bytes'], record['sha256']))
+        packet.assert_integrity(self)
         products, _, _ = parse_jtwc_rss(packet.payloads[JTWC_RSS])
         alert = next(p for p in products if p.kind == 'formation_alert')
         self.assertEqual(alert.identity, 'SH962027')

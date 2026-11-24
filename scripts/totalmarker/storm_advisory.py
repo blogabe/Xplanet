@@ -11,6 +11,7 @@ import re
 
 from .errors import FeedError
 from .storm_model import Storm, TrackPoint
+from .storm_time import storm_season
 
 MONTH = {name: number for number, name in enumerate(
     ("JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"), 1)}
@@ -72,9 +73,9 @@ class AdvisoryArea:
 @dataclass(frozen=True)
 class Advisory:
     issue_at: float                # Validity start stated in the body.
-    valid_until_at: float
+    valid_until_at: float          # Declared validity end, not based on the header.
     areas: tuple[AdvisoryArea, ...]
-    issued_at: float               # Actual header time, possibly a later reissue.
+    issued_at: float               # WMO issue time, sometimes different from the start.
     reissued: bool
 
     @property
@@ -278,8 +279,8 @@ def parse_advisory(raw, kind, *, rss_issue=None):
         raise FeedError("Storm JTWC advisory is not ASCII") from None
     if not text or len(text) > 256 * 1024:
         raise FeedError("Storm JTWC advisory is empty or too large")
-    issue_at, valid_until_at, issued_at, reissued = _issue_interval(text, kind, rss_issue)
-    position_at = min(issue_at, issued_at)
+    valid_from_at, valid_until_at, issued_at, reissued = _issue_interval(text, kind, rss_issue)
+    position_at = min(valid_from_at, issued_at)
     area_matches = list(AREA.finditer(text))
     expected = AREAS[kind]
     if len(area_matches) != 2 or [(m[1], m[2]) for m in area_matches] != [
@@ -347,7 +348,7 @@ def parse_advisory(raw, kind, *, rss_issue=None):
                     continue
                 lat, lon = _current_position(paragraph)
                 position_time = datetime.fromtimestamp(position_at, timezone.utc)
-                year = position_time.year + (basin == "SH" and position_time.month >= 7)
+                year = storm_season(position_time, basin)
                 invests.append(Storm(basin + code[:2] + str(year), "Invest " + code, "DEP",
                                      TrackPoint(position_at, lat, lon), None, (), None, (),
                                      "not_issued"))
@@ -355,4 +356,4 @@ def parse_advisory(raw, kind, *, rss_issue=None):
             raise FeedError("Storm JTWC advisory repeats an invest")
         result.append(AdvisoryArea(area_name, group, cyclone_none, warned_codes,
                                    tuple(invests), tuple(promotions), final_codes))
-    return Advisory(issue_at, valid_until_at, tuple(result), issued_at, reissued)
+    return Advisory(valid_from_at, valid_until_at, tuple(result), issued_at, reissued)

@@ -17,10 +17,7 @@ AT = datetime(2026, 11, 6, 6, 57, tzinfo=timezone.utc).timestamp()
 class FinalWarningTests(Sandbox):
     def test_public_packet_integrity_and_retired_warning(self):
         packet = ReceiptPacket(FIXTURE)
-        for record in packet.records:
-            body = packet.payloads[record['url']]
-            self.assertEqual(len(body), record['bytes'])
-            self.assertEqual(hashlib.sha256(body).hexdigest(), record['sha256'])
+        packet.assert_integrity(self)
         advisory = parse_advisory((FIXTURE / 'jtwc-abpw.txt').read_bytes(), 'abpw')
         self.assertEqual(advisory.areas[0].warned_codes, ('30W',))
         self.assertEqual(advisory.areas[0].final_codes, ('30W',))

@@ -1,19 +1,16 @@
 """Replay the captured JTWC ABPW early reissue without external requests."""
 from datetime import datetime, timezone
 from email.utils import formatdate
-import hashlib
-import json
 from pathlib import Path
 
 from totalmarker.errors import FeedError
 from totalmarker.features.storm import run
-from totalmarker.http import Response
 from totalmarker.storm_advisory import parse_advisory
 from totalmarker.storm_sources import (
     JTWC_RSS, collect_snapshot, parse_jtwc_rss, _fresh_advisory,
 )
 from .support import Sandbox
-from .support_storm import JTWC, empty_advisory
+from .support_storm import JTWC, ReceiptPacket, empty_advisory
 
 FIXTURE = Path(__file__).parent / "fixtures/storm/live-20261124-early-reissue"
 ABPW_URL = JTWC + "abpwweb.txt"
@@ -27,10 +24,10 @@ START = ISSUED + 3600
 END = datetime(2026, 11, 24, 6, tzinfo=timezone.utc).timestamp()
 
 
-class EarlyPacket:
+class EarlyPacket(ReceiptPacket):
     def __init__(self):
-        self.records = json.loads((FIXTURE / "sources.json").read_text())["responses"]
-        self.payloads = {r["url"]: (FIXTURE / r["file"]).read_bytes() for r in self.records}
+        # The original failed snapshot lacks HTTP Date headers.
+        super().__init__(FIXTURE, default_date=formatdate(NOW, usegmt=True))
         # Old code stopped on ABPW before it fetched ABIO. This separate,
         # synthetic 18Z bulletin corroborates the captured active 98S TCFA.
         abio = (empty_advisory("abio")
@@ -42,20 +39,11 @@ class EarlyPacket:
             b"B. TROPICAL DISTURBANCE SUMMARY:\n"
             b"      (1) THE AREA OF CONVECTION (INVEST 98S) HAS PERSISTED NEAR 7.6S 76.8E.", 1)
 
-    def fetch(self, url, **kwargs):
-        if url not in self.payloads:
-            raise AssertionError("Unexpected offline storm request: " + url)
-        # Empty NHC index needs a Date; original rejection capture omits headers.
-        return Response(200, {"date": formatdate(NOW, usegmt=True)}, self.payloads[url])
-
 
 class EarlyReissueTests(Sandbox):
     def test_receipted_response_collects_and_publishes_without_retired_xavier(self):
         packet = EarlyPacket()
-        for record in packet.records:
-            raw = packet.payloads[record["url"]]
-            self.assertEqual((len(raw), hashlib.sha256(raw).hexdigest()),
-                             (record["bytes"], record["sha256"]))
+        packet.assert_integrity(self)
         _, _, links = parse_jtwc_rss(packet.payloads[JTWC_RSS])
         self.assertEqual(links["abpw"], (ABPW_URL, MATCH))
         advisory = parse_advisory(packet.payloads[ABPW_URL], "abpw", rss_issue=MATCH)
@@ -67,6 +55,7 @@ class EarlyReissueTests(Sandbox):
         self.assertEqual(snapshot.storms[0].history, ())
         self.assertEqual(snapshot.storms[0].forecast, ())
         self.assertEqual(dict(snapshot.source_times)["jtwc_west"], ISSUED)
+        self.assertEqual(snapshot.valid_until_at, END)
 
         settings = self.config("StormCheckIntervalSeconds=0\n")
         result = run(self.fs, settings, fetcher=packet, now=NOW)
@@ -89,6 +78,20 @@ class EarlyReissueTests(Sandbox):
                 self.assertEqual(result.successful_at, NOW)
                 self.assertEqual((self.fs.read(settings.storm.marker), self.fs.read(settings.storm.arc)),
                                  (marker, arc))
+
+    def test_expired_reissue_cannot_renew_last_good_publication(self):
+        settings = self.config("StormCheckIntervalSeconds=0\n")
+        good = run(self.fs, settings, fetcher=EarlyPacket(), now=NOW)
+        self.assertEqual(good.outcome, "changed", good.message)
+        paths = settings.storm.marker, settings.storm.arc
+        previous = tuple(self.fs.read(path) for path in paths)
+
+        expired = run(self.fs, settings, fetcher=EarlyPacket(), now=END + 1)
+        self.assertEqual(expired.outcome, "failed", expired.message)
+        self.assertIn("ABPW advisory is stale", expired.message)
+        self.assertEqual((expired.installed_at, expired.successful_at, expired.count),
+                         (good.installed_at, good.successful_at, good.count))
+        self.assertEqual(tuple(self.fs.read(path) for path in paths), previous)
 
     def test_early_window_is_bounded_and_regular_correction_and_indian_stay_strict(self):
         raw = EarlyPacket().payloads[ABPW_URL]
