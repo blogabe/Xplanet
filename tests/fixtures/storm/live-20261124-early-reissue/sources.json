@@ -1,0 +1,34 @@
+{
+  "captured_at": "2026-11-24T01:10:05.319029+00:00",
+  "source": "Unmodified public response bodies from an interrupted storm snapshot. The run stopped before requesting ABIO. HTTP headers are not retained. Replay supplies a synthetic ABIO response and NHC Date header.",
+  "responses": [
+    {
+      "file": "nhc-current.json",
+      "url": "https://www.nhc.noaa.gov/CurrentStorms.json",
+      "status": 200,
+      "bytes": 24,
+      "sha256": "faea5cf4718512d456018c5081c2b274d7709e4f7f69e4d0bb2556d0d33360d7"
+    },
+    {
+      "file": "jtwc-rss.xml",
+      "url": "https://www.metoc.navy.mil/jtwc/rss/jtwc.rss",
+      "status": 200,
+      "bytes": 4193,
+      "sha256": "393c9bcaaf98113ff32e616d0cd1bfb74753412ab1bddec60cc3654230fc3519"
+    },
+    {
+      "file": "sh9827web.txt",
+      "url": "https://www.metoc.navy.mil/jtwc/products/sh9827web.txt",
+      "status": 200,
+      "bytes": 1683,
+      "sha256": "da5299f50fae9eb29f7794c6b57f431710eebbb4b97a37f24ea2a3b448ae4d67"
+    },
+    {
+      "file": "abpw.txt",
+      "url": "https://www.metoc.navy.mil/jtwc/products/abpwweb.txt",
+      "status": 200,
+      "bytes": 666,
+      "sha256": "e5c6c4393694bb2d3ce853b7acbc10e33caed9872da79d55e6d674ec8500a494"
+    }
+  ]
+}

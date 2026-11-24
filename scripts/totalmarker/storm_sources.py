@@ -19,7 +19,7 @@ import xml.etree.ElementTree as ET
 
 from .errors import FeedError
 from .xmlsafe import parse as parse_xml
-from .storm_advisory import parse_advisory
+from .storm_advisory import parse_advisory, reissue_matches_rss
 from .storm_model import (ForecastPoint, Storm, StormSnapshot, TrackPoint,
                           validate_snapshot)
 
@@ -536,7 +536,8 @@ def _fresh(at, now, max_age, label):
 
 
 def _fresh_advisory(advisory, now, kind):
-    if advisory.issued_at > now + 3600:
+    # Bound both stamps so the early-header window cannot add clock skew.
+    if max(advisory.issued_at, advisory.issue_at) > now + 3600:
         raise FeedError("Storm JTWC " + kind.upper() + " advisory is future-dated")
     if now > advisory.valid_until_at:
         raise FeedError("Storm JTWC " + kind.upper() + " advisory is stale")
@@ -631,17 +632,15 @@ def collect_snapshot(fetcher, *, now, timeout=30, max_bytes=16 * 1024 * 1024):
     advisory_promotions = {}
     advisory_invest_sources = {}
     for kind, (url, rss_issue) in advisory_urls.items():
-        advisory = parse_advisory(get(url, 256 * 1024).body, kind)
-        if advisory.issued_at != advisory.issue_at:
-            header_time = datetime.fromtimestamp(advisory.issued_at, timezone.utc)
-            expected = ("reissued", header_time.strftime("%d/%H%MZ"))
-            if rss_issue is None or (rss_issue[0].lower(), rss_issue[1]) != expected:
-                raise FeedError("Storm JTWC " + kind.upper() + " reissue disagrees with RSS")
+        advisory = parse_advisory(get(url, 256 * 1024).body, kind, rss_issue=rss_issue)
+        if (advisory.issued_at != advisory.issue_at
+                and not reissue_matches_rss(advisory.issued_at, rss_issue)):
+            raise FeedError("Storm JTWC " + kind.upper() + " reissue disagrees with RSS")
         _fresh_advisory(advisory, now, kind)
         deadlines.append(advisory.valid_until_at)
         for area in advisory.areas:
             advisory_promotions.update(area.promotions)
-            source_times[area.group] = min(source_times[area.group], advisory.issue_at)
+            source_times[area.group] = min(source_times[area.group], advisory.position_at)
             for code in area.warned_codes:
                 if code in advisory_codes:
                     raise FeedError("Storm JTWC advisories repeat a warning code")
