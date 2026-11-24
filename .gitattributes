@@ -21,3 +21,7 @@ tests/fixtures/storm/live-20261119-cancellation/*.txt -text -whitespace
 # Preserve captured early-reissue responses byte for byte.
 tests/fixtures/storm/live-20261124-early-reissue/*.txt -text -whitespace
 tests/fixtures/storm/live-20261124-early-reissue/*.xml -text -whitespace
+
+# Preserve captured reissued TCFA packet byte for byte.
+tests/fixtures/storm/live-20261124-tcfa-reissued/*.txt -text -whitespace
+tests/fixtures/storm/live-20261124-tcfa-reissued/*.xml -text -whitespace

@@ -360,10 +360,11 @@ def _parse_jtwc_formation_product(body, identity, rss_at):
     if len(subjects) != 1:
         raise FeedError("Storm JTWC formation alert lacks one subject")
     subject = re.fullmatch(r"SUBJ/TROPICAL CYCLONE FORMATION ALERT[ \t]*"
-                           r"\(INVEST ([0-9]{2}[A-Z])\)( CANCELLATION)?//", subjects[0])
+                           r"\(INVEST ([0-9]{2}[A-Z])\)(?: (CANCELLATION|REISSUED))?//", subjects[0])
     if not subject or not _jtwc_code_matches(identity, subject[1]):
         raise FeedError("Storm JTWC formation alert identity disagrees with RSS")
-    cancelled = subject[2] is not None
+    # REISSUED remains active and must corroborate against the advisory.
+    cancelled = subject[2] == "CANCELLATION"
     cancellation_cue = bool(re.search(r"\bTHIS CANCELS REF A\b", "\n".join(lines)))
     if cancelled != cancellation_cue:
         raise FeedError("Storm JTWC formation alert cancellation is ambiguous")
