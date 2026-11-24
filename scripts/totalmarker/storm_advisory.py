@@ -71,18 +71,29 @@ class AdvisoryArea:
 
 @dataclass(frozen=True)
 class Advisory:
-    issue_at: float                # Validity start; conservative invest position proxy.
+    issue_at: float                # Validity start stated in the body.
     valid_until_at: float
     areas: tuple[AdvisoryArea, ...]
     issued_at: float               # Actual header time, possibly a later reissue.
     reissued: bool
 
     @property
+    def position_at(self):
+        # For an early-header reissue, the bulletin cannot observe a future fix.
+        return min(self.issue_at, self.issued_at)
+
+    @property
     def invests(self):
         return tuple(invest for area in self.areas for invest in area.invests)
 
 
-def _issue_interval(text, kind):
+def reissue_matches_rss(issued_at, rss_issue):
+    header_time = datetime.fromtimestamp(issued_at, timezone.utc)
+    expected = ("reissued", header_time.strftime("%d/%H%MZ"))
+    return rss_issue is not None and (rss_issue[0].lower(), rss_issue[1]) == expected
+
+
+def _issue_interval(text, kind, rss_issue):
     missing_issue = f"Storm JTWC {kind.upper()} advisory lacks a dated issue interval"
     explicit = list(ISSUE.finditer(text))
     subject = list(SUBJECT_ISSUE.finditer(text))
@@ -146,13 +157,23 @@ def _issue_interval(text, kind):
     header = headers[0][0]
     header_day, header_hour, header_minute = int(header[:2]), int(header[2:4]), int(header[4:])
     issued = set()
-    for year_month in {(start.year, start.month), (until.year, until.month)}:
+    starts_early = reissued and kind == "abpw"
+    earliest = start - timedelta(hours=1) if starts_early else start
+    months = {(earliest.year, earliest.month), (start.year, start.month),
+              (until.year, until.month)}
+    for year_month in months:
         try:
             candidate = datetime(*year_month, header_day, header_hour, header_minute,
                                  tzinfo=timezone.utc)
         except ValueError:
             continue
         if start <= candidate < until:
+            issued.add(candidate)
+        # Nov 23, 2026 ABPW reissue: the WMO header and exact RSS link stamp
+        # predate the scheduled body interval by one hour. No standalone or
+        # uncorroborated bulletin gets the same exception.
+        elif (earliest <= candidate < start
+              and reissue_matches_rss(candidate.timestamp(), rss_issue)):
             issued.add(candidate)
     if len(issued) != 1 or (not reissued and next(iter(issued)) != start):
         raise FeedError("Storm JTWC advisory header disagrees with issue time")
@@ -248,7 +269,7 @@ def _final_warning_codes(cyclone, text):
     return tuple(final)
 
 
-def parse_advisory(raw, kind):
+def parse_advisory(raw, kind, *, rss_issue=None):
     if kind not in AREAS:
         raise FeedError("Storm JTWC advisory region is unsupported")
     try:
@@ -257,7 +278,8 @@ def parse_advisory(raw, kind):
         raise FeedError("Storm JTWC advisory is not ASCII") from None
     if not text or len(text) > 256 * 1024:
         raise FeedError("Storm JTWC advisory is empty or too large")
-    issue_at, valid_until_at, issued_at, reissued = _issue_interval(text, kind)
+    issue_at, valid_until_at, issued_at, reissued = _issue_interval(text, kind, rss_issue)
+    position_at = min(issue_at, issued_at)
     area_matches = list(AREA.finditer(text))
     expected = AREAS[kind]
     if len(area_matches) != 2 or [(m[1], m[2]) for m in area_matches] != [
@@ -324,11 +346,10 @@ def parse_advisory(raw, kind):
                     promotions.append((code, promoted))
                     continue
                 lat, lon = _current_position(paragraph)
-                year = datetime.fromtimestamp(issue_at, timezone.utc).year
-                if basin == "SH" and datetime.fromtimestamp(issue_at, timezone.utc).month >= 7:
-                    year += 1
+                position_time = datetime.fromtimestamp(position_at, timezone.utc)
+                year = position_time.year + (basin == "SH" and position_time.month >= 7)
                 invests.append(Storm(basin + code[:2] + str(year), "Invest " + code, "DEP",
-                                     TrackPoint(issue_at, lat, lon), None, (), None, (),
+                                     TrackPoint(position_at, lat, lon), None, (), None, (),
                                      "not_issued"))
         if len({storm.id for storm in invests}) != len(invests):
             raise FeedError("Storm JTWC advisory repeats an invest")
