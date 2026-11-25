@@ -246,7 +246,7 @@ hours = 72
         self.assertNotIn("legacy", document)
         self.assertFalse(document["norad"]["enabled"])
         self.assertFalse(document["eclipse"]["enabled"])
-        self.assertEqual(document["eclipse"]["check_interval_days"], 1)
+        self.assertEqual(document["eclipse"]["check_interval_hours"], 24)
         self.assertTrue(document["aurora"]["enabled"])
         self.assertNotIn("santa", document)
         (self.root / "example.toml").write_bytes(raw)
