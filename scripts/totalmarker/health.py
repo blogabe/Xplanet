@@ -5,12 +5,13 @@ import hashlib
 import json
 import math
 from pathlib import Path
+from types import SimpleNamespace
 import tempfile
 import time
 
 from .diagnostics import observation
 from .errors import StorageError, TotalMarkerError
-from .features import clouds, eclipse, norad, quake, storm, volcano
+from .features import aurora, clouds, eclipse, norad, quake, storm, volcano
 from .http import Fetcher
 from .labels import color_for
 from .paths import RootFS
@@ -18,12 +19,16 @@ from .state import load_state
 from .storm_sources import JTWC_RSS, NHC_INDEX
 from .volcano_weekly import WEEKLY_URL
 
+def _probe_aurora(fs, settings, **kwargs):
+    return SimpleNamespace(**aurora.run(fs, settings, overlay_only=True, **kwargs))
+
+
 RUNNERS = {'clouds': clouds.run, 'quake': quake.run, 'storm': storm.run,
-           'volcano': volcano.run, 'norad': norad.run, 'eclipse': eclipse.run}
+           'volcano': volcano.run, 'norad': norad.run, 'eclipse': eclipse.run, 'aurora': _probe_aurora}
 
 
 def _sources(settings):
-    return {
+    sources = {
         'clouds': [settings.url], 'quake': [settings.quake.url],
         'storm': [NHC_INDEX, JTWC_RSS],
         'volcano': [WEEKLY_URL if settings.volcano.provider == 'weekly_html'
@@ -33,11 +38,16 @@ def _sources(settings):
                     for group in settings.norad.groups if group.enabled],
         'eclipse': [settings.eclipse.path_url or eclipse.INDEX_URL], 'santa': [],
     }
+    if settings.aurora.enabled or settings.aurora.base_night_map:
+        sources['aurora'] = [aurora.URL]
+    return sources
 
 
 def _outputs(settings, product):
     if product == 'clouds':
         return [(settings.image, 'image_sha256')]
+    if product == 'aurora':
+        return [(aurora.OVERLAY, 'overlay_sha256')]
     options = getattr(settings, product)
     if product == 'norad':
         return [(options.satellite, 'satellite_sha256'), (options.satellite + '.tle', 'tle_sha256')]
@@ -149,6 +159,9 @@ def eclipse_relevance(record, now):
 
 
 def _freshness(product, record, settings, now):
+    if product == 'aurora':
+        expires = record.get('expires_at')
+        return 'unknown' if expires is None else ('current' if now < expires else 'stale')
     if product == 'quake':
         return quake_feed_freshness(record, settings, now)
     if product == 'volcano':
@@ -244,7 +257,8 @@ def _live(fs, settings, product, row, record, now, fetcher_factory):
                 if client.requests:
                     row['last_error'] = {'at': now, 'message': result.message}
             else:
-                checked = load_state(probe_fs, probe_settings.state)['products'].get(product, {})
+                checked = (aurora._record(probe_fs) if product == 'aurora' else
+                           load_state(probe_fs, probe_settings.state)['products'].get(product, {}))
                 row['freshness'] = _freshness(product, checked, settings, now)
                 if product == 'eclipse':
                     row['event_relevance'] = eclipse_relevance(checked, now)
@@ -271,8 +285,17 @@ def check(fs, settings, *, live=False, now=None, fetcher_factory=Fetcher):
     rows = []
     for product, sources in _sources(settings).items():
         record = state['products'].get(product, {})
+        if product == 'aurora':
+            try:
+                record = aurora._record(fs)
+            except StorageError:
+                record = {}
+            record['successful_at'] = record.get('fetched_at')
+            record['source_at'] = record.get('forecast_at')
+            if errors.get(product) and isinstance(errors[product]['at'], (int, float)) and errors[product]['at'] > (record.get('fetched_at') or 0):
+                record['last_outcome'] = 'failed'
         facts = observation(record)
-        enabled = product not in {'volcano', 'norad', 'eclipse', 'santa'} or getattr(settings, product).enabled
+        enabled = product not in {'volcano', 'norad', 'eclipse', 'santa', 'aurora'} or getattr(settings, product).enabled
         row = {'product': product, 'sources': sources, 'status': 'unknown' if enabled else 'disabled',
                'access': 'not_checked', 'content': 'unknown', 'freshness': 'unknown',
                'last_check_at': facts['checked_at'], 'last_attempt_at': facts['attempted_at'],
@@ -312,9 +335,10 @@ def check(fs, settings, *, live=False, now=None, fetcher_factory=Fetcher):
                 except Exception:
                     row.update(status='error', message='Unexpected probe setup failure')
         # Inspect journal presence only: health must never replay or alter one.
-        journal = settings.journal if product == 'clouds' else getattr(settings, product).journal
+        journal = (settings.journal if product == 'clouds' else
+                   None if product == 'aurora' else getattr(settings, product).journal)
         try:
-            pending = fs.file_stat(journal) is not None
+            pending = journal is not None and fs.file_stat(journal) is not None
         except StorageError as error:
             row.update(status='error', recovery_error=str(error))
         else:
@@ -338,7 +362,7 @@ def exit_status(report):
 
 _TITLES = {'clouds': 'Clouds', 'quake': 'Earthquakes', 'storm': 'Storms',
            'volcano': 'Volcanoes', 'norad': 'Satellites', 'eclipse': 'Eclipses',
-           'santa': 'Santa'}
+           'santa': 'Santa', 'aurora': 'Aurora'}
 
 
 def _stamp(value):

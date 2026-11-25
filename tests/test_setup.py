@@ -245,8 +245,9 @@ class SetupTests(Sandbox):
         self.assertFalse((config / "xp.def").exists())
         accepted = self._inspect(scripts, env, input="y\nq\n")
         self.assertEqual(accepted.returncode, 3, accepted.stderr)
-        self.assertEqual((config / "xp.conf").read_bytes(),
-                         (config / "xp.conf.example").read_bytes())
+        expected = (config / "xp.conf.example").read_bytes().replace(
+            b"night_map=night.jpg\n", b"night_map=.state/totalmarker/aurora/night-current\n")
+        self.assertEqual((config / "xp.conf").read_bytes(), expected)
         definition = (config / "xp.def").read_text()
         self.assertIn("XPLANET_BIN=", definition)
         self.assertIn(str(xplanet).replace(" ", "\\ "), definition)
@@ -538,6 +539,34 @@ class SetupTests(Sandbox):
                 process.kill()
                 process.wait()
             os.close(master)
+
+    def test_fresh_setup_enables_aurora_without_clouds_or_live_fetch(self):
+        scripts, env, _, home, calls = self._volcano_automation_fixture()
+        config = self.root / "config"
+        (config / "xp.conf").unlink(missing_ok=True)
+        (config / "totalmarker.toml").unlink(missing_ok=True)
+        shutil.copy2(PROJECT / "config/xp.conf.example", config / "xp.conf.example")
+        base = self.root / "maps/lights/earth_lights_4800.tiff"
+        base.parent.mkdir(parents=True, exist_ok=True)
+        base.write_bytes(b"test fallback texture")
+        runner = scripts / "run-totalmarker"
+        original = runner.read_text()
+        runner.write_text(original.replace(
+            'printf "%s\\n" "$1" >> "$TM_SETUP_PRODUCTS"\n',
+            'if [ "$1 $2" = "aurora --prepare" ]; then\n'
+            '  PYTHONPATH="$TM_PACKAGE_PATH" exec "$TM_PYTHON" -P -s -B -m totalmarker '
+            '--root "$TM_ROOT" --config config/totalmarker.toml aurora --prepare\n'
+            'fi\n' + 'printf "%s\\n" "$1" >> "$TM_SETUP_PRODUCTS"\n'))
+        env.update(TM_ROOT=str(self.root), TM_PACKAGE_PATH=str(PROJECT / "scripts"))
+        done = self._inspect(scripts, env, input="y\n\nn\nn\nn\nn\ny\n")
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertIn('night_map=.state/totalmarker/aurora/night-current',
+                      (config / "xp.conf").read_text())
+        self.assertEqual((self.root / ".state/totalmarker/aurora/night-current").resolve(), base)
+        self.assertTrue((home / "Library/LaunchAgents/local.xplanet.aurora.plist").is_symlink())
+        self.assertIn("local.xplanet.aurora.plist", calls.read_text())
+        self.assertNotIn("local.xplanet.clouds.plist", calls.read_text())
+        self.assertFalse((self.root / ".state/totalmarker/aurora/overlay.png").exists())
 
     def test_fresh_interactive_volcano_source_choices(self):
         scripts, env, products, home, calls = self._volcano_automation_fixture()

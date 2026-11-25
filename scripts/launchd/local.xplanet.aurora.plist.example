@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>local.xplanet.aurora</string>
+
+	<key>WorkingDirectory</key>
+	<string>__XPLANET_ROOT__</string>
+
+	<key>ProgramArguments</key>
+	<array>
+		<string>__XPLANET_ROOT__/scripts/xplanet.sh</string>
+		<string>aurora</string>
+	</array>
+
+	<key>StartInterval</key>
+	<integer>300</integer>
+
+	<key>StandardOutPath</key>
+	<string>__XPLANET_ROOT__/logs/xplanet.log</string>
+	<key>StandardErrorPath</key>
+	<string>__XPLANET_ROOT__/logs/xplanet-aurora.log</string>
+</dict>
+</plist>

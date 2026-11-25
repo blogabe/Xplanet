@@ -191,3 +191,10 @@ notice_color = "White"
 # output = "markers/santa"
 # journal = ".state/totalmarker/santa-pending.json"
 # freshness_seconds = 0
+
+
+# NOAA OVATION aurora. New configurations enable it; absent means disabled.
+# Set this to your original image or symlink, never to the derived night-current.
+[aurora]
+enabled = true
+base_night_map = "maps/lights/earth_lights_4800.tiff"

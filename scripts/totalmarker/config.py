@@ -111,9 +111,16 @@ class Settings:
     storm: "StormOptions" = field(default_factory=lambda: StormOptions())
     norad: "NoradOptions" = field(default_factory=lambda: NoradOptions())
     eclipse: "EclipseOptions" = field(default_factory=lambda: EclipseOptions())
+    aurora: "AuroraOptions" = field(default_factory=lambda: AuroraOptions())
     santa: "SantaOptions" = field(default_factory=lambda: SantaOptions())
     unrelated: dict = field(default_factory=dict, repr=False)
     deferred_settings: dict = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True)
+class AuroraOptions:
+    enabled: bool = False  # Existing configurations do not acquire a new job.
+    base_night_map: str = ""
 
 
 @dataclass(frozen=True)
@@ -355,6 +362,8 @@ TOML_KEYS = {
     "norad.color": "NoradColor",
     "norad.group_max_bytes": "NoradGroupMaxBytes",
     "labels.warning_norad_seconds": "LabelWarningNorad",
+    "aurora.enabled": "AuroraEnabled",
+    "aurora.base_night_map": "AuroraBaseNightMap",
     "eclipse.enabled": "EclipseEnabled",
     "eclipse.path_url": "EclipsePathURL",
     "eclipse.marker_output": "EclipseMarkerOutput",
@@ -387,7 +396,7 @@ SUPPORTED_KEYS = {value.lower() for value in TOML_KEYS.values()} | {
 def _scalar(value, canonical):
     if canonical.lower() in {"labelonoff", "volcanonameonoff", "stormnameonoff",
                              "stormtrackonoff", "noradenabled", "eclipseenabled",
-                             "eclipsenoticeenabled", "santaenabled"} and isinstance(value, bool):
+                             "eclipsenoticeenabled", "santaenabled", "auroraenabled"} and isinstance(value, bool):
         return "On" if value else "Off"
     if not isinstance(value, (str, int, float, bool)):
         raise ConfigError("A supported configuration setting must be a scalar")
@@ -424,7 +433,7 @@ def _toml_values(raw):
                 elif dotted in {"labels.enabled", "volcano.name_enabled",
                               "storm.name_enabled", "storm.track_enabled",
                               "norad.enabled", "eclipse.enabled", "santa.enabled",
-                              "eclipse.notice_enabled"}:
+                              "eclipse.notice_enabled", "aurora.enabled"}:
                     valid_type = isinstance(value, bool)
                 elif canonical in {
                         "CloudResolution", "CloudCheckIntervalSeconds",
@@ -894,6 +903,10 @@ def load_bytes(fs, raw, path):
         freshness_seconds=number("SantaFreshnessSeconds", 0, maximum=24 * 3600))
     if santa.enabled and santa.freshness_seconds == 0:
         raise ConfigError("Enabled Santa requires a documented freshness interval")
+    aurora_enabled = get("AuroraEnabled", "Off").lower()
+    if aurora_enabled not in {"on", "off"}:
+        raise ConfigError("AuroraEnabled must be On or Off")
+    aurora = AuroraOptions(aurora_enabled == "on", get("AuroraBaseNightMap").strip())
     outputs = [value for value in
                [*paths.values(), volcano.marker, volcano.journal,
                 quake.marker, quake.journal, storm.marker, storm.arc,
@@ -907,6 +920,9 @@ def load_bytes(fs, raw, path):
         if any(str(fs.resolve(value)).casefold() == source for value in outputs):
             raise ConfigError("Outputs must not overwrite the configuration file")
     resolved = [fs.resolve(value, write=True) for value in outputs]
+    if any([part.casefold() for part in value.relative_to(fs.root).parts[:3]]
+           == [".state", "totalmarker", "aurora"] for value in resolved):
+        raise ConfigError("The aurora runtime directory is reserved")
     # Case variants can name the same file on macOS even before it exists.
     if len(resolved) != len({str(value).casefold() for value in resolved}):
         raise ConfigError("Configured output paths must be distinct")
@@ -919,5 +935,5 @@ def load_bytes(fs, raw, path):
                          maximum=128 * 1024 * 1024),
         warning=number("LabelWarningCloud", 21600), colors=colors,
         labels_enabled=enabled == "on", volcano=volcano, quake=quake, storm=storm,
-        norad=norad, eclipse=eclipse, santa=santa,
+        norad=norad, eclipse=eclipse, santa=santa, aurora=aurora,
         unrelated=values, deferred_settings=deferred)

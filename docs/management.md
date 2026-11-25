@@ -595,3 +595,49 @@ unknown flags or a renderer from another tap require manual review rather than
 silently substituting default features. `setup` can continue to use an existing
 renderer without migrating its installation. Binary feature reports are useful
 for inspection but do not establish Homebrew provenance or original build flags.
+
+## Aurora
+
+Aurora is a new Xplanet layer, separate from the Perl TotalMarker migration.
+It uses NOAA SWPC's [OVATION forecast](https://www.spaceweather.gov/products/aurora-30-minute-forecast)
+to draw a subtle green glow with no markers. It is model output, not a local
+visibility forecast.
+
+New guided setups enable it when the bundled night map is available and you
+choose to register automation. Setup initializes a fallback link offline; the
+first scheduled run attempts the forecast. Existing `xp.conf` and TotalMarker
+settings are never migrated automatically. To enable it manually, add this to
+`config/totalmarker.toml`:
+
+```toml
+[aurora]
+enabled = true
+base_night_map = "maps/lights/earth_lights_4800.tiff"
+```
+
+The base can instead be your existing link, for example `images/lights.tiff`.
+That link and its original map stay under your control. Keep these paths
+inside this checkout. Then:
+
+1. Run `./scripts/xplanet.sh aurora --prepare` to create the fallback link
+   without fetching, or `./scripts/xplanet.sh aurora` to try the forecast now.
+2. Set `night_map=.state/totalmarker/aurora/night-current` in the Earth section
+   of `config/xp.conf`. Restart the existing service once if it is running.
+3. Rerun guided setup to install automation, or use the
+   [aurora plist example](../scripts/launchd/local.xplanet.aurora.plist.example).
+   It checks every five minutes; cloud scheduling and maps are unaffected.
+
+The job validates the complete forecast, produces the overlay and builds
+a separate composite from the original base (never from a prior composite).
+It switches the renderer's link atomically. Xplanet opens the stable link
+on redraw, with its usual day/night fade. The job checks for changes to your
+base link before it reuses a composite. If the forecast expires, the next
+job invocation selects the original map even if NOAA is unavailable. If the
+job is stopped entirely, it cannot clear the last composite automatically.
+
+To turn it off, set `enabled = false` in `[aurora]` and run
+`./scripts/xplanet.sh aurora --prepare` to restore the original map without
+fetching or restarting. A still-registered job does no network work when
+disabled. To stop the scheduled wake-ups too, unload the aurora LaunchAgent
+after restoring the original map. Check the shared TotalMarker event log
+for `aurora` refresh results and forecast timestamps.

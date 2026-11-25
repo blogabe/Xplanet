@@ -18,7 +18,7 @@ from .errors import ConfigError, StorageError
 
 MAX_LINE = 64 * 1024
 MAX_FILE = 512 * 1024 * 1024
-FEATURES = {"clouds", "quake", "storm", "volcano", "norad", "eclipse"}
+FEATURES = {"clouds", "quake", "storm", "volcano", "norad", "eclipse", "aurora"}
 OUTCOMES = {"changed", "unchanged", "failed"}
 
 

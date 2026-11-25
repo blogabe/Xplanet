@@ -17,3 +17,6 @@ marker_file=updatelabel
 # For an included monthly Earth set, set EARTH_MAP_PRE=folder/stem in xp.def
 # and map=earth.png. Optional included textures use night_map=lights.tiff,
 # bump_map=bump.png and specular_map=specular.png after setup links them.
+
+# Guided setup binds new copies to the aurora night-map link when the bundled
+# base is available. For manual setup, see docs/management.md#aurora.

@@ -86,6 +86,8 @@ Refresh data (Python TotalMarker)
   volcano      Refresh markers from configured CAP or GVP weekly HTML
   norad        Update optional, explicitly selected NORAD satellite files
   eclipse      Update optional NASA central eclipse markers and arcs
+  aurora       Update NOAA aurora and select the night map, if configured
+               --overlay-only writes a transparent PNG; --prepare is offline
   label        Refresh update labels without fetching (alias: labels)
 
 Inspect and troubleshoot
@@ -139,7 +141,7 @@ Workflow notes (macOS)
 USAGE
 }
 
-if (( $# > 1 )) && [[ "$1" != setup && "$1" != health && "$1" != log-trim && "$1" != log-view && "$1" != config && "$1" != diagnostics && "$1" != install && "$1" != update ]]; then
+if (( $# > 1 )) && [[ "$1" != setup && "$1" != health && "$1" != log-trim && "$1" != log-view && "$1" != config && "$1" != diagnostics && "$1" != install && "$1" != update && "$1" != aurora ]]; then
     fail "expected exactly one command; use --help"
 fi
 if (( $# == 0 )); then
@@ -262,6 +264,10 @@ case "$switch" in
         ;;
     eclipse)
         "$script_dir/run-totalmarker" eclipse
+        ;;
+    aurora)
+        shift
+        "$script_dir/run-totalmarker" aurora "$@"
         ;;
     santa)
         # Stub only: Santa is intended as an on/off choice when Xplanet starts.
