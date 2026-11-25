@@ -660,6 +660,11 @@ base link before it reuses a composite. If the forecast expires, the next
 job invocation selects the original map even if NOAA is unavailable. If the
 job is stopped entirely, it cannot clear the last composite automatically.
 
+When desktop update labels are enabled, the Aurora row appears below Clouds.
+It shows the saved forecast's expiry: green while current (even if it predicts
+no glow), yellow when expired and red when no valid forecast is saved. Aurora
+has no separate warning timer. `--overlay-only` does not touch desktop labels.
+
 To turn it off, set `enabled = false` in `[aurora]` and run
 `./scripts/xplanet.sh aurora --prepare` to restore the original map without
 fetching or restarting. A still-registered job does no network work when

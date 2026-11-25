@@ -392,7 +392,7 @@ def run(fs, settings, *, fetcher=None, now=None):
         if not (deferred_refresh and outcome == "unchanged"
                 and record.get("last_outcome") == "failed"):
             finish(record, now, outcome, message, attempt)
-        label = (refresh_all(old_label, state, settings, now,
+        label = (refresh_all(old_label, state, settings, now, fs=fs,
                              append_product="norad" if satellite is not None or valid_existing else None)
                  if settings.labels_enabled else None)
         if label == old_label:

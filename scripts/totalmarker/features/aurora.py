@@ -15,17 +15,16 @@ import time
 import uuid
 import zlib
 
+from ..aurora_status import DIR, OVERLAY, RECORD, MAX_FEED, read_record as _record
 from ..errors import ConfigError, DownloadError, FeedError, StorageError
 from ..http import Fetcher
+from ..labels import refresh_aurora
+from ..state import STATE_LIMIT, recover_pending
 
 URL = "https://services.swpc.noaa.gov/json/ovation_aurora_latest.json"
-DIR = ".state/totalmarker/aurora"
-OVERLAY = DIR + "/overlay.png"
 CURRENT = DIR + "/night-current"
 COMPOSITE = DIR + "/night-composite.png"
-RECORD = DIR + "/status.json"
 LOCK = DIR + "/job.lock"
-MAX_FEED = 2 * 1024 * 1024
 MAX_MAP = 128 * 1024 * 1024
 WIDTH, HEIGHT = 1440, 720
 
@@ -176,22 +175,6 @@ def _compose(base, overlay):
         raise FeedError("Could not composite the Linux night map") from None
 
 
-def _record(fs):
-    raw = fs.read(RECORD, 8192)
-    if raw is None:
-        return {}
-    try:
-        item = json.loads(raw)
-        if (not isinstance(item, dict) or item.get("schema") != 1
-                or any(type(item.get(key)) is not int for key in ("observed_at", "forecast_at", "expires_at"))
-                or type(item.get("fetched_at")) is not int
-                or not re.fullmatch(r"[0-9a-f]{64}", str(item.get("overlay_sha256")))):
-            raise ValueError
-        return item
-    except (ValueError, TypeError):
-        return {}
-
-
 def _run(fs, settings, *, overlay_only=False, prepare=False, fetcher=None, now=None, compositor=_compose):
     options = settings.aurora
     now = time.time() if now is None else now
@@ -269,8 +252,24 @@ def run(fs, settings, *, overlay_only=False, prepare=False, fetcher=None, now=No
     now = time.time() if now is None else now
     result = _run(fs, settings, overlay_only=overlay_only, prepare=prepare,
                   fetcher=fetcher, now=now, compositor=compositor)
-    if settings.log and not prepare and result["outcome"] != "disabled":
+    write_label = (settings.labels_enabled and not overlay_only
+                   and (not prepare or not settings.aurora.enabled))
+    write_log = settings.log and not prepare and result["outcome"] != "disabled"
+    if write_label or write_log:
         with fs.lock(settings.lock):
-            fs.append(settings.log, (json.dumps({"feature": "aurora", "time": now, **result})
-                                 + "\n").encode("utf-8"))
+            if write_label:
+                recover_pending(fs, settings)
+                old = fs.read(settings.labels, STATE_LIMIT) or b""
+                try:
+                    existing = old.decode("utf-8")
+                except UnicodeError:
+                    raise StorageError("Existing labels are not valid UTF-8") from None
+                label = refresh_aurora(fs, existing, settings, now, append=True).encode("utf-8")
+                if len(label) > STATE_LIMIT:
+                    raise StorageError("Label output exceeds its size limit")
+                if label != old:
+                    fs.write(settings.labels, label)
+            if write_log:
+                fs.append(settings.log, (json.dumps({"feature": "aurora", "time": now, **result})
+                                         + "\n").encode("utf-8"))
     return result

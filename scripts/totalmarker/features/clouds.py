@@ -162,7 +162,7 @@ def run(fs, settings, *, label_only=False, fetcher=None, now=None, environment=N
             record["successful_at"] = now
         if not label_only:
             finish(record, now, outcome, message, attempt)
-        label = (refresh_all(old_label, state, settings, now, append_product="clouds")
+        label = (refresh_all(old_label, state, settings, now, fs=fs, append_product="clouds")
                  if settings.labels_enabled else None)
         publisher.publish(state, label, image=new_image, source_mtime=source_mtime)
         if settings.log:
