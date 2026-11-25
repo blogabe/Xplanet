@@ -70,6 +70,7 @@ management_initial_health() {
 
 management_saved_health() {
     local records result kind title summary detail style badge count=0 header=false compact='' note='' snapshot_time=''
+    local -A seen_products
     records=$(management_health_records 2>/dev/null)
     result=$?
     management_health='[?] Inspection failed; no verified snapshot'
@@ -94,6 +95,12 @@ management_saved_health() {
             continue
         fi
         [[ "$header" == true && "$title" != *[[:cntrl:]]* && "$summary" != *[[:cntrl:]]* && "$detail" != *[[:cntrl:]]* && -n "$title" && -n "$summary" ]] || return 2
+        case "$title" in
+            Clouds|Earthquakes|Storms|Volcanoes|Satellites|Eclipses|Aurora) ;;
+            *) return 2 ;;
+        esac
+        [[ -z "${seen_products[$title]-}" ]] || return 2
+        seen_products[$title]=1
         (( ++count <= 7 )) || return 2
         style='' badge='[?]'
         case "$kind" in
@@ -110,7 +117,10 @@ management_saved_health() {
         fi
         compact+="$style$badge $title$management_reset"
     done <<< "$records"
-    [[ "$header" == true && "$count" == 7 ]] || return 2
+    [[ "$header" == true ]] || return 2
+    for title in Clouds Earthquakes Storms Volcanoes Satellites Eclipses; do
+        [[ "${seen_products[$title]-}" == 1 ]] || return 2
+    done
     if (( result == 2 )); then management_health_time='';return 2;fi
     management_health_time="$snapshot_time"
     management_health="$compact${note:+ $note}"
