@@ -5,17 +5,23 @@ data-only use, see [standalone TotalMarker](totalmarker-standalone.md).
 
 ## TotalMarker timing units
 
-In `config/totalmarker.toml`, use whole minutes for
-`check_interval_minutes` and `warning_*_minutes`, seconds for
-`timeout_seconds`, days for NORAD `max_age_days`, and hours for eclipse
-`notify_hours`. The check interval limits how often an invocation can
-fetch data; it does not change its launchd, cron, or systemd schedule.
-For example, the volcano check interval is 1,380 minutes (23 hours),
-with a separate daily launchd schedule. The sample quake interval is
-18 minutes; its launchd schedule still runs every 20 minutes.
+In `config/totalmarker.toml`, use whole units as named in each key:
 
-Existing seconds-based keys and INI settings remain supported without
-rounding. Use either the old or new key for a setting, never both.
+- **Check intervals:** minutes for clouds, earthquakes, storms and eclipses;
+  hours for volcanoes (`check_interval_hours = 23`) and NORAD
+  (`check_interval_hours = 2`).
+- **Label warnings:** hours for clouds, earthquakes and storms; days for
+  volcanoes and NORAD.
+- **Other settings:** seconds for network timeouts, days for NORAD's
+  `max_age_days` and hours for eclipse `notify_hours`.
+
+A check interval limits how often an invocation can fetch data. It does not
+change the launchd, cron, or systemd schedule. The bundled launchd schedule
+still checks volcanoes daily and earthquakes every 20 minutes, while the
+TOML allows a volcano fetch after 23 hours and a quake fetch after 18 minutes.
+
+Prior seconds and minute spellings and INI settings remain supported without
+rounding. Use only one spelling for a setting.
 Response byte limits still apply by default; existing override keys
 remain supported for deployments such as unusually large cloud maps.
 

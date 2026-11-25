@@ -384,18 +384,31 @@ TOML_KEYS = {
 }
 # Only the TOML spelling changes. Normalize aliases to the same legacy
 # canonical keys so ranges, INI readers and duplicate detection stay shared.
-TOML_DURATION_ALIASES = {
-    key: (key.removesuffix("_seconds") + "_minutes", 60)
-    for key in TOML_KEYS
-    if key.endswith(".check_interval_seconds")
-    or (key.startswith("labels.warning_") and key.endswith("_seconds"))
+TOML_DURATION_UNITS = {
+    # Canonical seconds key: preferred unit first, then older non-second units.
+    "cloud.check_interval_seconds": ("minutes",),
+    "quake.check_interval_seconds": ("minutes",),
+    "storm.check_interval_seconds": ("minutes",),
+    "volcano.check_interval_seconds": ("hours", "minutes"),
+    "norad.check_interval_seconds": ("hours", "minutes"),
+    "eclipse.check_interval_seconds": ("minutes",),
+    "labels.warning_cloud_seconds": ("hours", "minutes"),
+    "labels.warning_quake_seconds": ("hours", "minutes"),
+    "labels.warning_storm_seconds": ("hours", "minutes"),
+    "labels.warning_volcano_seconds": ("days", "minutes"),
+    "labels.warning_norad_seconds": ("days", "minutes"),
+    "norad.max_age_seconds": ("days",),
 }
-TOML_DURATION_ALIASES["norad.max_age_seconds"] = ("norad.max_age_days", 86400)
-TOML_DURATION_SCALES = {
-    new: scale for _, (new, scale) in TOML_DURATION_ALIASES.items()
-}
-for _old_duration, (_new_duration, _scale) in TOML_DURATION_ALIASES.items():
-    TOML_KEYS[_new_duration] = TOML_KEYS[_old_duration]
+_SECONDS_PER_UNIT = {"minutes": 60, "hours": 3600, "days": 86400}
+TOML_DURATION_SCALES = {}
+TOML_LEGACY_DURATION_KEYS = set(TOML_DURATION_UNITS)
+for _seconds_key, _units in TOML_DURATION_UNITS.items():
+    for _index, _unit in enumerate(_units):
+        _alias = _seconds_key.removesuffix("_seconds") + "_" + _unit
+        TOML_KEYS[_alias] = TOML_KEYS[_seconds_key]
+        TOML_DURATION_SCALES[_alias] = _SECONDS_PER_UNIT[_unit]
+        if _index:
+            TOML_LEGACY_DURATION_KEYS.add(_alias)
 
 for _storm_key in ("StormColorTrackReal", "StormColorTrackPrediction",
                    "StormNameOnOff", "StormColorName", "StormAlignName",
