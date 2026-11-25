@@ -6,11 +6,11 @@ import hashlib
 import json
 import time
 
-from ..diagnostics import Attempt, finish
-from ..errors import DownloadError, ImageError, StorageError
-from ..http import Fetcher, safe_header
+from ..diagnostics import Attempt, append_event, finish
+from ..errors import DownloadError, ImageError
+from ..http import Fetcher, conditional_validators, safe_header, store_validators
 from ..image import cloud_creation_time, validate_jpeg
-from ..labels import cloud_timestamp, refresh_all
+from ..labels import read_labels, cloud_timestamp, refresh_all
 from ..state import load_state, Publisher, recover_pending
 
 
@@ -54,11 +54,7 @@ def run(fs, settings, *, label_only=False, fetcher=None, now=None, environment=N
         recover_pending(fs, settings)
         state = load_state(fs, settings.state)
         record = state["products"].setdefault("clouds", {})
-        raw_label = fs.read(settings.labels, 2 * 1024 * 1024)
-        try:
-            old_label = raw_label.decode("utf-8") if raw_label is not None else ""
-        except UnicodeError:
-            raise StorageError("Existing labels are not valid UTF-8") from None
+        old_label = read_labels(fs, settings.labels)
         # Previous releases sometimes put a label-derived estimate in this
         # local-install field. Retain it as unverified history, never as source
         # creation or as a confirmed publication time.
@@ -106,15 +102,7 @@ def run(fs, settings, *, label_only=False, fetcher=None, now=None, environment=N
                 # An attempted source switch invalidates the old request identity,
                 # but only a validated response advances the fetch time.
                 record["fetch_source_key"] = source_key
-                validators = {}
-                if matching:
-                    for key, header in [("etag", "If-None-Match"),
-                                        ("last_modified", "If-Modified-Since")]:
-                        value = record.get(key)
-                        if value is not None:
-                            if not safe_header(value):
-                                raise StorageError("Invalid stored HTTP validator")
-                            validators[header] = value
+                validators = conditional_validators(record) if matching else {}
                 previous_record = copy.deepcopy(record)
                 try:
                     credentials = settings.auth.resolve(environment)
@@ -141,14 +129,8 @@ def run(fs, settings, *, label_only=False, fetcher=None, now=None, environment=N
                         record_creation_time(record, response.body, digest, now)
                         record["image_sha256"] = digest
                         record["source_key"] = source_key
-                    for key, header in [("etag", "etag"), ("last_modified", "last-modified")]:
-                        value = response.headers.get(header)
-                        if value is not None:
-                            if not safe_header(value):
-                                raise DownloadError("Server returned an invalid HTTP validator")
-                            record[key] = value
-                        elif response.status == 200:
-                            record.pop(key, None)
+                    store_validators(
+                        record, response, invalid_message="Server returned an invalid HTTP validator")
                     source_mtime = modified_time(record.get("last_modified"))
                     record["source_modified_at"] = source_mtime
                     record["fetched_at"] = now
@@ -170,9 +152,7 @@ def run(fs, settings, *, label_only=False, fetcher=None, now=None, environment=N
             event = {"time": now, "feature": "clouds", "outcome": outcome,
                      "message": message, "installed_at": record.get("installed_at"),
                      "source_created_at": record.get("source_created_at")}
-            try:
-                fs.append(settings.log, (json.dumps(event) + "\n").encode())
-            except StorageError:
+            if not append_event(fs, settings.log, event):
                 message += "; diagnostic log unavailable"
         return Result(outcome, message, record.get("installed_at"),
                       record.get("source_created_at"))
