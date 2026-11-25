@@ -1,4 +1,4 @@
-"""Selectable GVP CAP or weekly HTML markers with last-good retention."""
+"""GVP volcano markers with source fallback and last-good retention."""
 import copy
 from dataclasses import dataclass
 from dataclasses import asdict
@@ -7,7 +7,7 @@ import json
 import time
 
 from ..diagnostics import Attempt, append_event, finish
-from ..errors import DownloadError, FeedError
+from ..errors import DownloadError, FeedError, SourceStatusError
 from ..http import Fetcher, conditional_validators, store_validators
 from ..labels import read_labels, refresh_all, volcano_timestamp
 from ..state import load_state, MarkerPublisher, recover_pending
@@ -33,7 +33,7 @@ class Result:
 
 def _source_key(fs, options):
     style = asdict(options)
-    for name in ["journal", "interval", "timeout", "max_bytes", "warning"]:
+    for name in ["active", "journal", "interval", "timeout", "max_bytes", "warning"]:
         style.pop(name)
     style["marker"] = str(fs.resolve(options.marker, write=True).relative_to(fs.root))
     # Revalidate engine-safe literal labels, line bounds and RGB color keys.
@@ -50,10 +50,101 @@ def _validate_weekly_coverage(coverage_end_at, now):
         raise FeedError("GVP weekly reporting period is stale")
 
 
+def _providers(options):
+    if options.provider == "auto":
+        return ("cap", "weekly_html")
+    return (options.provider,)
+
+
+def source_urls(options):
+    return [WEEKLY_URL if provider == "weekly_html" else options.url
+            for provider in _providers(options)] if options.enabled else []
+
+
+def _allows_fallback(error):
+    if isinstance(error, SourceStatusError):
+        return type(error.status) is int and (
+            error.status in {403, 404, 408, 410} or 500 <= error.status <= 599)
+    return True
+
+
+def _refresh(attempt, options, provider, record, *, matching, valid_existing, key, now):
+    outcome, marker = "unchanged", None
+    previous_coverage = record.get("coverage_end_at")
+    validators = conditional_validators(record) if matching else {}
+    source_url = WEEKLY_URL if provider == "weekly_html" else options.url
+    response = attempt.fetch(
+        source_url, validators=validators, credentials=None,
+        timeout=options.timeout, max_bytes=options.max_bytes)
+    if response.status == 304:
+        if not matching or not validators:
+            raise DownloadError("Not-modified response lacks matching volcano markers")
+        _validate_weekly_coverage(record.get("coverage_end_at"), now)
+        message = "Source reported no change"
+    elif response.status == 200:
+        content_type = response.headers.get("content-type", "").split(";")[0].strip().lower()
+        allowed = ({"", "text/html", "application/xhtml+xml", "application/octet-stream"}
+                   if provider == "weekly_html" else
+                   {"", "application/xml", "text/xml", "application/cap+xml",
+                    "application/rss+xml", "application/atom+xml",
+                    "application/octet-stream"})
+        if content_type not in allowed:
+            raise FeedError("Volcano response has an unsupported content type")
+        if provider == "weekly_html":
+            page = parse_weekly_html(response.body)
+            _validate_weekly_coverage(page.coverage_end_at, now)
+            events = join_coordinates(page, load_coordinate_catalogue())
+            record["coverage_end_at"] = page.coverage_end_at
+            record["report_period_start"] = page.period_start.isoformat()
+            record["report_period_end"] = page.period_end.isoformat()
+            record["source_report_at"] = None  # No publication time on this page.
+            period_note = ("; report covers " + page.period_start.isoformat() +
+                           " through " + page.period_end.isoformat() +
+                           " (publication time unavailable)")
+        else:
+            events = parse_cap(response.body)
+            periods = {(event.period_start, event.period_end) for event in events}
+            if len(periods) != 1:
+                raise FeedError("Volcano CAP entries have conflicting reporting periods")
+            start, end = periods.pop()
+            cutoff = coverage_end_at(end)
+            _validate_weekly_coverage(cutoff, now)
+            record["coverage_end_at"] = cutoff
+            record["report_period_start"] = start.isoformat()
+            record["report_period_end"] = end.isoformat()
+            period_note = ("; report covers " + start.isoformat() +
+                           " through " + end.isoformat())
+            record["source_report_at"] = max(
+                (e.source_sent_at for e in events if e.source_sent_at is not None),
+                default=None)
+        if (options.provider == "auto" and valid_existing and previous_coverage is not None
+                and record["coverage_end_at"] < previous_coverage):
+            raise FeedError("GVP reporting period is older than the saved markers")
+        body = render_body(events, options)
+        body_hash = hashlib.sha256(body).hexdigest()
+        if not valid_existing or record.get("body_sha256") != body_hash:
+            marker = render_marker(body, now)
+            record["marker_sha256"] = hashlib.sha256(marker).hexdigest()
+            record["body_sha256"] = body_hash
+            record["installed_at"] = now
+            outcome, message = "changed", "Changed valid volcano markers published" + period_note
+        else:
+            message = "Identical volcano markers retained" + period_note
+        record["count"] = len(events)
+        record["source_key"] = key
+        record["provider"] = provider
+    else:
+        raise DownloadError("Unexpected volcano HTTP response")
+    store_validators(record, response)
+    record["source_modified_at"] = modified_time(record.get("last_modified"))
+    record["fetched_at"] = now  # Last successful source verification.
+    return outcome, message, marker
+
+
 def run(fs, settings, *, fetcher=None, now=None):
     options = settings.volcano
     if not options.enabled:
-        return Result("disabled", "No volcano source selected in config/totalmarker.toml",
+        return Result("disabled", "Volcanoes are disabled or have no source in config/totalmarker.toml",
                       None, None, None, None, provider=options.provider)
     with fs.lock(settings.lock):
         now = time.time() if now is None else now
@@ -83,76 +174,31 @@ def run(fs, settings, *, fetcher=None, now=None):
             except FeedError as error:
                 outcome, message = "failed", str(error)
         if not cached:
-            before_attempt = copy.deepcopy(record)
-            try:
-                validators = conditional_validators(record) if matching else {}
-                source_url = WEEKLY_URL if options.provider == "weekly_html" else options.url
-                response = attempt.fetch(
-                    source_url, validators=validators, credentials=None,
-                    timeout=options.timeout, max_bytes=options.max_bytes)
-                if response.status == 304:
-                    if not matching:
-                        raise DownloadError("Not-modified response lacks matching volcano markers")
-                    _validate_weekly_coverage(record.get("coverage_end_at"), now)
-                    message = "Source reported no change"
-                elif response.status == 200:
-                    content_type = response.headers.get("content-type", "").split(";")[0].strip().lower()
-                    allowed = ({"", "text/html", "application/xhtml+xml", "application/octet-stream"}
-                               if options.provider == "weekly_html" else
-                               {"", "application/xml", "text/xml", "application/cap+xml",
-                                "application/rss+xml", "application/atom+xml",
-                                "application/octet-stream"})
-                    if content_type not in allowed:
-                        raise FeedError("Volcano response has an unsupported content type")
-                    if options.provider == "weekly_html":
-                        page = parse_weekly_html(response.body)
-                        _validate_weekly_coverage(page.coverage_end_at, now)
-                        events = join_coordinates(page, load_coordinate_catalogue())
-                        record["coverage_end_at"] = page.coverage_end_at
-                        record["report_period_start"] = page.period_start.isoformat()
-                        record["report_period_end"] = page.period_end.isoformat()
-                        record["source_report_at"] = None  # No publication time on this page.
-                        period_note = ("; report covers " + page.period_start.isoformat() +
-                                       " through " + page.period_end.isoformat() +
-                                       " (publication time unavailable)")
-                    else:
-                        events = parse_cap(response.body)
-                        periods = {(event.period_start, event.period_end) for event in events}
-                        if len(periods) != 1:
-                            raise FeedError("Volcano CAP entries have conflicting reporting periods")
-                        start, end = periods.pop()
-                        cutoff = coverage_end_at(end)
-                        _validate_weekly_coverage(cutoff, now)
-                        record["coverage_end_at"] = cutoff
-                        record["report_period_start"] = start.isoformat()
-                        record["report_period_end"] = end.isoformat()
-                        period_note = ("; report covers " + start.isoformat() +
-                                       " through " + end.isoformat())
-                        record["source_report_at"] = max(
-                            (e.source_sent_at for e in events if e.source_sent_at is not None),
-                            default=None)
-                    body = render_body(events, options)
-                    body_hash = hashlib.sha256(body).hexdigest()
-                    if not valid_existing or record.get("body_sha256") != body_hash:
-                        marker = render_marker(body, now)
-                        record["marker_sha256"] = hashlib.sha256(marker).hexdigest()
-                        record["body_sha256"] = body_hash
-                        record["installed_at"] = now
-                        outcome, message = "changed", "Changed valid volcano markers published" + period_note
-                    else:
-                        message = "Identical volcano markers retained" + period_note
-                    record["count"] = len(events)
-                    record["source_key"] = key
-                    record["provider"] = options.provider
+            errors = []
+            refreshed = False
+            for provider in _providers(options):
+                candidate = copy.deepcopy(record)
+                # Never send CAP validators to HTML or reuse a stale alternate response.
+                provider_matches = matching and (
+                    record.get("provider") == provider
+                    or (options.provider != "auto" and record.get("provider") is None))
+                try:
+                    outcome, message, marker = _refresh(
+                        attempt, options, provider, candidate, matching=provider_matches,
+                        valid_existing=valid_existing, key=key, now=now)
+                except (DownloadError, FeedError) as error:
+                    errors.append(f"{provider}: {error}" if options.provider == "auto" else str(error))
+                    if not _allows_fallback(error):
+                        break
                 else:
-                    raise DownloadError("Unexpected volcano HTTP response")
-                store_validators(record, response)
-                record["source_modified_at"] = modified_time(record.get("last_modified"))
-                record["fetched_at"] = now  # Last successful source verification.
-            except (DownloadError, FeedError) as error:
-                outcome, message, marker = "failed", str(error), None
-                record.clear()
-                record.update(before_attempt)
+                    refreshed = True
+                    record.clear()
+                    record.update(candidate)
+                    if errors:
+                        message = "Using Weekly HTML after " + errors[0] + "; " + message
+                    break
+            if not refreshed:
+                outcome, message, marker = "failed", "; ".join(errors), None
         if outcome != "failed" and (marker is not None or valid_existing):
             record["successful_at"] = now
         finish(record, now, outcome, message, attempt)

@@ -125,6 +125,7 @@ class AuroraOptions:
 
 @dataclass(frozen=True)
 class VolcanoOptions:
+    active: bool = True
     provider: str = "cap"
     url: str = "https://volcano.si.edu/news/WeeklyVolcanoCAP.xml"
     marker: str = "markers/volcano"
@@ -147,8 +148,8 @@ class VolcanoOptions:
     @property
     def enabled(self):
         # The unconfigured CAP sentinel used by guided setup (including old copies).
-        return not (self.provider == "cap"
-                    and self.url == "https://volcano.example.invalid/WeeklyVolcanoCAP.xml")
+        return self.active and not (self.provider == "cap"
+                                    and self.url == "https://volcano.example.invalid/WeeklyVolcanoCAP.xml")
 
 
 @dataclass(frozen=True)
@@ -298,6 +299,7 @@ TOML_KEYS = {
     "labels.colors.ok": "LabelColorOk", "labels.colors.warning": "LabelColorWarn",
     "labels.colors.error": "LabelColorError",
     "volcano.url": "VolcanoURL", "volcano.output": "VolcanoOutput",
+    "volcano.enabled": "VolcanoEnabled",
     "volcano.provider": "VolcanoProvider",
     "volcano.journal": "VolcanoJournalFile",
     "volcano.check_interval_seconds": "VolcanoCheckIntervalSeconds",
@@ -424,7 +426,7 @@ SUPPORTED_KEYS = {value.lower() for value in TOML_KEYS.values()} | {
 
 
 def _scalar(value, canonical):
-    if canonical.lower() in {"labelonoff", "volcanonameonoff", "stormnameonoff",
+    if canonical.lower() in {"labelonoff", "volcanoenabled", "volcanonameonoff", "stormnameonoff",
                              "stormtrackonoff", "noradenabled", "eclipseenabled",
                              "eclipsenoticeenabled", "santaenabled", "auroraenabled"} and isinstance(value, bool):
         return "On" if value else "Off"
@@ -460,7 +462,7 @@ def _toml_values(raw):
                 canonical = TOML_KEYS[dotted]
                 if dotted.startswith("storm.") and dotted.rsplit(".", 1)[-1][:1].isupper():
                     valid_type = isinstance(value, str)  # Existing quoted legacy TOML keys.
-                elif dotted in {"labels.enabled", "volcano.name_enabled",
+                elif dotted in {"labels.enabled", "volcano.enabled", "volcano.name_enabled",
                               "storm.name_enabled", "storm.track_enabled",
                               "norad.enabled", "eclipse.enabled", "santa.enabled",
                               "eclipse.notice_enabled", "aurora.enabled"}:
@@ -761,11 +763,16 @@ def _read_volcano(reader):
                                    "", detail)):
         raise ConfigError("VolcanoDetailList contains an unsupported placeholder")
     volcano_provider = reader.get("VolcanoProvider", "cap").lower()
-    if volcano_provider not in {"cap", "weekly_html"}:
-        raise ConfigError("VolcanoProvider must be cap or weekly_html")
+    if volcano_provider not in {"auto", "cap", "weekly_html"}:
+        raise ConfigError("VolcanoProvider must be auto, cap or weekly_html")
+    volcano_enabled = reader.get("VolcanoEnabled", "On").lower()
+    if volcano_enabled not in {"on", "off"}:
+        raise ConfigError("VolcanoEnabled must be On or Off")
+    volcano_url = https_url(reader.get("VolcanoURL") or VolcanoOptions.url)
+    if volcano_provider == "auto" and volcano_url != VolcanoOptions.url:
+        raise ConfigError("A custom volcano URL requires provider = cap")
     return VolcanoOptions(
-        provider=volcano_provider,
-        url=https_url(reader.get("VolcanoURL") or VolcanoOptions.url),
+        active=volcano_enabled == "on", provider=volcano_provider, url=volcano_url,
         marker=reader.get("VolcanoOutput") or VolcanoOptions.marker,
         journal=reader.get("VolcanoJournalFile") or VolcanoOptions.journal,
         interval=reader.number("VolcanoCheckIntervalSeconds", 82800),

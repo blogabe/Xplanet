@@ -172,8 +172,8 @@ current access. Known limits include:
 
 - Volcano reports through 2026-11-04 included rejected stale CAP coverage and HTTP
   403 from weekly HTML. A fresh install has no volcano markers until retrieval
-  succeeds. For new configurations, setup defaults to the Weekly Report (HTML);
-  you can select CAP or skip. See [volcano sources](docs/technical-notes.md#volcano-sources).
+  succeeds. New configurations try CAP first, with the Weekly Report HTML as
+  fallback. See [volcano sources](docs/technical-notes.md#volcano-sources).
 - Storm refreshes fail closed on incomplete coverage or unsupported provider-format
   changes, retaining the last-good marker/track pair.
 - NORAD supports up to 16 catalog IDs. IDs 100000–339999 require the renderer from the Homebrew tap at revision 2 or a renderer that reports Alpha-5 support with `xplanet -version`. Older renderers still use five-digit IDs.

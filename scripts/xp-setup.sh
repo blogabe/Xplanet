@@ -513,7 +513,6 @@ fi
 [[ "$XPLANET_BIN" == /* && -x "$XPLANET_BIN" ]] ||
     fail "$definition: XPLANET_BIN must name an absolute installed executable; edit that setting or run scripts/xplanet.sh install"
 
-volcano_choice=''
 volcano_helper="$script_dir/lib/xplanet/volcano-setup.py"
 [[ -f "$volcano_helper" && ! -L "$volcano_helper" ]] || fail "Missing regular volcano setup helper; restore it before setup"
 volcano_config="$project_root/config/totalmarker.toml"
@@ -602,28 +601,6 @@ for index in "${missing_personal[@]}"; do
                 fi
             done < "$example" > "$entry"
         ) || fail "Preparation stopped at $personal_names[index]; existing files are never replaced"
-    elif [[ "$entry" == "$volcano_config" && "$interactive_setup" == true ]] &&
-            "$python_bin" -I -B "$volcano_helper" selectable "$example"; then
-        print -- "Choose a Smithsonian Global Volcanism Program source for volcano markers."
-        print -- "  1) Official CAP feed (https://volcano.si.edu/news/WeeklyVolcanoCAP.xml)"
-        print -- "  2) Weekly Report (HTML) [default]"
-        print -- "  3) Skip volcanoes for now"
-        while true; do
-            read -r 'answer?Volcano source [1/2/3, default 2]: ' ||
-                fail "input ended before volcano source choice"
-            case "$answer" in
-                1) volcano_choice=cap; break ;;
-                2|'') volcano_choice=weekly_html; break ;;
-                3) volcano_choice=skip; break ;;
-                *) print -- "Choose 1, 2, or 3." ;;
-            esac
-        done
-        real_dir config
-        # The sentinel preserves the template's trailing newlines through shell capture.
-        selected_toml=$("$python_bin" -I -B "$volcano_helper" render "$example" "$volcano_choice" &&
-                        print -n -- x) || fail "Could not prepare the selected volcano source from the example"
-        (setopt noclobber; print -rn -- "${selected_toml%x}" > "$entry") ||
-            fail "Preparation stopped at $personal_names[index]; existing files are never replaced"
     elif [[ "$entry" == "$project_root/config/xp.conf" &&
             -f "$project_root/maps/lights/earth_lights_4800.tiff" &&
             ! -e "$project_root/config/totalmarker.toml" ]]; then
@@ -722,13 +699,13 @@ record_refresh_result() {
 }
 
 volcano_ready() {
-    [[ "$volcano_choice" != skip && "$(volcano_status "$volcano_config")" == ready ]]
+    [[ "$(volcano_status "$volcano_config")" == ready ]]
 }
 marker_products=(quake storm)
 if volcano_ready; then
     marker_products+=(volcano)
 else
-    print -- "Volcano source not selected or configured; skipping its refresh and new automation."
+    print -- "Volcanoes disabled or source not configured; skipping its refresh and new automation."
     print -- "To enable it later, choose a source in config/totalmarker.toml and run setup again."
 fi
 for product in "${marker_products[@]}"; do

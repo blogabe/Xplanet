@@ -11,9 +11,8 @@ cp config/totalmarker.example.toml config/totalmarker.toml
 
 Review `config/totalmarker.toml` before refreshing your sources. Configure a
 real cloud source to replace the example's `.invalid` cloud URL. Volcanoes use
-the Smithsonian GVP Weekly Report (HTML) by default in the copied example; to
-switch, set `provider = "cap"` in `[volcano]` and use the
-[official CAP URL](technical-notes.md#volcano-sources). Quakes use USGS and
+the Smithsonian GVP CAP feed first, with Weekly Report HTML as fallback.
+Pin a provider only when needed; see [volcano sources](technical-notes.md#volcano-sources). Quakes use USGS and
 storms use NHC/JTWC. NORAD and eclipse stay disabled until deliberately configured.
 
 ```sh

@@ -17,7 +17,6 @@ from .labels import color_for
 from .paths import RootFS
 from .state import load_state
 from .storm_sources import JTWC_RSS, NHC_INDEX
-from .volcano_weekly import WEEKLY_URL
 
 def _probe_aurora(fs, settings, **kwargs):
     return SimpleNamespace(**aurora.run(fs, settings, overlay_only=True, **kwargs))
@@ -31,8 +30,7 @@ def _sources(settings):
     sources = {
         'clouds': [settings.url], 'quake': [settings.quake.url],
         'storm': [NHC_INDEX, JTWC_RSS],
-        'volcano': [WEEKLY_URL if settings.volcano.provider == 'weekly_html'
-                    else settings.volcano.url] if settings.volcano.enabled else [],
+        'volcano': volcano.source_urls(settings.volcano),
         'norad': [norad.CELESTRAK.format(id=number) for number in settings.norad.catalog_ids]
                  + [norad.CELESTRAK_GROUP.format(source=group.source)
                     for group in settings.norad.groups if group.enabled],

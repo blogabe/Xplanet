@@ -21,7 +21,7 @@ from urllib.request import (build_opener, HTTPRedirectHandler, HTTPSHandler,
                             ProxyHandler, Request)
 
 from .config import https_url
-from .errors import ConfigError, DownloadError, StorageError
+from .errors import ConfigError, DownloadError, SourceStatusError, StorageError
 
 
 @dataclass
@@ -354,7 +354,7 @@ class Fetcher:
                     raise DownloadError("HTTPS redirect destination was rejected") from None
                 continue
             if response.status not in {200, 304}:
-                raise DownloadError(_http_diagnostic(response))
+                raise SourceStatusError(response.status, _http_diagnostic(response))
             if len(response.body) > max_bytes:
                 raise DownloadError("HTTP response exceeds the size limit")
             return response
