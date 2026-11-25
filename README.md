@@ -10,7 +10,7 @@ start/restart. See the [stock scenes](docs/configurator/stock-scenes.md).
 
 TotalMarker downloads cloud imagery and generates earthquake, volcano and storm
 markers, storm tracks and update labels. Optional NORAD satellite and central
-eclipse products are disabled by default; Santa remains a disabled stub.
+eclipse products are disabled by default.
 [Aurora](docs/management.md#aurora) adds a NOAA forecast glow to the night map
 on new guided setups and can run independently on Linux.
 
@@ -163,8 +163,7 @@ For timestamp, cache, and log details, see [Technical notes](docs/technical-note
 For internal boundaries and file ownership, see [Architecture](docs/architecture.md).
 
 Optional NORAD and eclipse products require deliberate configuration and
-corresponding Xplanet display settings. Santa has no live provider or production
-tracking.
+corresponding Xplanet display settings.
 
 ## Limitations and troubleshooting
 

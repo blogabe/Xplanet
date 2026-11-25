@@ -1,244 +1,430 @@
 """Private draft storage never touches native scenes, providers or selectors."""
+
 from tests.support import prepare_fixture
-import asyncio,json,os,tempfile,unittest
+import asyncio, os, unittest
 from contextlib import suppress
-from pathlib import Path
 from unittest.mock import Mock, patch
-from configurator.recovery import RecoveryStore,raw_fields,pack,head,digest,encoded,metadata,BUDGET
-from configurator.workspace import Workspace
+from configurator.recovery import (
+    pack,
+    head,
+    digest,
+)
 from configurator.model import SAMPLE
 
 from tests.configurator.support_recovery import RecoveryFixture
 
+
 async def cancel_at_blob_write(session, record, blobs, blob_name, external=None):
     """Inject cancellation at an actual owned write, independent of await counts."""
-    target=session.store.path/session.identity/blob_name
-    original_write=os.write
-    observed=[]
-    task=None
+    target = session.store.path / session.identity / blob_name
+    original_write = os.write
+    observed = []
+    task = None
+
     def write(fd, data):
-        count=original_write(fd,data)
+        count = original_write(fd, data)
         if not observed and target.exists():
-            opened=os.fstat(fd);named=target.stat()
-            if (opened.st_dev,opened.st_ino)==(named.st_dev,named.st_ino):
+            opened = os.fstat(fd)
+            named = target.stat()
+            if (opened.st_dev, opened.st_ino) == (named.st_dev, named.st_ino):
                 observed.append(count)
                 if external is not None:
-                    target.write_bytes(external);target.chmod(0o600)
+                    target.write_bytes(external)
+                    target.chmod(0o600)
                 task.cancel()
         return count
-    with patch('configurator.recovery.os.write',side_effect=write):
-        task=asyncio.create_task(session.checkpoint(record,blobs))
+
+    with patch("configurator.recovery.os.write", side_effect=write):
+        task = asyncio.create_task(session.checkpoint(record, blobs))
         try:
             with suppress(asyncio.CancelledError):
                 await task
         finally:
-            if not task.done():task.cancel()
-            await asyncio.gather(task,return_exceptions=True)
-    if not observed:raise AssertionError('Checkpoint never wrote the selected new blob')
-    if not task.cancelled():raise AssertionError('Checkpoint did not honor write-boundary cancellation')
-    return target,observed[0]
+            if not task.done():
+                task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+    if not observed:
+        raise AssertionError("Checkpoint never wrote the selected new blob")
+    if not task.cancelled():
+        raise AssertionError("Checkpoint did not honor write-boundary cancellation")
+    return target, observed[0]
 
 
 class RecoveryTests(RecoveryFixture, unittest.IsolatedAsyncioTestCase):
-
     async def test_entry_is_readonly_and_invalid_draft_roundtrips_without_execution(self):
-        self.assertEqual(self.store.entries(),[]);self.assertEqual(list(self.root.iterdir()),[])
-        session=self.session();record,blobs=self.proposal(renderer='$(must-not-execute)')
-        sha=await session.checkpoint(record,blobs)
-        self.assertTrue(self.store.entries()[0]['active'])
-        with self.assertRaisesRegex(ValueError,'active'):self.store.load(session.identity)
-        session.close();recovered=self.store.load(session.identity)
-        self.assertEqual(recovered.record['current'],record['current']);self.assertEqual(recovered.revision,sha)
-        self.assertEqual(recovered.record['baseline'],self.baseline);self.assertEqual(recovered.config,SAMPLE.read_bytes())
-        self.assertFalse((self.root/'config').exists());self.assertFalse((self.root/'must-not-execute').exists())
-        self.assertEqual(self.store.path.stat().st_mode&0o777,0o700)
-        self.assertTrue(all(p.stat().st_mode&0o077==0 for p in self.store.path.rglob('*')))
+        self.assertEqual(self.store.entries(), [])
+        self.assertEqual(list(self.root.iterdir()), [])
+        session = self.session()
+        record, blobs = self.proposal(renderer="$(must-not-execute)")
+        sha = await session.checkpoint(record, blobs)
+        self.assertTrue(self.store.entries()[0]["active"])
+        with self.assertRaisesRegex(ValueError, "active"):
+            self.store.load(session.identity)
+        session.close()
+        recovered = self.store.load(session.identity)
+        self.assertEqual(recovered.record["current"], record["current"])
+        self.assertEqual(recovered.revision, sha)
+        self.assertEqual(recovered.record["baseline"], self.baseline)
+        self.assertEqual(recovered.config, SAMPLE.read_bytes())
+        self.assertFalse((self.root / "config").exists())
+        self.assertFalse((self.root / "must-not-execute").exists())
+        self.assertEqual(self.store.path.stat().st_mode & 0o777, 0o700)
+        self.assertTrue(all(p.stat().st_mode & 0o077 == 0 for p in self.store.path.rglob("*")))
 
     async def test_three_writes_keep_two_complete_revisions_and_reuse_objects(self):
-        session=self.session();revisions=[]
-        for latitude in ('-x','20','30'):
-            record,blobs=self.proposal(latitude=latitude);revisions.append(await session.checkpoint(record,blobs))
-        with self.store.session(session.identity) as fd:self.assertEqual(head(fd),list(reversed(revisions[-2:])))
-        files=list((self.store.path/session.identity).iterdir())
-        self.assertEqual(len([p for p in files if p.name.endswith('.json')]),3) # head + two manifests
-        self.assertEqual(len([p for p in files if len(p.name)==64]),1) # shared body bytes
-        session.close();self.assertEqual(self.store.load(session.identity).record['current']['latitude'],'30')
+        session = self.session()
+        revisions = []
+        for latitude in ("-x", "20", "30"):
+            record, blobs = self.proposal(latitude=latitude)
+            revisions.append(await session.checkpoint(record, blobs))
+        with self.store.session(session.identity) as fd:
+            self.assertEqual(head(fd), list(reversed(revisions[-2:])))
+        files = list((self.store.path / session.identity).iterdir())
+        self.assertEqual(
+            len([p for p in files if p.name.endswith(".json")]), 3
+        )  # head + two manifests
+        self.assertEqual(len([p for p in files if len(p.name) == 64]), 1)  # shared body bytes
+        session.close()
+        self.assertEqual(self.store.load(session.identity).record["current"]["latitude"], "30")
 
     async def test_corrupt_latest_falls_back_and_never_repairs_or_deletes(self):
-        session=self.session();first=await session.checkpoint(*self.proposal(latitude='10'));second=await session.checkpoint(*self.proposal(latitude='20'));session.close()
-        bad=self.store.path/session.identity/(second+'.json');bad.write_bytes(b'broken')
-        before={p.name:p.read_bytes() for p in bad.parent.iterdir()}
-        recovered=self.store.load(session.identity);self.assertTrue(recovered.fallback);self.assertEqual(recovered.revision,first)
-        self.assertEqual(before,{p.name:p.read_bytes() for p in bad.parent.iterdir()})
-        with self.assertRaises(ValueError):self.store.discard(session.identity)
-        self.assertEqual(bad.read_bytes(),b'broken')
+        session = self.session()
+        first = await session.checkpoint(*self.proposal(latitude="10"))
+        second = await session.checkpoint(*self.proposal(latitude="20"))
+        session.close()
+        bad = self.store.path / session.identity / (second + ".json")
+        bad.write_bytes(b"broken")
+        before = {p.name: p.read_bytes() for p in bad.parent.iterdir()}
+        recovered = self.store.load(session.identity)
+        self.assertTrue(recovered.fallback)
+        self.assertEqual(recovered.revision, first)
+        self.assertEqual(before, {p.name: p.read_bytes() for p in bad.parent.iterdir()})
+        with self.assertRaises(ValueError):
+            self.store.discard(session.identity)
+        self.assertEqual(bad.read_bytes(), b"broken")
 
     async def test_failure_before_atomic_head_keeps_previous_complete_checkpoint(self):
-        session=self.session();first=await session.checkpoint(*self.proposal())
-        with patch('configurator.recovery.os.replace',side_effect=OSError('disk failure')),self.assertRaises(OSError):await session.checkpoint(*self.proposal(latitude='10'))
-        session.close();self.assertEqual(self.store.load(session.identity).revision,first)
-        self.assertFalse(any(p.name.startswith('.pending-') for p in (self.store.path/session.identity).iterdir()))
+        session = self.session()
+        first = await session.checkpoint(*self.proposal())
+        with (
+            patch("configurator.recovery.os.replace", side_effect=OSError("disk failure")),
+            self.assertRaises(OSError),
+        ):
+            await session.checkpoint(*self.proposal(latitude="10"))
+        session.close()
+        self.assertEqual(self.store.load(session.identity).revision, first)
+        self.assertFalse(
+            any(
+                p.name.startswith(".pending-")
+                for p in (self.store.path / session.identity).iterdir()
+            )
+        )
 
     async def test_cancellation_after_commit_does_not_erase_published_revision(self):
-        session=self.session();await session.checkpoint(*self.proposal())
-        with patch.object(session,'_prune',side_effect=asyncio.CancelledError),self.assertRaises(asyncio.CancelledError):await session.checkpoint(*self.proposal(latitude='25'))
-        session.close();self.assertEqual(self.store.load(session.identity).record['current']['latitude'],'25')
+        session = self.session()
+        await session.checkpoint(*self.proposal())
+        with (
+            patch.object(session, "_prune", side_effect=asyncio.CancelledError),
+            self.assertRaises(asyncio.CancelledError),
+        ):
+            await session.checkpoint(*self.proposal(latitude="25"))
+        session.close()
+        self.assertEqual(self.store.load(session.identity).record["current"]["latitude"], "25")
 
     async def test_budget_failure_does_not_evict_another_unsaved_session(self):
-        first=self.session();await first.checkpoint(*self.proposal());first.close()
-        original={str(p.relative_to(self.store.path)):p.read_bytes() for p in self.store.path.rglob('*') if p.is_file()}
-        self.store.budget=1;second=self.session()
-        with self.assertRaisesRegex(ValueError,'budget'):await second.checkpoint(*self.proposal(latitude='30'))
-        self.assertEqual(self.store.load(first.identity).record['current'],self.current)
-        for name,data in original.items():self.assertEqual((self.store.path/name).read_bytes(),data)
+        first = self.session()
+        await first.checkpoint(*self.proposal())
+        first.close()
+        original = {
+            str(p.relative_to(self.store.path)): p.read_bytes()
+            for p in self.store.path.rglob("*")
+            if p.is_file()
+        }
+        self.store.budget = 1
+        second = self.session()
+        with self.assertRaisesRegex(ValueError, "budget"):
+            await second.checkpoint(*self.proposal(latitude="30"))
+        self.assertEqual(self.store.load(first.identity).record["current"], self.current)
+        for name, data in original.items():
+            self.assertEqual((self.store.path / name).read_bytes(), data)
 
     async def test_nonblocking_lock_and_distinct_sessions_preserve_concurrent_editors(self):
-        first,second=self.session(),self.session();await first.checkpoint(*self.proposal())
-        with self.store.directory() as fd,self.store.lock(fd):
-            with self.assertRaisesRegex(ValueError,'busy'):await second.checkpoint(*self.proposal(latitude='40'))
-        await second.checkpoint(*self.proposal(latitude='40'))
-        self.assertNotEqual(first.identity,second.identity)
-        with self.assertRaisesRegex(ValueError,'Active'):self.store.discard(first.identity)
-        first.close();second.close();self.assertEqual(len(self.store.entries()),2)
-        self.assertEqual(self.store.load(first.identity).record['current']['latitude'],'-x')
-        self.assertEqual(self.store.load(second.identity).record['current']['latitude'],'40')
+        first, second = self.session(), self.session()
+        await first.checkpoint(*self.proposal())
+        with self.store.directory() as fd, self.store.lock(fd):
+            with self.assertRaisesRegex(ValueError, "busy"):
+                await second.checkpoint(*self.proposal(latitude="40"))
+        await second.checkpoint(*self.proposal(latitude="40"))
+        self.assertNotEqual(first.identity, second.identity)
+        with self.assertRaisesRegex(ValueError, "Active"):
+            self.store.discard(first.identity)
+        first.close()
+        second.close()
+        self.assertEqual(len(self.store.entries()), 2)
+        self.assertEqual(self.store.load(first.identity).record["current"]["latitude"], "-x")
+        self.assertEqual(self.store.load(second.identity).record["current"]["latitude"], "40")
 
     async def test_links_and_private_permission_violations_refuse_without_chmod(self):
-        outside=self.root/'outside';outside.mkdir();(self.root/'.state').symlink_to(outside,target_is_directory=True)
-        with self.assertRaises(ValueError):await self.session().checkpoint(*self.proposal())
-        self.assertEqual(list(outside.iterdir()),[]);(self.root/'.state').unlink()
-        session=self.session();sha=await session.checkpoint(*self.proposal());session.close()
-        parent=self.store.path/session.identity;file=parent/(sha+'.json');file.chmod(0o644)
-        with self.assertRaises(ValueError):self.store.load(session.identity)
-        self.assertEqual(file.stat().st_mode&0o777,0o644)
+        outside = self.root / "outside"
+        outside.mkdir()
+        (self.root / ".state").symlink_to(outside, target_is_directory=True)
+        with self.assertRaises(ValueError):
+            await self.session().checkpoint(*self.proposal())
+        self.assertEqual(list(outside.iterdir()), [])
+        (self.root / ".state").unlink()
+        session = self.session()
+        sha = await session.checkpoint(*self.proposal())
+        session.close()
+        parent = self.store.path / session.identity
+        file = parent / (sha + ".json")
+        file.chmod(0o644)
+        with self.assertRaises(ValueError):
+            self.store.load(session.identity)
+        self.assertEqual(file.stat().st_mode & 0o777, 0o644)
 
     async def test_explicit_discard_removes_only_verified_session_and_refuses_extra_material(self):
-        first,second=self.session(),self.session();await first.checkpoint(*self.proposal());await second.checkpoint(*self.proposal(latitude='5'));first.close();second.close()
-        extra=self.store.path/first.identity/'personal-note';extra.write_text('keep');extra.chmod(0o600)
-        with self.assertRaisesRegex(ValueError,'Unrecognized'):self.store.discard(first.identity)
-        self.assertEqual(extra.read_text(),'keep');extra.unlink()
-        self.store.discard(first.identity);self.assertFalse((self.store.path/first.identity).exists())
-        self.assertEqual(self.store.load(second.identity).record['current']['latitude'],'5')
+        first, second = self.session(), self.session()
+        await first.checkpoint(*self.proposal())
+        await second.checkpoint(*self.proposal(latitude="5"))
+        first.close()
+        second.close()
+        extra = self.store.path / first.identity / "personal-note"
+        extra.write_text("keep")
+        extra.chmod(0o600)
+        with self.assertRaisesRegex(ValueError, "Unrecognized"):
+            self.store.discard(first.identity)
+        self.assertEqual(extra.read_text(), "keep")
+        extra.unlink()
+        self.store.discard(first.identity)
+        self.assertFalse((self.store.path / first.identity).exists())
+        self.assertEqual(self.store.load(second.identity).record["current"]["latitude"], "5")
 
     async def test_oversized_and_unsupported_fields_are_not_serialized(self):
-        for change in ({'projection':'unknown'},{'latitude':'x'*262145},{'renderer':'bad\x1bpath'},{'capture_id':'0'*64}):
-            with self.subTest(change=list(change)),self.assertRaises(ValueError):self.proposal(**change)
+        for change in (
+            {"projection": "unknown"},
+            {"latitude": "x" * 262145},
+            {"renderer": "bad\x1bpath"},
+            {"capture_id": "0" * 64},
+        ):
+            with self.subTest(change=list(change)), self.assertRaises(ValueError):
+                self.proposal(**change)
         self.assertFalse(self.store.path.exists())
 
     async def test_frozen_cloud_and_observations_recover_after_sources_are_gone(self):
         from tests.configurator.support_cloud import CloudCaptureFixture
         from tests.configurator.support_observations import ObservationCaptureFixture
-        cloud_fixture=prepare_fixture(self,CloudCaptureFixture)
-        obs_fixture=prepare_fixture(self,ObservationCaptureFixture)
-        cloud=cloud_fixture.capture();observed=obs_fixture.capture();self.w.register_capture(cloud);self.w.register_observations(observed)
-        session=self.session();record,blobs=self.proposal(capture_id=cloud.identity,clouds='captured',observations_id=observed.identity,storm_layer='captured')
-        await session.checkpoint(record,blobs)
-        original={p.name:(p.stat().st_mtime_ns,p.read_bytes()) for p in (self.store.path/session.identity).iterdir() if len(p.name)==64}
-        newer={**record,'at':record['at']+1,'current':{**record['current'],'latitude':'other-invalid'}}
-        await session.checkpoint(newer,blobs)
-        for name,(stamp,raw) in original.items():
-            path=self.store.path/session.identity/name;self.assertEqual(path.stat().st_mtime_ns,stamp);self.assertEqual(path.read_bytes(),raw)
-        session.close();cloud_fixture.tmp.cleanup();obs_fixture.temp.cleanup()
-        recovered=self.store.load(session.identity)
-        self.assertEqual(recovered.clouds,(cloud,));self.assertEqual(recovered.observations,(observed,))
-        stored=b''.join(p.read_bytes() for p in (self.store.path/session.identity).iterdir() if p.name.endswith('.json'))
-        self.assertNotIn(b'PrivatePassword',stored);self.assertNotIn(b'PrivateUser',stored)
-        self.assertNotIn(str(cloud_fixture.root).encode(),stored);self.assertNotIn(str(obs_fixture.root).encode(),stored)
+
+        cloud_fixture = prepare_fixture(self, CloudCaptureFixture)
+        obs_fixture = prepare_fixture(self, ObservationCaptureFixture)
+        cloud = cloud_fixture.capture()
+        observed = obs_fixture.capture()
+        self.w.register_capture(cloud)
+        self.w.register_observations(observed)
+        session = self.session()
+        record, blobs = self.proposal(
+            capture_id=cloud.identity,
+            clouds="captured",
+            observations_id=observed.identity,
+            storm_layer="captured",
+        )
+        await session.checkpoint(record, blobs)
+        original = {
+            p.name: (p.stat().st_mtime_ns, p.read_bytes())
+            for p in (self.store.path / session.identity).iterdir()
+            if len(p.name) == 64
+        }
+        newer = {
+            **record,
+            "at": record["at"] + 1,
+            "current": {**record["current"], "latitude": "other-invalid"},
+        }
+        await session.checkpoint(newer, blobs)
+        for name, (stamp, raw) in original.items():
+            path = self.store.path / session.identity / name
+            self.assertEqual(path.stat().st_mtime_ns, stamp)
+            self.assertEqual(path.read_bytes(), raw)
+        session.close()
+        cloud_fixture.tmp.cleanup()
+        obs_fixture.temp.cleanup()
+        recovered = self.store.load(session.identity)
+        self.assertEqual(recovered.clouds, (cloud,))
+        self.assertEqual(recovered.observations, (observed,))
+        stored = b"".join(
+            p.read_bytes()
+            for p in (self.store.path / session.identity).iterdir()
+            if p.name.endswith(".json")
+        )
+        self.assertNotIn(b"PrivatePassword", stored)
+        self.assertNotIn(b"PrivateUser", stored)
+        self.assertNotIn(str(cloud_fixture.root).encode(), stored)
+        self.assertNotIn(str(obs_fixture.root).encode(), stored)
 
     async def test_cancelled_blob_write_preserves_old_head_and_external_material(self):
         from tests.configurator.support_cloud import CloudCaptureFixture
-        fixture=prepare_fixture(self,CloudCaptureFixture)
-        frozen=fixture.capture();self.w.register_capture(frozen)
-        session=self.session();old=await session.checkpoint(*self.proposal())
-        record,blobs=self.proposal(capture_id=frozen.identity,clouds='captured')
-        new,written=await cancel_at_blob_write(session,record,blobs,digest(frozen.image),b'external edit')
-        self.assertGreater(written,0)
-        self.assertEqual(new.read_bytes(),b'external edit')
-        session.close();self.assertEqual(self.store.load(session.identity).revision,old)
+
+        fixture = prepare_fixture(self, CloudCaptureFixture)
+        frozen = fixture.capture()
+        self.w.register_capture(frozen)
+        session = self.session()
+        old = await session.checkpoint(*self.proposal())
+        record, blobs = self.proposal(capture_id=frozen.identity, clouds="captured")
+        new, written = await cancel_at_blob_write(
+            session, record, blobs, digest(frozen.image), b"external edit"
+        )
+        self.assertGreater(written, 0)
+        self.assertEqual(new.read_bytes(), b"external edit")
+        session.close()
+        self.assertEqual(self.store.load(session.identity).revision, old)
 
     async def test_cancellation_before_commit_cleans_only_owned_partial_bytes(self):
         from tests.configurator.support_cloud import CloudCaptureFixture
-        fixture=prepare_fixture(self,CloudCaptureFixture)
-        frozen=fixture.capture();self.w.register_capture(frozen)
-        session=self.session();old=await session.checkpoint(*self.proposal())
-        record,blobs=self.proposal(capture_id=frozen.identity,clouds='captured')
-        original={p.name:p.read_bytes() for p in (self.store.path/session.identity).iterdir()}
-        _,written=await cancel_at_blob_write(session,record,blobs,digest(frozen.image))
-        self.assertGreater(written,0)
-        self.assertEqual(original,{p.name:p.read_bytes() for p in (self.store.path/session.identity).iterdir()})
-        session.close();self.assertEqual(self.store.load(session.identity).revision,old)
+
+        fixture = prepare_fixture(self, CloudCaptureFixture)
+        frozen = fixture.capture()
+        self.w.register_capture(frozen)
+        session = self.session()
+        old = await session.checkpoint(*self.proposal())
+        record, blobs = self.proposal(capture_id=frozen.identity, clouds="captured")
+        original = {p.name: p.read_bytes() for p in (self.store.path / session.identity).iterdir()}
+        _, written = await cancel_at_blob_write(session, record, blobs, digest(frozen.image))
+        self.assertGreater(written, 0)
+        self.assertEqual(
+            original,
+            {p.name: p.read_bytes() for p in (self.store.path / session.identity).iterdir()},
+        )
+        session.close()
+        self.assertEqual(self.store.load(session.identity).revision, old)
 
     async def test_hash_shaped_unindexed_user_material_is_never_adopted_for_pruning(self):
-        session=self.session();await session.checkpoint(*self.proposal(latitude='1'))
-        raw=b'private unrelated material';extra=self.store.path/session.identity/(digest(raw)+'.json');extra.write_bytes(raw);extra.chmod(0o600)
-        await session.checkpoint(*self.proposal(latitude='2'));await session.checkpoint(*self.proposal(latitude='3'))
-        self.assertEqual(extra.read_bytes(),raw);session.close()
-        with self.assertRaisesRegex(ValueError,'Unrecognized'):self.store.discard(session.identity)
+        session = self.session()
+        await session.checkpoint(*self.proposal(latitude="1"))
+        raw = b"private unrelated material"
+        extra = self.store.path / session.identity / (digest(raw) + ".json")
+        extra.write_bytes(raw)
+        extra.chmod(0o600)
+        await session.checkpoint(*self.proposal(latitude="2"))
+        await session.checkpoint(*self.proposal(latitude="3"))
+        self.assertEqual(extra.read_bytes(), raw)
+        session.close()
+        with self.assertRaisesRegex(ValueError, "Unrecognized"):
+            self.store.discard(session.identity)
+
 
 class DraftSessionTests(unittest.IsolatedAsyncioTestCase):
-    setUp=RecoveryFixture.setUp
+    setUp = RecoveryFixture.setUp
+
     async def test_debounce_max_delay_flush_and_noop_do_not_rewrite_checkpoint(self):
         from configurator.draft_session import DraftSession
-        notices=[];controller=DraftSession(self.root,lambda:(self.current,self.baseline,SAMPLE.read_bytes(),self.w,''),notices.append)
+
+        notices = []
+        controller = DraftSession(
+            self.root,
+            lambda: (self.current, self.baseline, SAMPLE.read_bytes(), self.w, ""),
+            notices.append,
+        )
         self.addCleanup(controller.close)
-        clock=Mock();clock.time.side_effect=[100.0,100.0,104.7]
-        first_timer,second_timer=Mock(),Mock()
-        clock.call_later.side_effect=[first_timer,second_timer]
-        with patch('configurator.draft_session.asyncio.get_running_loop',return_value=clock):
-            controller.changed();controller.changed()
-        self.assertEqual(controller.first_pending,100.0)
-        self.assertEqual(clock.call_later.call_count,2)
-        self.assertEqual(clock.call_later.call_args_list[0].args,(1,controller.start))
-        self.assertAlmostEqual(clock.call_later.call_args_list[1].args[0],.3)
-        self.assertEqual(clock.call_later.call_args_list[1].args[1],controller.start)
+        clock = Mock()
+        clock.time.side_effect = [100.0, 100.0, 104.7]
+        first_timer, second_timer = Mock(), Mock()
+        clock.call_later.side_effect = [first_timer, second_timer]
+        with patch("configurator.draft_session.asyncio.get_running_loop", return_value=clock):
+            controller.changed()
+            controller.changed()
+        self.assertEqual(controller.first_pending, 100.0)
+        self.assertEqual(clock.call_later.call_count, 2)
+        self.assertEqual(clock.call_later.call_args_list[0].args, (1, controller.start))
+        self.assertAlmostEqual(clock.call_later.call_args_list[1].args[0], 0.3)
+        self.assertEqual(clock.call_later.call_args_list[1].args[1], controller.start)
         first_timer.cancel.assert_called_once_with()
-        self.assertTrue(await controller.flush());identity=controller.last_complete
-        self.assertTrue(await controller.flush());self.assertEqual(controller.last_complete,identity)
-        await controller.discard_current();self.assertFalse((controller.store.path/identity[0]).exists())
+        self.assertTrue(await controller.flush())
+        identity = controller.last_complete
+        self.assertTrue(await controller.flush())
+        self.assertEqual(controller.last_complete, identity)
+        await controller.discard_current()
+        self.assertFalse((controller.store.path / identity[0]).exists())
         await controller.stop()
 
     async def test_document_boundary_retains_earlier_complete_session(self):
         from configurator.draft_session import DraftSession
-        controller=DraftSession(self.root,lambda:(self.current,self.baseline,SAMPLE.read_bytes(),self.w,''),lambda text:None)
+
+        controller = DraftSession(
+            self.root,
+            lambda: (self.current, self.baseline, SAMPLE.read_bytes(), self.w, ""),
+            lambda text: None,
+        )
         self.addCleanup(controller.close)
-        await controller.flush();old=controller.session.identity;controller.boundary()
-        self.current['latitude']='50';await controller.flush();new=controller.session.identity
-        self.assertNotEqual(old,new);await controller.stop();controller.close()
-        self.assertEqual(controller.store.load(old).record['current']['latitude'],'-x')
-        self.assertEqual(controller.store.load(new).record['current']['latitude'],'50')
+        await controller.flush()
+        old = controller.session.identity
+        controller.boundary()
+        self.current["latitude"] = "50"
+        await controller.flush()
+        new = controller.session.identity
+        self.assertNotEqual(old, new)
+        await controller.stop()
+        controller.close()
+        self.assertEqual(controller.store.load(old).record["current"]["latitude"], "-x")
+        self.assertEqual(controller.store.load(new).record["current"]["latitude"], "50")
+
 
 class RecoveryDirectoryTests(unittest.IsolatedAsyncioTestCase):
-    setUp=RecoveryFixture.setUp
-    session=RecoveryFixture.session
-    proposal=RecoveryFixture.proposal
+    setUp = RecoveryFixture.setUp
+    session = RecoveryFixture.session
+    proposal = RecoveryFixture.proposal
 
     async def test_moved_recovery_root_never_writes_replacement_directory(self):
-        session=self.session();old=await session.checkpoint(*self.proposal());moved=self.root/'moved-drafts';original=os.replace
-        def replace(source,target,*args,**kwargs):
-            self.store.path.rename(moved);self.store.path.mkdir(mode=0o700);sentinel=self.store.path/'keep';sentinel.write_bytes(b'concurrent material');sentinel.chmod(0o600)
-            return original(source,target,*args,**kwargs)
-        with patch('configurator.recovery.os.replace',side_effect=replace),self.assertRaises(ValueError):await session.checkpoint(*self.proposal(latitude='15'))
-        self.assertEqual((self.store.path/'keep').read_bytes(),b'concurrent material')
+        session = self.session()
+        old = await session.checkpoint(*self.proposal())
+        moved = self.root / "moved-drafts"
+        original = os.replace
+
+        def replace(source, target, *args, **kwargs):
+            self.store.path.rename(moved)
+            self.store.path.mkdir(mode=0o700)
+            sentinel = self.store.path / "keep"
+            sentinel.write_bytes(b"concurrent material")
+            sentinel.chmod(0o600)
+            return original(source, target, *args, **kwargs)
+
+        with (
+            patch("configurator.recovery.os.replace", side_effect=replace),
+            self.assertRaises(ValueError),
+        ):
+            await session.checkpoint(*self.proposal(latitude="15"))
+        self.assertEqual((self.store.path / "keep").read_bytes(), b"concurrent material")
         # Held descriptors wrote only into the moved private recovery namespace.
         import json
-        value=json.loads((moved/session.identity/'head.json').read_bytes())
-        self.assertTrue(all((moved/session.identity/(sha+'.json')).exists() for sha in value['revisions']))
+
+        value = json.loads((moved / session.identity / "head.json").read_bytes())
+        self.assertTrue(
+            all((moved / session.identity / (sha + ".json")).exists() for sha in value["revisions"])
+        )
 
     async def test_finder_metadata_does_not_block_checkpoint_and_is_preserved(self):
-        first=self.session();await first.checkpoint(*self.proposal())
-        metadata=self.store.path/'.DS_Store';metadata.write_bytes(b'Finder metadata');metadata.chmod(0o644)
-        second=self.session();await second.checkpoint(*self.proposal(latitude='30'))
-        self.assertEqual(metadata.read_bytes(),b'Finder metadata')
+        first = self.session()
+        await first.checkpoint(*self.proposal())
+        metadata = self.store.path / ".DS_Store"
+        metadata.write_bytes(b"Finder metadata")
+        metadata.chmod(0o644)
+        second = self.session()
+        await second.checkpoint(*self.proposal(latitude="30"))
+        self.assertEqual(metadata.read_bytes(), b"Finder metadata")
         self.assertTrue(self.store.path.exists())
 
     async def test_explicit_discard_includes_only_hash_verified_orphan_objects(self):
-        session=self.session();await session.checkpoint(*self.proposal());session.close()
-        raw=b'unreferenced owned checkpoint object';orphan=self.store.path/session.identity/digest(raw)
-        orphan.write_bytes(raw);orphan.chmod(0o600)
+        session = self.session()
+        await session.checkpoint(*self.proposal())
+        session.close()
+        raw = b"unreferenced owned checkpoint object"
+        orphan = self.store.path / session.identity / digest(raw)
+        orphan.write_bytes(raw)
+        orphan.chmod(0o600)
         self.store.discard(session.identity)
         self.assertFalse(orphan.parent.exists())
 
     async def test_source_hint_controls_do_not_prevent_checkpoint(self):
-        record,blobs=pack(self.current,self.current,SAMPLE.read_bytes(),self.w,'odd\nname\x1b')
-        self.assertEqual(record['source'],'odd name ')
-        session=self.session();await session.checkpoint(record,blobs)
+        record, blobs = pack(
+            self.current, self.current, SAMPLE.read_bytes(), self.w, "odd\nname\x1b"
+        )
+        self.assertEqual(record["source"], "odd name ")
+        session = self.session()
+        await session.checkpoint(record, blobs)

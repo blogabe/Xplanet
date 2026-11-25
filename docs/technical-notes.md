@@ -166,8 +166,8 @@ time was saved. Missing state or unsupported freshness remains unknown.
 `health --live` runs the normal product validators in disposable output roots.
 Normal markers, labels, state, caches and timestamps remain unchanged. It reports
 access separately from content and freshness; valid content alone is not proof
-of current coverage. Disabled optional products are skipped; Santa has no live
-provider. NORAD respects the saved provider cooldown, but probes do not persist
+of current coverage. Disabled optional products are skipped.
+NORAD respects the saved provider cooldown, but probes do not persist
 a new cooldown: avoid repeated live requests. No provider restriction is bypassed.
 
 Use `--json` for structured results. Exit status is 1 for an access failure,
@@ -314,3 +314,11 @@ Unexpected TotalMarker failures retain the generic JSON error and exit status 2.
 Standard error additionally identifies the exception category and a project-relative
 Python source location when available. It omits exception messages, locals, raw
 tracebacks, URLs and absolute host paths; keep the short diagnostic with a bug report.
+
+
+## Retired Santa stub
+
+The unsupported `santa` command had no live provider and is no longer shipped.
+Older configuration keys and saved records are still read for compatibility;
+a valid pending journal from an older install can still complete recovery.
+The upgrade does not delete saved markers, state, or settings.

@@ -1,6 +1,5 @@
-"""Provider-neutral Santa snapshot validation and one-position marker rendering."""
-from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+"""Validate saved snapshots from the retired Santa stub for recovery."""
+from dataclasses import dataclass
 import math
 import re
 
@@ -8,10 +7,6 @@ from .errors import FeedError
 
 TIMESTAMP_LIMIT = 32503680000
 CLOCK_SKEW = 300
-
-
-class SeasonMismatch(FeedError):
-    """A valid snapshot explicitly names a different Santa season."""
 
 
 @dataclass(frozen=True)
@@ -37,7 +32,7 @@ def _number(value, label, low, high):
     return number
 
 
-def validate_snapshot(snapshot, *, now=None):
+def validate_snapshot(snapshot):
     if not isinstance(snapshot, SantaSnapshot):
         raise FeedError("Santa adapter did not return a snapshot")
     if (not isinstance(snapshot.provider_id, str) or not
@@ -57,12 +52,6 @@ def validate_snapshot(snapshot, *, now=None):
         _number(snapshot.longitude, "longitude", -180, 180)
     elif snapshot.latitude is not None or snapshot.longitude is not None:
         raise FeedError("Inactive Santa snapshot has a position")
-    if now is not None:
-        current = _number(now, "clock", 0, TIMESTAMP_LIMIT)
-        if snapshot.season_year != datetime.fromtimestamp(current, timezone.utc).year:
-            raise SeasonMismatch("Santa snapshot belongs to another season")
-        if abs(retrieved - current) > CLOCK_SKEW or source > current + CLOCK_SKEW:
-            raise FeedError("Santa snapshot times disagree with the current clock")
     return snapshot
 
 
@@ -70,37 +59,3 @@ def snapshot_from_record(value):
     if not isinstance(value, dict) or set(value) != set(SantaSnapshot.__dataclass_fields__):
         raise FeedError("Saved Santa snapshot is invalid")
     return validate_snapshot(SantaSnapshot(**value))
-
-
-def snapshot_record(snapshot):
-    return asdict(validate_snapshot(snapshot))
-
-
-def season_active(now):
-    current = _number(now, "clock", 0, TIMESTAMP_LIMIT)
-    date = datetime.fromtimestamp(current, timezone.utc)
-    return date.month == 12 and 23 <= date.day <= 25
-
-
-def fresh(snapshot, now, freshness_seconds):
-    validate_snapshot(snapshot)
-    current = _number(now, "clock", 0, TIMESTAMP_LIMIT)
-    return (snapshot.lifecycle == "tracking" and freshness_seconds > 0
-            and -CLOCK_SKEW <= current - snapshot.source_at <= freshness_seconds)
-
-
-def render_marker(snapshot, *, stale=False):
-    """Render no route or icon dependency: one symbol and an honest UTC caption."""
-    if snapshot is None:
-        return b""
-    validate_snapshot(snapshot)
-    if snapshot.lifecycle != "tracking":
-        return b""
-    stamp = datetime.fromtimestamp(snapshot.source_at, timezone.utc).strftime("%Y-%m-%d %H:%M")
-    caption = (f"Santa (stale; reported {stamp} UTC)" if stale
-               else f"Santa (reported {stamp} UTC)")
-    color = "Yellow" if stale else "Red"
-    point = f"{snapshot.latitude:.4f} {snapshot.longitude:.4f}"
-    return (f'# Santa position from {snapshot.provider_id} at {stamp} UTC\n'
-            f'{point} "" color={color} symbolsize=6\n'
-            f'{point} "{caption}" color={color} align=Above\n').encode("ascii")

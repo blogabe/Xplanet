@@ -15,7 +15,6 @@ from .features.storm import run as run_storm
 from .features.norad import run as run_norad
 from .features.eclipse import run as run_eclipse
 from .features.aurora import run as run_aurora
-from .features.santa import run as run_santa
 from .paths import RootFS
 from .log_trim import trim as trim_log
 from .log_view import view as view_log
@@ -63,7 +62,7 @@ def _main(argv=None):
     parser = argparse.ArgumentParser(prog="totalmarker")
     parser.add_argument("--root", required=True, help="Existing isolated project root")
     parser.add_argument("--config", help="INI or TOML path within root (never rewritten)")
-    parser.add_argument("command", choices=["clouds", "labels", "quake", "storm", "volcano", "norad", "eclipse", "aurora", "santa", "health", "log-trim", "log-view"])
+    parser.add_argument("command", choices=["clouds", "labels", "quake", "storm", "volcano", "norad", "eclipse", "aurora", "health", "log-trim", "log-view"])
     parser.add_argument("--live", action="store_true", help="Health: validate sources in a temporary root")
     parser.add_argument("--json", action="store_true", help="Health: output structured JSON")
     parser.add_argument("--verbose", action="store_true", help="Health: include source and diagnostic details")
@@ -117,8 +116,6 @@ def _main(argv=None):
             result = run_norad(fs, settings)
         elif args.command == "eclipse":
             result = run_eclipse(fs, settings)
-        elif args.command == "santa":
-            result = run_santa(fs, settings)
         else:
             result = run(fs, settings, label_only=args.command == "labels")
         fields = asdict(result)

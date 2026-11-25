@@ -466,7 +466,7 @@ separate. No network request is made by saved health.
 - Eclipse predictions show event phase (upcoming, active, ended or unknown) and
   whether the producer's overlay is enabled or hidden. Their age is not treated
   as generic observational freshness, and this does not verify desktop display.
-- Disabled sources remain disabled; Santa has no supported live provider.
+- Disabled sources remain disabled.
 
 A recorded refresh failure remains a failure even while retained source data is
 recent. Cached success timestamps alone do not prove recent provider access.

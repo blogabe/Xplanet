@@ -4,6 +4,7 @@ Stored records keep their existing schema. New checks add actual request attempt
 and bounded last-error facts; views derive common names instead of duplicating
 source timestamps or treating local checks as successful HTTP requests.
 """
+import json
 import math
 
 from .errors import StorageError
@@ -34,6 +35,15 @@ def finish(record, now, outcome, message, attempt):
     record['last_outcome'] = outcome
     if outcome == 'failed':
         record['last_error'] = {'at': now, 'message': ' '.join(message.split())[:500].rstrip()}
+
+
+def append_event(fs, path, event):
+    """Append a product-owned diagnostic event; report storage failure to its caller."""
+    try:
+        fs.append(path, (json.dumps(event) + "\n").encode())
+    except StorageError:
+        return False
+    return True
 
 
 def success_at(record):
