@@ -604,8 +604,8 @@ def _norad_collections(values):
         if not isinstance(row, dict) or "catalog_id" not in row:
             raise ConfigError("NORAD profile requires catalog_id")
         catalog_id = row["catalog_id"]
-        if type(catalog_id) is not int or not 1 <= catalog_id <= 99999:
-            raise ConfigError("NORAD profile ID must fit Xplanet TLE format")
+        if type(catalog_id) is not int or not 1 <= catalog_id <= 339999:
+            raise ConfigError("NORAD profile ID must be between 1 and 339999")
         style = _norad_style({key: value for key, value in row.items()
                               if key != "catalog_id"})
         parsed_profiles.append(NoradProfile(catalog_id, style))
@@ -860,8 +860,9 @@ def _read_norad(reader):
         raise ConfigError("NoradEnabled must be On or Off")
     raw_ids = reader.get("NoradCatalogIds").strip()
     id_parts = [part.strip() for part in raw_ids.split(",")] if raw_ids else []
-    if any(not re.fullmatch(r"[1-9][0-9]{0,4}", part) for part in id_parts):
-        raise ConfigError("NORAD TLE catalog IDs must be one to five decimal digits")
+    if any(not re.fullmatch(r"[1-9][0-9]{0,5}", part) or int(part) > 339999
+           for part in id_parts):
+        raise ConfigError("NORAD catalog IDs must be between 1 and 339999")
     catalog_ids = tuple(int(part) for part in id_parts)
     if len(catalog_ids) > 16 or len(set(catalog_ids)) != len(catalog_ids):
         raise ConfigError("NORAD catalog IDs must be distinct and contain at most 16 entries")

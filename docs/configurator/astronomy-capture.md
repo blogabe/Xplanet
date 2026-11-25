@@ -39,8 +39,8 @@ performs no network access.
 
 ## NORAD policy
 
-- Require a nonempty, coherent selection of 1–16 representable one-to-five-digit
-  catalog IDs and matching selector/TLE rows.
+- Require a nonempty, coherent selection of 1–16 representable catalog IDs and matching
+  selector/TLE rows. Captured IDs above 99999 require an Alpha-5 renderer.
 - Reuse TotalMarker's actual TLE checksum, orbital-field and epoch validator;
   require the saved oldest epoch to match the parsed elements. The saved configured
   maximum age is preserved. Future-epoch tolerance remains the producer's 24 hours.

@@ -121,7 +121,7 @@ def satellite_pair(first, second, metadata):
     if (
         not isinstance(ids, list)
         or not 1 <= len(ids) <= 16
-        or any(type(i) is not int or not 1 <= i <= 99999 for i in ids)
+        or any(type(i) is not int or not 1 <= i <= 339999 for i in ids)
         or len(set(ids)) != len(ids)
         or type(max_age) is not int
         or not 1 <= max_age <= 2**31
@@ -142,7 +142,7 @@ def satellite_pair(first, second, metadata):
         if icon:
             row = row[: icon.start()] + row[icon.end() :]
         match = re.fullmatch(
-            r'([0-9]{1,5}) "([A-Za-z0-9 ._()/+ -]{0,64})" color=([^ ]+) trail=\{orbit,(-?[0-9]+),(-?[0-9]+),([0-9]+)\}(?: transparent=\{([0-9]+),([0-9]+),([0-9]+)\})?(?: altcirc=([0-9]+))?(?: align=(right|left|above|below|center))?',
+            r'([0-9]{1,6}) "([A-Za-z0-9 ._()/+ -]{0,64})" color=([^ ]+) trail=\{orbit,(-?[0-9]+),(-?[0-9]+),([0-9]+)\}(?: transparent=\{([0-9]+),([0-9]+),([0-9]+)\})?(?: altcirc=([0-9]+))?(?: align=(right|left|above|below|center))?',
             row,
         )
         if not match or int(match[1]) != catalog_id or not TOKEN.fullmatch(match[3]):

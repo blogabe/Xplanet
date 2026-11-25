@@ -166,7 +166,7 @@ def _validate_norad_state(norad):
     selected_ids = norad.get("selected_ids")
     if selected_ids is not None and (
             not isinstance(selected_ids, list) or not 0 <= len(selected_ids) <= 16
-            or any(type(item) is not int or not 1 <= item <= 99999
+            or any(type(item) is not int or not 1 <= item <= 339999
                    for item in selected_ids)
             or len(set(selected_ids)) != len(selected_ids)):
         raise StorageError("Invalid NORAD selected IDs")

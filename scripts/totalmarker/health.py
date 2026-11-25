@@ -137,12 +137,16 @@ def saved_norad_freshness(fs, settings, record, output, now):
     try:
         selected = record.get('selected_ids', list(settings.norad.catalog_ids)
                               if not settings.norad.groups else None)
-        if record.get('source_key') != norad._source_key(fs, settings.norad):
+        # Provider freshness is independent of the currently installed renderer.
+        # Validate either publication format without executing a local renderer.
+        if record.get('source_key') not in {
+                norad._source_key(fs, settings.norad, alpha5=False),
+                norad._source_key(fs, settings.norad, alpha5=True)}:
             return 'unknown'
         raw = fs.read(settings.norad.satellite + '.tle', 32 * 1024 * 1024)
         valid = (raw is not None and hashlib.sha256(raw).hexdigest() == record.get('tle_sha256')
                  and norad._icons_valid(fs, record.get('icons', []))
-                 and norad._cached_tles_valid(raw, settings.norad, now, oldest, selected))
+                 and norad._cached_tles_valid(raw, settings.norad, now, oldest, selected, norad.ALPHA5_MAX))
         return 'current' if valid else 'unknown'
     except StorageError:
         return 'unknown'
