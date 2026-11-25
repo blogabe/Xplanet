@@ -25,3 +25,6 @@ tests/fixtures/storm/live-20261124-early-reissue/*.xml -text -whitespace
 # Preserve captured reissued TCFA packet byte for byte.
 tests/fixtures/storm/live-20261124-tcfa-reissued/*.txt -text -whitespace
 tests/fixtures/storm/live-20261124-tcfa-reissued/*.xml -text -whitespace
+
+# Preserve the captured wrapped basin advisory byte for byte.
+tests/fixtures/storm/live-20261125-wrapped-basin/abioweb.txt -text -whitespace

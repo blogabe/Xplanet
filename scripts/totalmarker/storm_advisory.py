@@ -29,8 +29,11 @@ REISSUE_SUBJECT = re.compile(
     r"(?m)^SUBJ/SIGNIFICANT TROPICAL WEATHER ADVISORY FOR THE "
     rf"({INDIAN_REGION}|WESTERN AND SOUTH\s+PACIFIC OCEANS)(?:/|\s+)"
     r"(REISSUED|ISSUED|CORRECTED)/")
-AREA = re.compile(r"(?m)^([12])\.\s+(NORTH INDIAN OCEAN AREA|SOUTH INDIAN OCEAN AREA|"
-                  r"WESTERN NORTH PACIFIC AREA|SOUTH PACIFIC AREA)\b[^\n]*:")
+# Basin names and numbering are fixed; the parenthesized geography may wrap once.
+AREA = re.compile(
+    r"(?m)^([12])\.\s+(NORTH INDIAN OCEAN AREA|SOUTH INDIAN OCEAN AREA|"
+    r"WESTERN NORTH PACIFIC AREA|SOUTH PACIFIC AREA)\b"
+    r"(?:[ \t]+\([^()\r\n:]{1,100}\r?\n[^()\r\n:]{1,100}\):[ \t]*\r?$|[^\n]*:)")
 SUMMARY = re.compile(r"(?m)^\s*([ABC])\.\s+(TROPICAL CYCLONE SUMMARY|"
                      r"TROPICAL DISTURBANCE SUMMARY|SUBTROPICAL SYSTEM SUMMARY):")
 BLOCK = re.compile(r"(?m)^\s*\(([0-9]+)\)\s+")
