@@ -207,7 +207,8 @@ class LogViewTests(Sandbox):
                         self.assertEqual(child.stderr.read(), b"")
                     finally:
                         if child.poll() is None:
-                            child.kill(); child.wait()
+                            child.kill()
+                            child.wait()
                         child.stderr.close()
                     self.assertEqual(self.path.read_bytes(), data)
                     self.assertEqual(log_view._identity(self.path.stat()), before)

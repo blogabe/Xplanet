@@ -3,7 +3,7 @@ import os
 import re
 import subprocess
 
-from .support import copy_launcher, PROJECT, Sandbox
+from .support import copy_launcher, Sandbox
 from .support_terminal import run_with_terminal_stdout
 
 

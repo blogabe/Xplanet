@@ -106,7 +106,8 @@ class ManagementTests(Sandbox):
                         observed=subprocess.run(['/bin/ps','-o','state=','-p',str(proc.pid)],
                                                 capture_output=True,text=True,timeout=1)
                         state=observed.stdout.strip()
-                        if state.startswith('S'):break
+                        if state.startswith('S'):
+                            break
                     self.assertTrue(state.startswith('S'),(state,output))
                 os.write(master,b'\x03')
             elif termination:
@@ -129,10 +130,12 @@ class ManagementTests(Sandbox):
                         observed=subprocess.run(['/bin/ps','-o','state=','-p',str(proc.pid)],
                                                 capture_output=True,text=True,timeout=1)
                         state=observed.stdout.strip()
-                        if termios.tcgetattr(slave)[3] & termios.ICANON and state.startswith('S'):break
+                        if termios.tcgetattr(slave)[3] & termios.ICANON and state.startswith('S'):
+                            break
                     self.assertTrue(termios.tcgetattr(slave)[3] & termios.ICANON,output.decode())
                     self.assertTrue(state.startswith('S'),(state,output))
-                    os.write(master,b'\x03');confirmation_signalled=True
+                    os.write(master,b'\x03')
+                    confirmation_signalled=True
                 if key_marker and key_marker in output:
                     os.write(master, b'q')
                     key_marker = None
@@ -757,67 +760,94 @@ class ManagementTests(Sandbox):
     def test_completed_configurator_changes_do_not_claim_only_a_view_was_saved(self):
         self.write_script(self.scripts/'run-configurator','exit 0\n')
         code,output=self.terminal('2\nq\n')
-        self.assertEqual(code,0);self.assertIn('Configurator closed; saved files and selection retained. Desktop not restarted.',output)
-        self.assertNotIn('View saved; desktop settings unchanged.',output);self.assertEqual(self.calls(),[])
+        self.assertEqual(code,0)
+        self.assertIn('Configurator closed; saved files and selection retained. Desktop not restarted.',output)
+        self.assertNotIn('View saved; desktop settings unchanged.',output)
+        self.assertEqual(self.calls(),[])
 
     def test_uncertain_selection_is_reported_for_inspection_not_as_saved_or_cancelled(self):
         self.write_script(self.scripts/'run-configurator','exit 5\n')
         code,output=self.terminal('2\n q\n')
-        self.assertEqual(code,0);self.assertIn('Selection outcome uncertain; inspect config/desktop.scene',output)
-        self.assertNotIn('Configurator changes saved;',output);self.assertNotIn('Configurator cancelled;',output)
+        self.assertEqual(code,0)
+        self.assertIn('Selection outcome uncertain; inspect config/desktop.scene',output)
+        self.assertNotIn('Configurator changes saved;',output)
+        self.assertNotIn('Configurator cancelled;',output)
         self.assertEqual(self.calls(),[])
 
 
     def test_health_snapshot_is_explicit_cached_and_never_claims_live_or_running_scene(self):
-        (self.root/'config').mkdir();(self.root/'config/totalmarker.toml').write_text('')
+        (self.root/'config').mkdir()
+        (self.root/'config/totalmarker.toml').write_text('')
         code,output=self.terminal('7\n',pause_key=b'x',after_pause='q\n')
-        self.assertEqual(code,0,output);self.assertEqual(self.calls(),['health --dashboard','health --dashboard'])
+        self.assertEqual(code,0,output)
+        self.assertEqual(self.calls(),['health --dashboard','health --dashboard'])
         self.assertRegex(output,r'Snapshot +2026-11-04 12:00Z \(saved evidence, not a live access check')
-        self.assertIn('[?] Clouds',output);self.assertRegex(output,r'Running scene +\[\?\] Not identified')
+        self.assertIn('[?] Clouds',output)
+        self.assertRegex(output,r'Running scene +\[\?\] Not identified')
         self.assertNotIn('Dashboard pending',output)
 
     def test_invalid_selection_is_not_silently_presented_as_legacy(self):
-        (self.root/'config').mkdir();(self.root/'config/desktop.scene').write_text('invalid')
-        before=self.snapshot();code,output=self.terminal('q\n')
-        self.assertEqual(code,0,output);self.assertIn('invalid or unavailable selector',output)
-        self.assertNotRegex(output,r'Next start +custom');self.assertEqual(before,self.snapshot());self.assertEqual(self.calls(),[])
+        (self.root/'config').mkdir()
+        (self.root/'config/desktop.scene').write_text('invalid')
+        before=self.snapshot()
+        code,output=self.terminal('q\n')
+        self.assertEqual(code,0,output)
+        self.assertIn('invalid or unavailable selector',output)
+        self.assertNotRegex(output,r'Next start +custom')
+        self.assertEqual(before,self.snapshot())
+        self.assertEqual(self.calls(),[])
 
     def test_selection_dashboard_binds_metadata_without_certifying_resources(self):
         import hashlib,plistlib
         record={'schema':1,'review':{'root':str(self.root),'scene':'config/scenes/my-scene.conf','geometry':'1920x1080'}}
-        raw=plistlib.dumps(record);identity=hashlib.sha256(raw).hexdigest()
-        revision=self.root/'.state/xplanet/scenes'/identity;revision.mkdir(parents=True)
-        (revision/'deployment.plist').write_bytes(raw);(self.root/'config').mkdir()
+        raw=plistlib.dumps(record)
+        identity=hashlib.sha256(raw).hexdigest()
+        revision=self.root/'.state/xplanet/scenes'/identity
+        revision.mkdir(parents=True)
+        (revision/'deployment.plist').write_bytes(raw)
+        (self.root/'config').mkdir()
         (self.root/'config/desktop.scene').write_text('v1 '+identity+'\n')
-        before=self.snapshot();code,output=self.terminal('q\n')
-        self.assertEqual(code,0,output);self.assertRegex(output,r'Next start +my-scene \(1920x1080\); metadata verified, resources unchecked')
-        self.assertRegex(output,r'Running scene +\[\?\] Not identified');self.assertEqual(before,self.snapshot());self.assertEqual(self.calls(),[])
+        before=self.snapshot()
+        code,output=self.terminal('q\n')
+        self.assertEqual(code,0,output)
+        self.assertRegex(output,r'Next start +my-scene \(1920x1080\); metadata verified, resources unchecked')
+        self.assertRegex(output,r'Running scene +\[\?\] Not identified')
+        self.assertEqual(before,self.snapshot())
+        self.assertEqual(self.calls(),[])
         (revision/'deployment.plist').write_bytes(raw+b' ')
-        code,output=self.terminal('q\n');self.assertIn('invalid or unavailable selector',output)
+        code,output=self.terminal('q\n')
+        self.assertIn('invalid or unavailable selector',output)
 
 
     def test_malformed_health_records_never_become_successful_snapshot(self):
-        (self.root/'config').mkdir();(self.root/'config/totalmarker.toml').write_text('')
+        (self.root/'config').mkdir()
+        (self.root/'config/totalmarker.toml').write_text('')
         for status in (0,1,2):
             self.write_script(self.scripts/'run-totalmarker',f'echo malformed-result; exit {status}\n')
             code,output=self.terminal('7\n',pause_key=b'x',after_pause='q\n')
-            self.assertEqual(code,0,output);self.assertIn('Problem - Health inspection failed',output)
-            self.assertIn('no verified snapshot',output);self.assertNotIn('Saved health completed',output)
+            self.assertEqual(code,0,output)
+            self.assertIn('Problem - Health inspection failed',output)
+            self.assertIn('no verified snapshot',output)
+            self.assertNotIn('Saved health completed',output)
 
     def test_saved_health_global_warning_is_visible_and_cached_as_a_caveat(self):
-        (self.root/'config').mkdir();(self.root/'config/totalmarker.toml').write_text('')
+        (self.root/'config').mkdir()
+        (self.root/'config/totalmarker.toml').write_text('')
         self.write_script(self.scripts/'run-totalmarker',"cat <<'DASHBOARD'\n"+DASHBOARD+"\nnote\tRecorded error log unavailable\nDASHBOARD\n")
         code,output=self.terminal('7\n',pause_key=b'x',after_pause='q\n')
-        self.assertEqual(code,0,output);self.assertIn('Recorded error log unavailable',output)
+        self.assertEqual(code,0,output)
+        self.assertIn('Recorded error log unavailable',output)
         self.assertIn('[!] Status warning; review health details',output)
 
 
     def test_long_completed_result_uses_safe_redraw_instead_of_wrong_cursor_rows(self):
-        self.enhanced_terminal();self.write_script(self.scripts/'run-configurator','exit 0\n')
+        self.enhanced_terminal()
+        self.write_script(self.scripts/'run-configurator','exit 0\n')
         code,output=self.terminal('2\r',menu_steps=[(2,b'\x1b[Bq')])
         self.assertEqual(code,0,output)
         self.assertGreaterEqual(output.count('Xplanet management'),3)
-        self.assertIn('Desktop not restarted.',output);self.assertEqual(self.calls(),[])
+        self.assertIn('Desktop not restarted.',output)
+        self.assertEqual(self.calls(),[])
 
 
     def test_configurator_signal_exit_is_interruption_not_failure_or_rollback(self):
@@ -826,34 +856,50 @@ class ManagementTests(Sandbox):
             code,output=self.terminal('2\nq\n')
             self.assertEqual(code,0,output)
             self.assertIn('Configurator interrupted; completed saves/selections remain. Desktop not restarted.',output)
-            self.assertNotIn('Problem - Configurator',output);self.assertEqual(self.calls(),[])
+            self.assertNotIn('Problem - Configurator',output)
+            self.assertEqual(self.calls(),[])
 
     def test_binary_evidence_is_historical_and_menu_never_executes_probe(self):
         import json
-        evidence=self.root/'.state/configurator/binary-evidence.json';evidence.parent.mkdir(parents=True)
+        evidence=self.root/'.state/configurator/binary-evidence.json'
+        evidence.parent.mkdir(parents=True)
         evidence.write_text(json.dumps({'schema':1,'report':{'status':'reported','completed_utc':'2026-11-04T01:02:03+00:00'}}))
-        before=self.snapshot();code,output=self.terminal('q\n')
-        self.assertEqual(code,0);self.assertIn('Xplanet build',output)
+        before=self.snapshot()
+        code,output=self.terminal('q\n')
+        self.assertEqual(code,0)
+        self.assertIn('Xplanet build',output)
         self.assertIn('reported 2026-11-04T01:02:03Z',output)
         self.assertIn('Features reported 2026-11-04T01:02:03Z; not rechecked',output)
-        self.assertEqual(self.calls(),[]);self.assertEqual(before,self.snapshot())
+        self.assertEqual(self.calls(),[])
+        self.assertEqual(before,self.snapshot())
         evidence.write_text('{broken')
-        code,output=self.terminal('q\n');self.assertEqual(code,0)
-        self.assertIn('Build features not checked; choose Troubleshooting (9)',output);self.assertEqual(self.calls(),[])
+        code,output=self.terminal('q\n')
+        self.assertEqual(code,0)
+        self.assertIn('Build features not checked; choose Troubleshooting (9)',output)
+        self.assertEqual(self.calls(),[])
 
     def test_diagnostic_and_help_entries_are_discoverable_without_activation(self):
-        self.enhanced_terminal();before=self.snapshot()
+        self.enhanced_terminal()
+        before=self.snapshot()
         for keys in ('9q','hq'):
             code,output=self.terminal(keys)
-            self.assertEqual(code,0);self.assertIn('9) Troubleshooting...',output);self.assertIn('h) Help',output)
-            self.assertNotIn('Capture renderer support now?',output);self.assertNotIn('Usage: scripts/xplanet.sh',output)
-        self.assertEqual(self.calls(),[]);self.assertEqual(before,self.snapshot())
+            self.assertEqual(code,0)
+            self.assertIn('9) Troubleshooting...',output)
+            self.assertIn('h) Help',output)
+            self.assertNotIn('Capture renderer support now?',output)
+            self.assertNotIn('Usage: scripts/xplanet.sh',output)
+        self.assertEqual(self.calls(),[])
+        self.assertEqual(before,self.snapshot())
 
     def test_diagnostic_cancellation_is_immediate_and_has_no_probe(self):
-        self.enhanced_terminal();before=self.snapshot()
+        self.enhanced_terminal()
+        before=self.snapshot()
         code,output=self.terminal('9\n3\nn\nq')
-        self.assertEqual(code,0);self.assertIn('Renderer diagnostic was not run.',output)
-        self.assertNotIn('Press any key',output);self.assertEqual(self.calls(),[]);self.assertEqual(before,self.snapshot())
+        self.assertEqual(code,0)
+        self.assertIn('Renderer diagnostic was not run.',output)
+        self.assertNotIn('Press any key',output)
+        self.assertEqual(self.calls(),[])
+        self.assertEqual(before,self.snapshot())
 
     def test_diagnostic_routes_existing_command_and_keeps_unknown_distinct_from_failure(self):
         self.enhanced_terminal()
@@ -861,11 +907,18 @@ class ManagementTests(Sandbox):
             'renderer_diagnostics() { echo diagnostics >> "$TRACE"; print -- "fixture support evidence"; return "$DIAGNOSTIC_RESULT"; }\n')
         for status,message in (('0','Renderer support captured'),('1','renderer support remains unknown'),('2','Renderer inspection failed (exit 2)')):
             self.env['DIAGNOSTIC_RESULT']=status
-            if self.trace.exists():self.trace.unlink()
-            before=self.snapshot();code,output=self.terminal('9\n3\ny\n',pause_key=b' ',after_pause='q')
-            self.assertEqual(code,0,output);self.assertIn('fixture support evidence',output);self.assertIn(message,output)
-            self.assertEqual(output.count('Press any key'),1);self.assertEqual(self.calls(),['diagnostics'])
-            self.assertEqual(before,self.snapshot());self.assertEqual(output.count('\x1b[?1049h'),1);self.assertTrue(output.endswith('\x1b[?1049l'))
+            if self.trace.exists():
+                self.trace.unlink()
+            before=self.snapshot()
+            code,output=self.terminal('9\n3\ny\n',pause_key=b' ',after_pause='q')
+            self.assertEqual(code,0,output)
+            self.assertIn('fixture support evidence',output)
+            self.assertIn(message,output)
+            self.assertEqual(output.count('Press any key'),1)
+            self.assertEqual(self.calls(),['diagnostics'])
+            self.assertEqual(before,self.snapshot())
+            self.assertEqual(output.count('\x1b[?1049h'),1)
+            self.assertTrue(output.endswith('\x1b[?1049l'))
 
     def test_troubleshooting_navigation_and_back_do_not_read_or_probe(self):
         self.enhanced_terminal()
@@ -1005,21 +1058,29 @@ class ManagementTests(Sandbox):
 
     def test_help_routes_existing_usage_and_exposes_detailed_help_without_probe(self):
         for enhanced in (False,True):
-            if enhanced:self.enhanced_terminal()
-            before=self.snapshot();code,output=self.terminal('h\n',pause_key=b' ',after_pause='q\n')
-            self.assertEqual(code,0,output);self.assertIn('Usage: scripts/xplanet.sh [COMMAND [OPTIONS]]',output)
-            self.assertIn('diagnostics --help',output);self.assertIn('config --help',output);self.assertIn('config --guide',output)
+            if enhanced:
+                self.enhanced_terminal()
+            before=self.snapshot()
+            code,output=self.terminal('h\n',pause_key=b' ',after_pause='q\n')
+            self.assertEqual(code,0,output)
+            self.assertIn('Usage: scripts/xplanet.sh [COMMAND [OPTIONS]]',output)
+            self.assertIn('diagnostics --help',output)
+            self.assertIn('config --help',output)
+            self.assertIn('config --guide',output)
             for heading in ('Explore and configure', 'Control the desktop', 'Refresh data (Python TotalMarker)', 'Inspect and troubleshoot'):
                 self.assertIn(heading,output)
             self.assertIn('no probe, setup or service action was run',output)
-            self.assertEqual(self.calls(),[]);self.assertEqual(before,self.snapshot())
+            self.assertEqual(self.calls(),[])
+            self.assertEqual(before,self.snapshot())
 
     def test_help_pause_ctrl_d_and_ctrl_c_restore_terminal_without_actions(self):
         self.enhanced_terminal()
         for key,expected in ((b'\x04',0),(b'\x03',130)):
             code,output=self.terminal('h\n',pause_key=key)
-            self.assertEqual(code,expected,output);self.assertEqual(output.count('\x1b[?1049h'),1)
-            self.assertTrue(output.endswith('\x1b[?1049l'));self.assertEqual(self.calls(),[])
+            self.assertEqual(code,expected,output)
+            self.assertEqual(output.count('\x1b[?1049h'),1)
+            self.assertTrue(output.endswith('\x1b[?1049l'))
+            self.assertEqual(self.calls(),[])
 
     def test_dashboard_spacing_groups_facts_without_hiding_short_terminal_status(self):
         self.enhanced_terminal()
@@ -1083,7 +1144,8 @@ class ManagementTests(Sandbox):
 
     def test_initial_saved_health_runs_once_before_first_dashboard_and_not_navigation(self):
         self.enhanced_terminal()
-        (self.root/'config').mkdir();(self.root/'config/totalmarker.toml').write_text('')
+        (self.root/'config').mkdir()
+        (self.root/'config/totalmarker.toml').write_text('')
         before=self.snapshot()
         code,output=self.terminal('\x1b[B\x1b[Bq')
         self.assertEqual(code,0,output)
@@ -1096,7 +1158,8 @@ class ManagementTests(Sandbox):
         self.assertEqual(before,self.snapshot())
 
     def test_initial_failed_health_keeps_menu_usable_and_unknown(self):
-        (self.root/'config').mkdir();(self.root/'config/totalmarker.toml').write_text('')
+        (self.root/'config').mkdir()
+        (self.root/'config/totalmarker.toml').write_text('')
         self.write_script(self.scripts/'run-totalmarker','echo fixture-error; exit 2\n')
         code,output=self.terminal('q\n')
         self.assertEqual(code,0,output)
@@ -1105,9 +1168,11 @@ class ManagementTests(Sandbox):
         self.assertNotIn('fixture-error',output)
 
     def test_initial_health_timeout_cleans_only_owned_worker_group(self):
-        (self.root/'config').mkdir();(self.root/'config/totalmarker.toml').write_text('')
+        (self.root/'config').mkdir()
+        (self.root/'config/totalmarker.toml').write_text('')
         helper=self.scripts/'lib/xplanet/management-dashboard.zsh'
-        original=helper.read_text();self.assertEqual(original.count('{1..50}'),1)
+        original=helper.read_text()
+        self.assertEqual(original.count('{1..50}'),1)
         helper.write_text(original.replace('{1..50}','{1..3}'))
         self.write_script(self.scripts/'run-totalmarker',
             'echo $$ > "$TRACE.worker"; sleep 20 & echo $! > "$TRACE.child"; wait\n')
@@ -1121,12 +1186,16 @@ class ManagementTests(Sandbox):
                 pid=int(Path(str(self.trace)+suffix).read_text())
                 deadline=time.monotonic()+2
                 while time.monotonic()<deadline:
-                    try:os.kill(pid,0)
-                    except ProcessLookupError:break
+                    try:
+                        os.kill(pid,0)
+                    except ProcessLookupError:
+                        break
                     select.select([],[],[],0.02)
-                else:self.fail(f'Owned health process {pid} survived timeout')
+                else:
+                    self.fail(f'Owned health process {pid} survived timeout')
         finally:
-            unrelated.terminate();unrelated.wait(timeout=3)
+            unrelated.terminate()
+            unrelated.wait(timeout=3)
 
     def test_horizontal_alignment_on_wide_dashboard_preserves_full_narrow_values(self):
         self.enhanced_terminal()
@@ -1146,7 +1215,8 @@ class ManagementTests(Sandbox):
 
     def test_startup_ctrl_c_restores_screen_and_cleans_owned_health_group(self):
         self.enhanced_terminal()
-        (self.root/'config').mkdir();(self.root/'config/totalmarker.toml').write_text('')
+        (self.root/'config').mkdir()
+        (self.root/'config/totalmarker.toml').write_text('')
         self.write_script(self.scripts/'run-totalmarker',
             'echo $$ > "$TRACE.worker"; sleep 20 & echo $! > "$TRACE.child"; wait\n')
         code,output=self.terminal('',startup_interrupt=True)
@@ -1154,16 +1224,20 @@ class ManagementTests(Sandbox):
         self.assertTrue(output.endswith('\x1b[?1049l'),output)
         for suffix in ('.worker','.child'):
             pid=int(Path(str(self.trace)+suffix).read_text())
-            with self.assertRaises(ProcessLookupError):os.kill(pid,0)
+            with self.assertRaises(ProcessLookupError):
+                os.kill(pid,0)
 
     def test_non_tty_with_configuration_does_not_run_automatic_health(self):
-        (self.root/'config').mkdir();(self.root/'config/totalmarker.toml').write_text('')
+        (self.root/'config').mkdir()
+        (self.root/'config/totalmarker.toml').write_text('')
         result=subprocess.run([str(self.entry)],env=self.env,input='',capture_output=True,text=True,timeout=3)
         self.assertEqual(result.returncode,0,result.stderr)
-        self.assertIn('Usage:',result.stdout);self.assertEqual(self.calls(),[])
+        self.assertIn('Usage:',result.stdout)
+        self.assertEqual(self.calls(),[])
 
     def test_health_capture_budget_refuses_excess_output_without_hiding_menu(self):
-        (self.root/'config').mkdir();(self.root/'config/totalmarker.toml').write_text('')
+        (self.root/'config').mkdir()
+        (self.root/'config/totalmarker.toml').write_text('')
         self.write_script(self.scripts/'run-totalmarker',
             '/usr/bin/yes excessive-health-output\n')
         code,output=self.terminal('q\n')
@@ -1172,17 +1246,21 @@ class ManagementTests(Sandbox):
         self.assertLess(len(output),10000)
 
     def test_action_return_reuses_snapshot_and_new_entry_reassesses_once(self):
-        (self.root/'config').mkdir();(self.root/'config/totalmarker.toml').write_text('')
+        (self.root/'config').mkdir()
+        (self.root/'config/totalmarker.toml').write_text('')
         code,output=self.terminal('2\nq\n')
-        self.assertEqual(code,0,output);self.assertEqual(self.calls(),['health --dashboard'])
+        self.assertEqual(code,0,output)
+        self.assertEqual(self.calls(),['health --dashboard'])
         code,output=self.terminal('q\n')
-        self.assertEqual(code,0,output);self.assertEqual(self.calls(),['health --dashboard','health --dashboard'])
+        self.assertEqual(code,0,output)
+        self.assertEqual(self.calls(),['health --dashboard','health --dashboard'])
 
     def test_ctrl_c_at_actual_action_confirmation_restores_terminal_without_start(self):
         self.enhanced_terminal()
         code,output=self.terminal('3\n',confirm_interrupt=True)
         self.assertIn('Run start? [y/N]',output)
-        self.assertEqual(code,130,output);self.assertEqual(self.calls(),[])
+        self.assertEqual(code,130,output)
+        self.assertEqual(self.calls(),[])
         self.assertEqual(output.count('\x1b[?1049h'),1)
         self.assertEqual(output.count('\x1b[?1049l'),1)
 
@@ -1200,7 +1278,8 @@ class ManagementTests(Sandbox):
             self.assertIn('Inspection failed; no verified snapshot', output)
 
     def test_actual_saved_health_cli_records_populate_shell_dashboard(self):
-        config=self.root/'config';config.mkdir()
+        config=self.root/'config'
+        config.mkdir()
         example=(PROJECT/'config/totalmarker.example.toml').read_bytes()
         working=config/'totalmarker.toml'
         self.env['PYTHONPATH']=str(PROJECT/'scripts')
@@ -1213,12 +1292,14 @@ class ManagementTests(Sandbox):
             working.write_bytes(content)
             raw=subprocess.run([str(self.scripts/'run-totalmarker'),'health','--dashboard'],env=self.env,text=True,capture_output=True,timeout=5)
             self.assertIn(raw.returncode,(0,1),raw.stdout+raw.stderr)
-            rows=raw.stdout.splitlines();self.assertTrue(rows[0].startswith('snapshot\t'))
+            rows=raw.stdout.splitlines()
+            self.assertTrue(rows[0].startswith('snapshot\t'))
             products=[line.split('\t') for line in rows[1:] if not line.startswith('note\t')]
             self.assertEqual({entry[1] for entry in products}, expected)
             code,output=self.terminal('q\n')
             self.assertEqual(code,0,output)
             badges={'good':'[+]','warning':'[!]','error':'[x]','disabled':'[-]','unknown':'[?]'}
             for kind,title,*_ in products:
-                with self.subTest(product=title):self.assertIn(badges[kind]+' '+title,output)
+                with self.subTest(product=title):
+                    self.assertIn(badges[kind]+' '+title,output)
             self.assertNotIn('Inspection failed; no verified snapshot',output)

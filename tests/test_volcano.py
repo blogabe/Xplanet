@@ -5,7 +5,6 @@ import hashlib
 import io
 import json
 from datetime import datetime
-from pathlib import Path
 from unittest.mock import patch
 
 from totalmarker.cli import main

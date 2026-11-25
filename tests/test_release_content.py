@@ -118,7 +118,8 @@ class ReleaseContentTests(unittest.TestCase):
             rb"libfile_[0-9a-f]{16,}")))
         from .release_policy import index_text
         for name,raw in index_text(PROJECT):
-            with self.subTest(path=name):self.assertIsNone(forbidden.search(raw),name)
+            with self.subTest(path=name):
+                self.assertIsNone(forbidden.search(raw),name)
 
     def test_readme_monthly_map_example_has_all_shipped_months(self):
         if (not (PROJECT / "maps").exists()
@@ -174,11 +175,15 @@ class IndexedPrivacyTests(unittest.TestCase):
         from .release_policy import index_text
         for name in ('output/preview/earth-render.png','output/exports/copy/export.json','output/future.dat'):
             with self.subTest(name=name),tempfile.TemporaryDirectory() as directory:
-                root=Path(directory);subprocess.run(['git','init','-q'],cwd=root,check=True)
+                root=Path(directory)
+                subprocess.run(['git','init','-q'],cwd=root,check=True)
                 (root/'.gitignore').write_text('/output/\n')
-                path=root/name;path.parent.mkdir(parents=True);path.write_bytes(b'private user output')
+                path=root/name
+                path.parent.mkdir(parents=True)
+                path.write_bytes(b'private user output')
                 subprocess.run(['git','add','-f','--',name],cwd=root,check=True)
-                with self.assertRaisesRegex(RuntimeError,'unsafe source entry: '+name):index_text(root)
+                with self.assertRaisesRegex(RuntimeError,'unsafe source entry: '+name):
+                    index_text(root)
                 self.assertEqual(path.read_bytes(),b'private user output')
 
     def test_scan_uses_index_bytes_and_checks_all_paths(self):
@@ -186,11 +191,13 @@ class IndexedPrivacyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory)
             subprocess.run(['git','init','-q'],cwd=root,check=True)
-            path=root/'README.md';path.write_text('indexed text')
+            path=root/'README.md'
+            path.write_text('indexed text')
             subprocess.run(['git','add','README.md'],cwd=root,check=True)
             path.write_text('different working bytes')
             self.assertEqual(index_text(root),[('README.md',b'indexed text')])
-            (root/'dev').mkdir();(root/'dev/private.bin').write_bytes(b'local')
+            (root/'dev').mkdir()
+            (root/'dev/private.bin').write_bytes(b'local')
             subprocess.run(['git','add','dev/private.bin'],cwd=root,check=True)
             with self.assertRaisesRegex(RuntimeError,'unsafe source entry: dev/private.bin'):
                 index_text(root)
@@ -199,11 +206,14 @@ class IndexedPrivacyTests(unittest.TestCase):
     def test_provider_text_fixture_suffixes_are_scanned_from_index_bytes(self):
         from .release_policy import index_text
         with tempfile.TemporaryDirectory() as directory:
-            root=Path(directory);subprocess.run(['git','init','-q'],cwd=root,check=True)
+            root=Path(directory)
+            subprocess.run(['git','init','-q'],cwd=root,check=True)
             fixtures={'tests/fixtures/feed.dat':b'indexed storm text',
                       'tests/fixtures/feed.geojson':b'{"fixture":"indexed"}'}
             for name,data in fixtures.items():
-                path=root/name;path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(data)
+                path=root/name
+                path.parent.mkdir(parents=True,exist_ok=True)
+                path.write_bytes(data)
                 subprocess.run(['git','add','-f','--',name],cwd=root,check=True)
                 path.write_bytes(b'changed working bytes')
             self.assertEqual(dict(index_text(root)),fixtures)
@@ -211,8 +221,10 @@ class IndexedPrivacyTests(unittest.TestCase):
     def test_new_text_fixture_suffix_obeys_indexed_text_budget(self):
         from . import release_policy as release
         with tempfile.TemporaryDirectory() as directory:
-            root=Path(directory);subprocess.run(['git','init','-q'],cwd=root,check=True)
-            path=root/'feed.geojson';path.write_bytes(b'x'*9)
+            root=Path(directory)
+            subprocess.run(['git','init','-q'],cwd=root,check=True)
+            path=root/'feed.geojson'
+            path.write_bytes(b'x'*9)
             subprocess.run(['git','add','feed.geojson'],cwd=root,check=True)
             with patch.object(release,'TEXT_LIMIT',8),self.assertRaisesRegex(RuntimeError,'Indexed text exceeds'):
                 release.index_text(root)
@@ -220,12 +232,15 @@ class IndexedPrivacyTests(unittest.TestCase):
     def test_binary_fixture_size_and_total_budgets_fail_closed(self):
         from . import release_policy as release
         with tempfile.TemporaryDirectory() as directory:
-            root=Path(directory);subprocess.run(['git','init','-q'],cwd=root,check=True)
-            path=root/'fixture.kmz';path.write_bytes(b'x'*9)
+            root=Path(directory)
+            subprocess.run(['git','init','-q'],cwd=root,check=True)
+            path=root/'fixture.kmz'
+            path.write_bytes(b'x'*9)
             subprocess.run(['git','add','fixture.kmz'],cwd=root,check=True)
             with patch.object(release,'BINARY_LIMIT',8),self.assertRaisesRegex(RuntimeError,'Indexed binary'):
                 release.index_text(root)
-            path.write_bytes(b'x'*6);(root/'second.kmz').write_bytes(b'y'*6)
+            path.write_bytes(b'x'*6)
+            (root/'second.kmz').write_bytes(b'y'*6)
             subprocess.run(['git','add','fixture.kmz','second.kmz'],cwd=root,check=True)
             with patch.object(release,'BINARY_LIMIT',16),patch.object(release,'BINARY_TOTAL_LIMIT',10),self.assertRaisesRegex(RuntimeError,'Indexed binary'):
                 release.index_text(root)
@@ -233,8 +248,11 @@ class IndexedPrivacyTests(unittest.TestCase):
     def test_binary_size_guard_does_not_replace_shipped_map_asset_policy(self):
         from . import release_policy as release
         with tempfile.TemporaryDirectory() as directory:
-            root=Path(directory);subprocess.run(['git','init','-q'],cwd=root,check=True)
-            path=root/'maps/family/map.png';path.parent.mkdir(parents=True);path.write_bytes(b'x'*20)
+            root=Path(directory)
+            subprocess.run(['git','init','-q'],cwd=root,check=True)
+            path=root/'maps/family/map.png'
+            path.parent.mkdir(parents=True)
+            path.write_bytes(b'x'*20)
             subprocess.run(['git','add','-f','--','maps/family/map.png'],cwd=root,check=True)
             with patch.object(release,'BINARY_LIMIT',8),patch.object(release,'BINARY_TOTAL_LIMIT',10):
                 self.assertEqual(release.index_text(root),[])

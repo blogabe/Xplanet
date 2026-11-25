@@ -6,7 +6,6 @@ import hashlib
 from io import BytesIO
 import json
 import zlib
-from pathlib import Path
 from unittest.mock import patch
 from xml.etree import ElementTree as ET
 from zipfile import ZipFile, ZIP_DEFLATED
@@ -159,16 +158,20 @@ class StormSourcesTests(Sandbox):
         damaged[22:26]=(1024).to_bytes(4,'little')
         damaged[central+24:central+28]=(1024).to_bytes(4,'little')
         body=bytes(damaged)
-        with ZipFile(BytesIO(body)) as archive:self.assertEqual(archive.getinfo('doc.kml').file_size,1024)
+        with ZipFile(BytesIO(body)) as archive:
+            self.assertEqual(archive.getinfo('doc.kml').file_size,1024)
         tracing=tracemalloc.is_tracing()
-        if not tracing:tracemalloc.start()
-        baseline=tracemalloc.get_traced_memory()[0];tracemalloc.reset_peak()
+        if not tracing:
+            tracemalloc.start()
+        baseline=tracemalloc.get_traced_memory()[0]
+        tracemalloc.reset_peak()
         try:
             with self.assertRaisesRegex(FeedError,'KMZ is invalid'):
                 parse_jtwc_kmz(body,None,'WP292026','Champi')
             peak=tracemalloc.get_traced_memory()[1]-baseline
         finally:
-            if not tracing:tracemalloc.stop()
+            if not tracing:
+                tracemalloc.stop()
         self.assertLess(peak,expanded,'Bounded parsing must not inflate the full lying member')
 
     def test_corrupt_forecast_records_failure_and_retains_last_good_pair(self):

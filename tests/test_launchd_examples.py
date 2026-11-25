@@ -1,5 +1,4 @@
 """Validate portable public launchd examples without constraining local plists."""
-from pathlib import Path
 import plistlib
 import unittest
 

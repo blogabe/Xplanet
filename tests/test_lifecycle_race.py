@@ -5,9 +5,15 @@ from .support import Sandbox,copy_launcher
 
 class LifecycleRaceTests(Sandbox):
     def setUp(self):
-        super().setUp();self.bin=self.base/'bin';self.bin.mkdir();self.runtime=self.base/'runtime';self.runtime.mkdir(mode=0o700)
-        self.jobs=self.base/'job.json';self.jobs.write_text('{"root":"seed"}')
-        self.marker=self.base/'kickstart-entered';self.trace=self.base/'calls.jsonl'
+        super().setUp()
+        self.bin=self.base/'bin'
+        self.bin.mkdir()
+        self.runtime=self.base/'runtime'
+        self.runtime.mkdir(mode=0o700)
+        self.jobs=self.base/'job.json'
+        self.jobs.write_text('{"root":"seed"}')
+        self.marker=self.base/'kickstart-entered'
+        self.trace=self.base/'calls.jsonl'
         self.release=self.base/'release-kickstart'
         self.script(self.bin/'getconf','printf "%s\\n" '+shlex.quote(str(self.runtime))+'\n')
         self.script(self.bin/'pgrep','exit 1\n')
@@ -44,7 +50,8 @@ log('end')
         self.plist=self.base/'Library/LaunchAgents/local.xplanet.desktop.plist'
         self.plist.parent.mkdir(parents=True)
         doc={'Label':'local.xplanet.desktop', 'ProgramArguments':['/bin/zsh',str(self.root/'scripts/lib/xplanet/desktop.zsh')], 'WorkingDirectory':str(self.root), 'StandardOutPath':str(self.root/'logs/xplanet.log'), 'StandardErrorPath':str(self.root/'logs/xplanet-error.log')}
-        self.plist.write_bytes(plistlib.dumps(doc));self.plist.chmod(0o600)
+        self.plist.write_bytes(plistlib.dumps(doc))
+        self.plist.chmod(0o600)
         self.jobs.write_text(json.dumps({'root':'seed','path':str(self.plist),'doc':doc}))
     def job_output(self):
         return """def print_job(job):
@@ -58,20 +65,29 @@ def save_job(job,path,actor='A'):
  job.write_text(json.dumps({'root':actor,'path':path,'doc':plistlib.loads(Path(path).read_bytes())}))
 """
     def script(self,path,body,python=False):
-        if python and path.name=='launchctl':body='import json\n'+self.job_output()+body
-        path.write_text(('#!'+sys.executable if python else '#!/bin/sh')+'\n'+body);path.chmod(0o700)
+        if python and path.name=='launchctl':
+            body='import json\n'+self.job_output()+body
+        path.write_text(('#!'+sys.executable if python else '#!/bin/sh')+'\n'+body)
+        path.chmod(0o700)
     def checkout(self,root):
-        scripts=root/'scripts';scripts.mkdir(parents=True);entry=scripts/'xplanet.sh';copy_launcher(entry)
-        config=root/'config';config.mkdir();(config/'xp.conf').write_text('[earth]\n')
+        scripts=root/'scripts'
+        scripts.mkdir(parents=True)
+        entry=scripts/'xplanet.sh'
+        copy_launcher(entry)
+        config=root/'config'
+        config.mkdir()
+        (config/'xp.conf').write_text('[earth]\n')
         (config/'xp.def').write_text('XPLANET_BIN=/usr/bin/true\nXPLANET_HOME='+shlex.quote(str(root))+'\nXPLANET_CONFIG='+shlex.quote(str(config))+'\nXPLANET_PROJECTION=rectangular\nXPLANET_LONGITUDE=0\n')
         return entry
     def invoke(self,entry,command,actor):return subprocess.Popen([str(entry),command],env={**self.env,'ACTOR':actor},stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
     def overlap(self,second_entry,second_command='restart'):
         self.env['HOLD']='1'
-        first=self.invoke(self.entry,'restart','A');second=None
+        first=self.invoke(self.entry,'restart','A')
+        second=None
         try:
             end=time.monotonic()+8
-            while not self.marker.exists() and first.poll() is None and time.monotonic()<end:time.sleep(.005)
+            while not self.marker.exists() and first.poll() is None and time.monotonic()<end:
+                time.sleep(.005)
             self.assertTrue(self.marker.exists(),'first restart never reached isolated kickstart')
             # zsh's native flock uses POSIX record locks, as does lockf.
             # Verify ownership while A is held, independently of B's scheduling.
@@ -80,17 +96,24 @@ def save_job(job,path,actor='A'):
                     fcntl.lockf(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
             second=self.invoke(second_entry,second_command,'B')
             self.release.write_text('continue')
-            aout,aerr=first.communicate(timeout=15);bout,berr=second.communicate(timeout=15)
-            self.assertEqual(first.returncode,0,(aout,aerr));self.assertEqual(second.returncode,0,(bout,berr))
+            aout,aerr=first.communicate(timeout=15)
+            bout,berr=second.communicate(timeout=15)
+            self.assertEqual(first.returncode,0,(aout,aerr))
+            self.assertEqual(second.returncode,0,(bout,berr))
             rows=[json.loads(line) for line in self.trace.read_text().splitlines()]
             self.assertNotIn(['A','kickstart','missing-job'],rows)
-            if second_command=='restart':self.assertEqual(json.loads(self.jobs.read_text())['root'],'B')
-            else:self.assertFalse(self.jobs.exists())
-            aend=rows.index(['A','kickstart','end']);bremove=rows.index(['B','bootout','begin'])
+            if second_command=='restart':
+                self.assertEqual(json.loads(self.jobs.read_text())['root'],'B')
+            else:
+                self.assertFalse(self.jobs.exists())
+            aend=rows.index(['A','kickstart','end'])
+            bremove=rows.index(['B','bootout','begin'])
             self.assertLess(aend,bremove,'restart must finish before another stop removes the job')
         finally:
             for child in (first,second):
-                if child is not None and child.poll() is None:child.kill();child.communicate()
+                if child is not None and child.poll() is None:
+                    child.kill()
+                    child.communicate()
     def test_overlapping_restart_is_serialized_in_one_checkout(self):self.overlap(self.entry)
     def test_overlapping_restart_uses_same_user_lock_across_checkouts(self):
         self.overlap(self.checkout(self.base/'second checkout'))
@@ -102,7 +125,8 @@ def save_job(job,path,actor='A'):
         self.assertEqual(original_definition.count('XPLANET_BIN=/usr/bin/true'),1)
         definition.write_text(original_definition.replace('XPLANET_BIN=/usr/bin/true','XPLANET_BIN=/missing/renderer'))
         original=self.jobs.read_bytes()
-        child=self.invoke(self.entry,'restart','A');out,err=child.communicate(timeout=10)
+        child=self.invoke(self.entry,'restart','A')
+        out,err=child.communicate(timeout=10)
         self.assertEqual(child.returncode,2,(out,err))
         self.assertEqual(self.jobs.read_bytes(),original)
         self.assertIn('xp.def XPLANET_BIN must be executable',err)
@@ -110,33 +134,46 @@ def save_job(job,path,actor='A'):
 
     def test_restart_invalid_monthly_map_preserves_job_and_files(self):
         definition=self.root/'config/xp.def'
-        with definition.open('a') as stream:stream.write('EARTH_MAP_PRE=world/world\n')
-        maps=self.root/'maps/world';maps.mkdir(parents=True)
-        images=self.root/'images';images.mkdir()
+        with definition.open('a') as stream:
+            stream.write('EARTH_MAP_PRE=world/world\n')
+        maps=self.root/'maps/world'
+        maps.mkdir(parents=True)
+        images=self.root/'images'
+        images.mkdir()
         before_job=self.jobs.read_bytes()
         for problem in ('missing source','missing images','regular link','external link','locked','valid'):
             with self.subTest(problem=problem):
                 for month in range(1,13):
                     image=maps/f'world.2004{month:02d}.3x5400x2700.png'
-                    if problem!='missing source':image.write_bytes(b'map')
-                if not images.exists():images.mkdir()
+                    if problem!='missing source':
+                        image.write_bytes(b'map')
+                if not images.exists():
+                    images.mkdir()
                 link=images/'earth.png'
-                if link.is_symlink() or link.exists():link.unlink()
+                if link.is_symlink() or link.exists():
+                    link.unlink()
                 lock=self.root/'.state/totalmarker/map.lock.d'
-                if lock.exists():lock.rmdir()
+                if lock.exists():
+                    lock.rmdir()
                 for directory in (lock.parent,lock.parent.parent):
-                    if directory.exists():directory.rmdir()
-                if problem=='missing images':images.rmdir()
-                if problem=='regular link':link.write_bytes(b'user image')
-                elif problem=='external link':link.symlink_to('/private/custom-map.png')
-                elif problem=='locked':lock.mkdir(parents=True)
+                    if directory.exists():
+                        directory.rmdir()
+                if problem=='missing images':
+                    images.rmdir()
+                if problem=='regular link':
+                    link.write_bytes(b'user image')
+                elif problem=='external link':
+                    link.symlink_to('/private/custom-map.png')
+                elif problem=='locked':
+                    lock.mkdir(parents=True)
                 before={str(path.relative_to(self.root)):(('link',str(path.readlink())) if path.is_symlink() else ('file',path.read_bytes()) if path.is_file() else ('directory',path.stat().st_mode)) for path in self.root.rglob('*')}
                 if problem=='valid':
                     # Directly exercise the private read-only path: no .state creation.
                     result=subprocess.run(['/bin/zsh','-f','-c','project_root=$1;script_dir="$1/scripts";fail() { print -u2 -r -- "$1";exit 2; };source "$script_dir/lib/xplanet/display.zsh";select_earth_map --check','audit',str(self.root)],env=self.env,capture_output=True,text=True)
                     self.assertEqual(result.returncode,0,result.stderr)
                 else:
-                    child=self.invoke(self.entry,'restart','A');out,err=child.communicate(timeout=5)
+                    child=self.invoke(self.entry,'restart','A')
+                    out,err=child.communicate(timeout=5)
                     self.assertEqual(child.returncode,2,(out,err))
                     reason={'missing source':'Monthly map is absent or not a regular file',
                             'missing images':'images must be a real directory',
@@ -150,55 +187,88 @@ def save_job(job,path,actor='A'):
                 self.assertEqual(after,before)
 
     def test_start_does_not_kickstart_a_job_from_another_checkout(self):
-        with (self.root/'config/xp.def').open('a') as definition:definition.write('EARTH_MAP_PRE=absent/map\n')
+        with (self.root/'config/xp.def').open('a') as definition:
+            definition.write('EARTH_MAP_PRE=absent/map\n')
         self.script(self.bin/'launchctl','[ "$1" = print ] && { printf "%s\\n" "program = /bin/zsh" "working directory = /another checkout" "arguments = {" "/bin/zsh" "/another checkout/scripts/lib/xplanet/desktop.zsh" "}"; exit 0; }; printf unexpected > "$TRACE"; exit 9\n')
-        child=self.invoke(self.entry,'start','A');out,err=child.communicate(timeout=5)
+        child=self.invoke(self.entry,'start','A')
+        out,err=child.communicate(timeout=5)
         self.assertEqual(child.returncode,2,(out,err))
         self.assertIn('another or unverified checkout',err)
         self.assertFalse(self.trace.exists())
 
     def test_job_identity_parser_accepts_spaces_and_rejects_ambiguous_fields(self):
-        spaced=self.base/'checkout with spaces';self.checkout(spaced)
+        spaced=self.base/'checkout with spaces'
+        self.checkout(spaced)
         helper=spaced/'scripts/lib/xplanet/display.zsh'
         root=str(spaced)
-        doc=plistlib.loads(self.plist.read_bytes());doc['WorkingDirectory']=root;doc['ProgramArguments'][1]=root+'/scripts/lib/xplanet/desktop.zsh';doc['StandardOutPath']=root+'/logs/xplanet.log';doc['StandardErrorPath']=root+'/logs/xplanet-error.log';self.plist.write_bytes(plistlib.dumps(doc))
+        doc=plistlib.loads(self.plist.read_bytes())
+        doc['WorkingDirectory']=root
+        doc['ProgramArguments'][1]=root+'/scripts/lib/xplanet/desktop.zsh'
+        doc['StandardOutPath']=root+'/logs/xplanet.log'
+        doc['StandardErrorPath']=root+'/logs/xplanet-error.log'
+        self.plist.write_bytes(plistlib.dumps(doc))
         good='path = '+str(self.plist)+'\nprogram = /bin/zsh\nworking directory = '+root+'\narguments = {\n/bin/zsh\n'+root+'/scripts/lib/xplanet/desktop.zsh\n}\n'
         for text,expected in ((good,0),('arguments = {\n}\n'+good,1),(good+'path = /other\n',1),(good+'working directory = /other\n',1),(good.replace('program = /bin/zsh','program = /bin/sh'),1),(good.replace('arguments = {','arguments = {\nextra'),1)):
             result=subprocess.run(['/bin/zsh','-f','-c','project_root=$1;script_dir="$1/scripts";source "$2";desktop_agent_paths;desktop_job_owned "$3"','audit',root,str(helper),text],env=self.env,capture_output=True,text=True)
             self.assertEqual(result.returncode,expected,(text,result.stderr))
 
     def test_failed_command_releases_lock_and_lock_inode_is_retained(self):
-        config=self.root/'config/xp.def';original=config.read_bytes();config.write_text('invalid assignment\n')
-        failed=self.invoke(self.entry,'start','A');out,err=failed.communicate(timeout=10)
-        self.assertEqual(failed.returncode,2,(out,err));lock=self.runtime/'local.xplanet.desktop.lock'
-        self.assertTrue(lock.is_file());inode=lock.stat().st_ino;config.write_bytes(original)
-        self.jobs.unlink(missing_ok=True);ok=self.invoke(self.entry,'start','A');out,err=ok.communicate(timeout=10)
-        self.assertEqual(ok.returncode,0,(out,err));self.assertEqual(lock.stat().st_ino,inode)
+        config=self.root/'config/xp.def'
+        original=config.read_bytes()
+        config.write_text('invalid assignment\n')
+        failed=self.invoke(self.entry,'start','A')
+        out,err=failed.communicate(timeout=10)
+        self.assertEqual(failed.returncode,2,(out,err))
+        lock=self.runtime/'local.xplanet.desktop.lock'
+        self.assertTrue(lock.is_file())
+        inode=lock.stat().st_ino
+        config.write_bytes(original)
+        self.jobs.unlink(missing_ok=True)
+        ok=self.invoke(self.entry,'start','A')
+        out,err=ok.communicate(timeout=10)
+        self.assertEqual(ok.returncode,0,(out,err))
+        self.assertEqual(lock.stat().st_ino,inode)
         self.assertEqual(lock.stat().st_mode&0o777,0o600)
 
     def test_linked_or_nonprivate_lock_is_refused_without_repair_or_service_calls(self):
-        lock=self.runtime/'local.xplanet.desktop.lock';target=self.base/'keep';target.write_bytes(b'keep')
+        lock=self.runtime/'local.xplanet.desktop.lock'
+        target=self.base/'keep'
+        target.write_bytes(b'keep')
         lock.symlink_to(target)
         for linked in (True,False):
-            if not linked:lock.unlink();lock.write_bytes(b'keep');lock.chmod(0o644)
-            child=self.invoke(self.entry,'stop','A');out,err=child.communicate(timeout=5)
-            self.assertEqual(child.returncode,2,(out,err));self.assertIn('private user-owned regular file',err)
-            self.assertFalse(self.trace.exists());self.assertEqual(target.read_bytes(),b'keep')
+            if not linked:
+                lock.unlink()
+                lock.write_bytes(b'keep')
+                lock.chmod(0o644)
+            child=self.invoke(self.entry,'stop','A')
+            out,err=child.communicate(timeout=5)
+            self.assertEqual(child.returncode,2,(out,err))
+            self.assertIn('private user-owned regular file',err)
+            self.assertFalse(self.trace.exists())
+            self.assertEqual(target.read_bytes(),b'keep')
         self.assertEqual(lock.stat().st_mode&0o777,0o644)
 
     def test_busy_lock_times_out_without_service_calls_and_releases_after_owner_exit(self):
         import fcntl
-        lock=self.runtime/'local.xplanet.desktop.lock';lock.touch(mode=0o600)
+        lock=self.runtime/'local.xplanet.desktop.lock'
+        lock.touch(mode=0o600)
         # Only shorten the test checkout's wait, not the production default.
-        helper=self.root/'scripts/lib/xplanet/lifecycle.zsh';original=helper.read_text()
+        helper=self.root/'scripts/lib/xplanet/lifecycle.zsh'
+        original=helper.read_text()
         self.assertEqual(original.count('flock -t 10'),1)
         helper.write_text(original.replace('flock -t 10','flock -t 0.1'))
         with lock.open('r+') as stream:
             fcntl.lockf(stream,fcntl.LOCK_EX)
-            child=self.invoke(self.entry,'stop','A');out,err=child.communicate(timeout=5)
-            self.assertEqual(child.returncode,2,(out,err));self.assertIn('busy',err);self.assertFalse(self.trace.exists())
-        child=self.invoke(self.entry,'stop','A');out,err=child.communicate(timeout=5)
-        self.assertEqual(child.returncode,0,(out,err));self.assertTrue(self.trace.exists());self.assertTrue(lock.exists())
+            child=self.invoke(self.entry,'stop','A')
+            out,err=child.communicate(timeout=5)
+            self.assertEqual(child.returncode,2,(out,err))
+            self.assertIn('busy',err)
+            self.assertFalse(self.trace.exists())
+        child=self.invoke(self.entry,'stop','A')
+        out,err=child.communicate(timeout=5)
+        self.assertEqual(child.returncode,0,(out,err))
+        self.assertTrue(self.trace.exists())
+        self.assertTrue(lock.exists())
 
     def removal_fixture(self, *, stuck=False, wrong_domain=False):
         code = r"""import json,os,sys
@@ -224,12 +294,14 @@ if args[0]=='kickstart':
 raise SystemExit(4)
 """
         self.script(self.bin/'launchctl',code,python=True)
-        if wrong_domain:self.jobs.unlink()
+        if wrong_domain:
+            self.jobs.unlink()
         self.env.update({'STUCK_REMOVAL':'1' if stuck else '', 'WRONG_DOMAIN':'1' if wrong_domain else ''})
 
     def test_restart_waits_for_delayed_service_removal_before_registration(self):
         self.removal_fixture()
-        child=self.invoke(self.entry,'restart','A');out,err=child.communicate(timeout=10)
+        child=self.invoke(self.entry,'restart','A')
+        out,err=child.communicate(timeout=10)
         self.assertEqual(child.returncode,0,(out,err))
         calls=[json.loads(line) for line in self.trace.read_text().splitlines()]
         self.assertEqual(sum(c[0]=='bootstrap' for c in calls),1)
@@ -238,7 +310,8 @@ raise SystemExit(4)
 
     def test_start_uses_target_gui_domain_not_contextual_list(self):
         self.removal_fixture(wrong_domain=True)
-        child=self.invoke(self.entry,'start','A');out,err=child.communicate(timeout=10)
+        child=self.invoke(self.entry,'start','A')
+        out,err=child.communicate(timeout=10)
         self.assertEqual(child.returncode,0,(out,err))
         calls=[json.loads(line) for line in self.trace.read_text().splitlines()]
         self.assertFalse(any(c[0]=='list' for c in calls))
@@ -256,7 +329,9 @@ raise SystemExit(4)
         try:
             out,err=child.communicate(timeout=30)
         finally:
-            if child.poll() is None:child.kill();child.communicate()
+            if child.poll() is None:
+                child.kill()
+                child.communicate()
         self.assertEqual(child.returncode,2,(out,err))
         self.assertEqual(sleeps.read_text().splitlines(), ['0.25']*20)
         self.assertIn('desktop job removal',err)
@@ -280,36 +355,55 @@ if args[0]=='kickstart':raise SystemExit(0 if job.exists() else 3)
 raise SystemExit(4)
 """
         self.script(self.bin/'launchctl',code,python=True)
-        child=self.invoke(self.entry,'start','A');out,err=child.communicate(timeout=10)
-        self.assertEqual(child.returncode,0,(out,err));self.assertTrue(self.jobs.exists())
+        child=self.invoke(self.entry,'start','A')
+        out,err=child.communicate(timeout=10)
+        self.assertEqual(child.returncode,0,(out,err))
+        self.assertTrue(self.jobs.exists())
 
     def test_running_earth_selection_refuses_restart_before_any_service_change(self):
         self.env.update(HOME=str(self.base),ZDOTDIR=str(self.base))
-        with (self.root/'config/xp.def').open('a') as definition:definition.write('EARTH_MAP_PRE=world/world\n')
-        maps=self.root/'maps/world';maps.mkdir(parents=True)
-        for month in range(1,13):(maps/f'world.2004{month:02d}.3x5400x2700.png').write_bytes(b'owned monthly map')
-        images=self.root/'images';images.mkdir()
-        link=images/'earth.png';link.symlink_to('../maps/world/world.200401.3x5400x2700.png')
+        with (self.root/'config/xp.def').open('a') as definition:
+            definition.write('EARTH_MAP_PRE=world/world\n')
+        maps=self.root/'maps/world'
+        maps.mkdir(parents=True)
+        for month in range(1,13):
+            (maps/f'world.2004{month:02d}.3x5400x2700.png').write_bytes(b'owned monthly map')
+        images=self.root/'images'
+        images.mkdir()
+        link=images/'earth.png'
+        link.symlink_to('../maps/world/world.200401.3x5400x2700.png')
         self.script(self.bin/'date','printf "11\\n"\n')
-        ready=self.base/'earth-link-ready';release=self.base/'earth-link-release'
+        ready=self.base/'earth-link-ready'
+        release=self.base/'earth-link-release'
         self.script(self.bin/'ln','import os,sys,time\nfrom pathlib import Path\nPath('+repr(str(ready))+').write_text("owned map lock held")\nwhile not Path('+repr(str(release))+').exists():time.sleep(.005)\nos.execv("/bin/ln",["/bin/ln",*sys.argv[1:]])\n',python=True)
         original=self.jobs.read_bytes()
         earth=subprocess.Popen([str(self.entry),'earth'],env=self.env,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,start_new_session=True)
         try:
             deadline=time.monotonic()+5
-            while not ready.exists() and earth.poll() is None and time.monotonic()<deadline:time.sleep(.005)
+            while not ready.exists() and earth.poll() is None and time.monotonic()<deadline:
+                time.sleep(.005)
             self.assertTrue(ready.exists(),'Earth selection never reached the owned link barrier')
-            lock=self.root/'.state/totalmarker/map.lock.d';self.assertTrue(lock.is_dir())
-            child=self.invoke(self.entry,'restart','A');out,err=child.communicate(timeout=5)
-            self.assertEqual(child.returncode,2,(out,err));self.assertIn('Earth map selection is locked',err);self.assertIn('rmdir',err)
-            self.assertEqual(self.jobs.read_bytes(),original);self.assertFalse(self.trace.exists())
-            release.write_text('finish owned selection');out,err=earth.communicate(timeout=5)
-            self.assertEqual(earth.returncode,0,(out,err));self.assertFalse(lock.exists())
+            lock=self.root/'.state/totalmarker/map.lock.d'
+            self.assertTrue(lock.is_dir())
+            child=self.invoke(self.entry,'restart','A')
+            out,err=child.communicate(timeout=5)
+            self.assertEqual(child.returncode,2,(out,err))
+            self.assertIn('Earth map selection is locked',err)
+            self.assertIn('rmdir',err)
+            self.assertEqual(self.jobs.read_bytes(),original)
+            self.assertFalse(self.trace.exists())
+            release.write_text('finish owned selection')
+            out,err=earth.communicate(timeout=5)
+            self.assertEqual(earth.returncode,0,(out,err))
+            self.assertFalse(lock.exists())
             self.assertEqual(link.readlink(),Path('../maps/world/world.200411.3x5400x2700.png'))
-            child=self.invoke(self.entry,'restart','A');out,err=child.communicate(timeout=10)
+            child=self.invoke(self.entry,'restart','A')
+            out,err=child.communicate(timeout=10)
             self.assertEqual(child.returncode,0,(out,err))
             calls=[json.loads(line) for line in self.trace.read_text().splitlines()]
             self.assertIn(['A','kickstart','end'],calls)
         finally:
             release.touch()
-            if earth.poll() is None:os.killpg(earth.pid,signal.SIGKILL);earth.communicate(timeout=5)
+            if earth.poll() is None:
+                os.killpg(earth.pid,signal.SIGKILL)
+                earth.communicate(timeout=5)

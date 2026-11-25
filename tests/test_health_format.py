@@ -163,12 +163,18 @@ class DashboardFormatTests(unittest.TestCase):
         self.assertIn('warning\tStorms\tsaved data stale',data)
         self.assertIn('error\tVolcanoes\trefresh failed',data)
         self.assertIn('disabled\tSatellites\tdisabled',data)
-        self.assertIn('secret-path',data);self.assertNotIn('example.invalid',data);self.assertNotIn('\033',data)
-        warned=report('saved',*rows);warned['warning']='log unreadable\n\033 problem'
+        self.assertIn('secret-path',data)
+        self.assertNotIn('example.invalid',data)
+        self.assertNotIn('\033',data)
+        warned=report('saved',*rows)
+        warned['warning']='log unreadable\n\033 problem'
         note=format_dashboard(warned).splitlines()[-1]
-        self.assertTrue(note.startswith('note\t'));self.assertNotIn('\033',note)
-        with self.assertRaises(ValueError):format_dashboard(report('live',*rows))
+        self.assertTrue(note.startswith('note\t'))
+        self.assertNotIn('\033',note)
+        with self.assertRaises(ValueError):
+            format_dashboard(report('live',*rows))
 
     def test_dashboard_flag_cannot_be_combined_with_live_json_or_nonhealth(self):
         for argv in (['health','--dashboard','--live'],['health','--dashboard','--json'],['clouds','--dashboard']):
-            with self.subTest(argv=argv),patch('sys.stderr',io.StringIO()),self.assertRaises(SystemExit):main(['--root','/unused',*argv])
+            with self.subTest(argv=argv),patch('sys.stderr',io.StringIO()),self.assertRaises(SystemExit):
+                main(['--root','/unused',*argv])

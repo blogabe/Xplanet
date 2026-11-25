@@ -285,22 +285,29 @@ class FetchTests(Sandbox):
 
 class NetworkWorkerBoundaryTests(Sandbox):
     def test_credentials_and_url_travel_only_over_stdin_to_isolated_worker(self):
-        secret='DUMMY_PRIVATE_CREDENTIAL';url='https://example.invalid/PRIVATE_PATH_TOKEN'
+        secret='DUMMY_PRIVATE_CREDENTIAL'
+        url='https://example.invalid/PRIVATE_PATH_TOKEN'
         seen={}
         class Process:
             returncode=0
-            def __init__(self):self.stdin=io.BytesIO();self.stdout=io.BytesIO()
+            def __init__(self):
+                self.stdin=io.BytesIO()
+                self.stdout=io.BytesIO()
             def communicate(self,payload,timeout):
                 seen['request']=json.loads(payload)
                 return b'{"status":200,"headers":{},"reason":"OK"}\nbody',None
             def poll(self):return 0
             def wait(self):return 0
-        def spawn(argv,**kwargs):seen['argv']=argv;seen['options']=kwargs;return Process()
+        def spawn(argv,**kwargs):
+            seen['argv']=argv
+            seen['options']=kwargs
+            return Process()
         with patch('totalmarker.http.subprocess.Popen',side_effect=spawn):
             result=HTTPTransport().request(url,{'Authorization':'Basic '+secret},3,1024)
         self.assertEqual(result.body,b'body')
         self.assertEqual(seen['argv'][1:4],['-I','-B','-c'])
-        self.assertNotIn(secret,' '.join(seen['argv']));self.assertNotIn(url,' '.join(seen['argv']))
+        self.assertNotIn(secret,' '.join(seen['argv']))
+        self.assertNotIn(url,' '.join(seen['argv']))
         self.assertEqual(seen['request']['url'],url)
         self.assertEqual(seen['request']['headers']['Authorization'],'Basic '+secret)
         self.assertTrue(seen['options']['close_fds'])
