@@ -2,6 +2,7 @@
 from pathlib import Path
 from contextlib import contextmanager
 import os,shutil,tempfile,unittest
+import sys
 
 TEST_ROOT=Path(__file__).resolve().parent
 
@@ -57,7 +58,10 @@ def unexpected_skips(result, *, portable=False):
 
 def run(factory, *, portable=False):
     with isolated_environment():
-        result=unittest.TextTestRunner(verbosity=2).run(factory())
+        runner_options = {"verbosity": 2}
+        if sys.version_info >= (3, 12) and os.environ.get("XPLANET_TEST_TIMINGS") == "1":
+            runner_options["durations"] = 20
+        result = unittest.TextTestRunner(**runner_options).run(factory())
         unexpected=unexpected_skips(result,portable=portable)
         for name,reason in unexpected:print('Unexpected skipped required check: '+name+' — '+reason,file=__import__('sys').stderr)
         return result.wasSuccessful() and not unexpected
