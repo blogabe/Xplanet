@@ -2,7 +2,6 @@
 import os
 import re
 import fcntl
-import pty
 import select
 import signal
 import shlex
@@ -16,6 +15,7 @@ from pathlib import Path
 
 from .build_options_support import INSTALL_BREW_FIXTURE
 from .support import PROJECT, Sandbox, copy_launcher
+from .support_terminal import open_terminal
 
 DASHBOARD='snapshot\t2026-11-04 12:00Z\n'+'\n'.join('unknown\t'+title+'\tsource-detail; freshness not assessed' for title in ('Clouds','Earthquakes','Storms','Volcanoes','Satellites','Eclipses','Santa'))
 
@@ -72,10 +72,8 @@ class ManagementTests(Sandbox):
                 for p in self.root.rglob('*') if p.is_file()}
 
     def terminal(self, answers=None, interrupt=False, eof=False, termination=None, pause_signal=None, pause_key=None, after_pause=None, menu_steps=(), resize=None, key_marker=None, startup_interrupt=False, confirm_interrupt=False):
-        master, slave = pty.openpty()
-        fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH',
-                    int(self.env.get('TEST_ROWS', 30)), int(self.env.get('TEST_COLS', 100)), 0, 0))
-        terminal_before = termios.tcgetattr(slave)
+        master, slave, terminal_before = open_terminal(
+            rows=int(self.env.get('TEST_ROWS', 30)), columns=int(self.env.get('TEST_COLS', 100)))
         proc = subprocess.Popen([str(self.entry)], stdin=slave, stdout=slave,
                                 stderr=slave, env=self.env, start_new_session=True,
                                 preexec_fn=lambda: fcntl.ioctl(0, termios.TIOCSCTTY, 0))

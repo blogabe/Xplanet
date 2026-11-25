@@ -1,0 +1,2 @@
+# GitHub-hosted Ubuntu x86_64 style job; not a runtime dependency.
+ruff==0.17.6 --hash=sha256:aa3b08254a732acba246891089a152c47c5733dc36b8ecb76ce8602f8326e5e4

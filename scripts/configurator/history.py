@@ -1,4 +1,5 @@
 """Session-local draft history; raw edits are retained without validating them."""
+
 import math
 from .model import NUMERIC_FIELDS
 
@@ -16,9 +17,10 @@ def comparable(field, value):
 
 class DraftHistory:
     """Bounded snapshots with an independent baseline and input-edit grouping."""
+
     def __init__(self, values, limit=100):
         if limit < 1:
-            raise ValueError('History limit must be positive.')
+            raise ValueError("History limit must be positive.")
         self.limit = limit
         self.reset(values)
 
@@ -30,7 +32,7 @@ class DraftHistory:
 
     def mark_saved(self):
         """Advance the baseline without dropping undo/capture history."""
-        self.baseline=self.current
+        self.baseline = self.current
         self.break_group()
 
     @property
@@ -50,11 +52,11 @@ class DraftHistory:
 
     def record(self, values, group=None):
         if values.keys() != self.baseline.keys():
-            raise ValueError('A draft must retain the same fields.')
+            raise ValueError("A draft must retain the same fields.")
         values = dict(values)
         if values == self.current:
             return
-        self._states = self._states[:self._index + 1]
+        self._states = self._states[: self._index + 1]
         if group is not None and group == self._group and self.can_undo:
             self._states[self._index] = values
         else:
@@ -77,9 +79,11 @@ class DraftHistory:
         return self.current
 
     def changes(self):
-        return [(field, before, self.current[field])
-                for field, before in self.baseline.items()
-                if comparable(field, before) != comparable(field, self.current[field])]
+        return [
+            (field, before, self.current[field])
+            for field, before in self.baseline.items()
+            if comparable(field, before) != comparable(field, self.current[field])
+        ]
 
     @property
     def dirty(self):

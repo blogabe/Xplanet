@@ -15,6 +15,9 @@
 !/.github/
 !/.github/workflows/
 !/.github/workflows/offline-tests.yml
+!/.github/workflows/configurator-style.yml
+!/ruff.toml
+!/.git-blame-ignore-revs
 !/scripts/
 !/scripts/totalmarker/
 !/scripts/totalmarker/**

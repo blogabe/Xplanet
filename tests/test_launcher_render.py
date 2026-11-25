@@ -2,14 +2,13 @@
 import json
 from pathlib import Path
 import os
-import pty
-import select
 import shlex
 import sys
 import shutil
 import subprocess
 
 from .support import copy_launcher, PROJECT, Sandbox, stub_desktop_launchctl
+from .support_terminal import run_with_terminal_stdout
 
 
 class LauncherRenderTests(Sandbox):
@@ -402,18 +401,8 @@ sys.exit(4)
         return env, table, trace, capture
 
     def invoke_tty(self, command, env):
-        master, slave = pty.openpty()
-        try:
-            result = subprocess.run([str(self.wrapper), command],
-                                    cwd=self.base, env={**self.environment, **env},
-                                    stdout=slave, stderr=subprocess.PIPE,
-                                    text=True, timeout=5)
-            ready, _, _ = select.select([master], [], [], 1)
-            output = os.read(master, 4096).decode() if ready else ""
-            return result, output
-        finally:
-            os.close(slave)
-            os.close(master)
+        return run_with_terminal_stdout(
+            [str(self.wrapper), command], cwd=self.base, env={**self.environment, **env})
 
     def test_stop_signals_all_current_user_xplanet_processes(self):
         env, table, trace, capture = self.lifecycle_env()
