@@ -33,6 +33,7 @@ from .model import (
 )
 from .geography import COLORS
 from .cloud_capture import describe_capture
+from .cloud_controls import CLOUD_CONTROLS
 from .observation_capture import (
     PRODUCTS as OBS_PRODUCTS,
     describe as describe_observations,
@@ -74,6 +75,7 @@ from .workspace import Workspace, configuration_issues, open_view, save_view
 
 
 STOCK_LIBRARY = Path(__file__).resolve().with_name("samples") / "scenes"
+CLOUD_CONTROL_IDS = tuple(control.input_id for control in CLOUD_CONTROLS)
 
 
 class ConfirmSave(ModalScreen[bool]):
@@ -762,12 +764,12 @@ class ConfiguratorApp(App):
                 yield Button("Capture existing eclipse…", id="capture-eclipse")
                 yield Button("Import local NASA-format path…", id="import-eclipse")
             yield Static("", id="capture-summary", markup=False)
-            with Vertical(id="control-cloud-gamma", classes="control"):
-                yield Label("Cloud gamma: 0.1–5 (studio range)")
-                yield Input(number(self.document.view.cloud_gamma), id="cloud-gamma")
-            with Vertical(id="control-cloud-threshold", classes="control"):
-                yield Label("Cloud threshold: 0–255 whole brightness level")
-                yield Input(number(self.document.view.cloud_threshold), id="cloud-threshold")
+            for control in CLOUD_CONTROLS:
+                with Vertical(id="control-" + control.input_id, classes="control"):
+                    yield Label(f"{control.label}: {control.bounds_text}{control.editor_suffix}")
+                    yield Input(
+                        number(getattr(self.document.view, control.name)), id=control.input_id
+                    )
             yield Static(
                 "Bundled choices display existing files. Only explicit cloud Capture reads a saved TotalMarker product; no provider refresh or schedule is changed.",
                 id="earth-layer-context",
@@ -1154,8 +1156,7 @@ class ConfiguratorApp(App):
             "route-width",
             "relief-scale",
             "relief-shade",
-            "cloud-gamma",
-            "cloud-threshold",
+            *CLOUD_CONTROL_IDS,
             "planet-shade",
             "satellite-scale",
             "orbit-width",
@@ -1194,8 +1195,7 @@ class ConfiguratorApp(App):
                 "route-width",
                 "relief-scale",
                 "relief-shade",
-                "cloud-gamma",
-                "cloud-threshold",
+                *CLOUD_CONTROL_IDS,
                 "planet-shade",
                 "satellite-scale",
                 "orbit-width",
@@ -1446,8 +1446,7 @@ class ConfiguratorApp(App):
             ("relief-shade", Input),
             ("specular", Select),
             ("clouds", Select),
-            ("cloud-gamma", Input),
-            ("cloud-threshold", Input),
+            *((field, Input) for field in CLOUD_CONTROL_IDS),
             ("planet-shade", Input),
             *((product + "-layer", Select) for product in (*OBS_PRODUCTS, *ASTRONOMY_FILES)),
         ]:

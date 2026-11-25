@@ -159,7 +159,8 @@ class HandoffUITests(HandoffUIFixture, unittest.IsolatedAsyncioTestCase):
             self.assertFalse((self.root / ".state").exists())
             self.assertIn("No files or selection changed", self.status())
             await click(pilot, "#handoff-apply-confirm")
-            await pilot.pause()
+            # A pilot pause drains UI messages, not the asynchronous file work.
+            await asyncio.wait_for(self.app.workers.wait_for_complete(), timeout=60)
             selected = inspect_selection(self.root)
             self.assertIsNotNone(selected.revision)
             read_revision(self.root, selected.revision)

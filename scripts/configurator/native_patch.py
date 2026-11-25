@@ -3,6 +3,7 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 import hashlib, math, os, re, stat
+from .cloud_controls import CLOUD_CONTROLS
 from .model import NUMERIC_FIELDS, TARGETS
 from .fileio import fingerprint, OwnedFiles
 from .owned_io import checkpoint
@@ -44,16 +45,14 @@ FIELDS = {
         True,
         "Subdivisions per major interval; only when a grid is active. Inherited values are not inferred.",
     ),
-    "cloud_gamma": (
-        "cloud_gamma",
-        False,
-        "Cloud brightness gamma; no cloud map is enabled or inferred.",
-    ),
-    "cloud_threshold": (
-        "cloud_threshold",
-        True,
-        "Hide cloud pixels below this 0–255 threshold; requires an existing cloud map.",
-    ),
+    **{
+        control.name: (
+            control.name,
+            control.whole,
+            control.native_hint.format(bounds=control.bounds_text),
+        )
+        for control in CLOUD_CONTROLS
+    },
     "magnify": (
         "satellite_scale",
         False,

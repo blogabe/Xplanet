@@ -5,6 +5,7 @@ from datetime import datetime, timezone, timedelta
 import math
 import hashlib
 from .cloud_capture import FrozenCloud, IMAGE_FILE
+from .cloud_controls import CLOUD_CONTROLS, CLOUD_GAMMA, CLOUD_THRESHOLD
 from .observation_capture import (
     FrozenObservations,
     PRODUCTS as OBS_PRODUCTS,
@@ -226,8 +227,7 @@ NUMERIC_FIELDS = {
     "solar_hour": ("Local solar hour", 0, 24),
     "distance": ("Observer distance", 1.01, 1000000),
     "rotation": ("Rotation", -180, 180),
-    "cloud_gamma": ("Cloud gamma", 0.1, 5),
-    "cloud_threshold": ("Cloud threshold", 0, 255),
+    **{control.name: control.limits for control in CLOUD_CONTROLS},
 }
 
 
@@ -358,8 +358,8 @@ class View:
     relief_shade: float = 30
     specular: str = "off"
     clouds: str = "off"
-    cloud_gamma: float = 1
-    cloud_threshold: float = 90
+    cloud_gamma: float = CLOUD_GAMMA.default
+    cloud_threshold: float = CLOUD_THRESHOLD.default
     capture_id: str = ""
     longitude_mode: str = "longitude"
     solar_hour: float = 12
@@ -426,7 +426,7 @@ class View:
             if self.relief_shadow == "shade":
                 fields.add("relief_shade")
         if self.clouds == "snapshot2011" or self.uses_capture():
-            fields |= {"cloud_gamma", "cloud_threshold"}
+            fields.update(control.name for control in CLOUD_CONTROLS)
         if self.uses_capture():
             fields.add("capture_id")
         if self.places == "on":
@@ -503,8 +503,7 @@ class View:
                 "relief_shade",
                 "specular",
                 "clouds",
-                "cloud_gamma",
-                "cloud_threshold",
+                *(control.name for control in CLOUD_CONTROLS),
                 "capture_id",
             }
         return fields
@@ -617,7 +616,7 @@ class View:
             "place_size",
             "route_width",
             "relief_shade",
-            "cloud_threshold",
+            *(control.name for control in CLOUD_CONTROLS if control.whole),
             "planet_shade",
             "orbit_width",
         ):
@@ -1313,7 +1312,11 @@ class View:
             body += f"specular_map={LAYER_ASSETS['specular']}\n".encode()
         if self.clouds == "snapshot2011" or self.uses_capture():
             cloud = IMAGE_FILE if self.uses_capture() else LAYER_ASSETS["clouds"]
-            body += f"cloud_map={cloud}\ncloud_gamma={number(self.cloud_gamma)}\ncloud_threshold={int(self.cloud_threshold)}\n".encode()
+            settings = "".join(
+                f"{control.name}={(int if control.whole else number)(getattr(self, control.name))}\n"
+                for control in CLOUD_CONTROLS
+            )
+            body += f"cloud_map={cloud}\n{settings}".encode()
         for product in self.uses_observations():
             marker, arc, _ = observation_names(product)
             body += f"marker_file={marker}\n".encode()
@@ -1525,8 +1528,7 @@ class View:
             relief_shade=30,
             specular="off",
             clouds="off",
-            cloud_gamma=1,
-            cloud_threshold=90,
+            **{control.name: control.default for control in CLOUD_CONTROLS},
         )
         if version < 5 and self != layer_defaults:
             raise ValueError("Older formats cannot retain layer settings.")
@@ -1578,7 +1580,10 @@ class View:
                 f"XPLANET_RELIEF={self.relief}\nXPLANET_RELIEF_SCALE={number(self.relief_scale)}\n"
                 f"XPLANET_RELIEF_SHADOW={self.relief_shadow}\nXPLANET_RELIEF_SHADE={number(self.relief_shade)}\n"
                 f"XPLANET_SPECULAR={self.specular}\nXPLANET_CLOUDS={self.clouds}\n"
-                f"XPLANET_CLOUD_GAMMA={number(self.cloud_gamma)}\nXPLANET_CLOUD_THRESHOLD={number(self.cloud_threshold)}\n"
+            )
+            extra += "".join(
+                f"{control.definition_key}={number(getattr(self, control.name))}\n"
+                for control in CLOUD_CONTROLS
             )
         if version >= 6:
             extra += f"XPLANET_CLOUD_CAPTURE={self.capture_id}\n"
@@ -1797,8 +1802,10 @@ def parse_saved_view(
                         relief_shade=float(values["XPLANET_RELIEF_SHADE"]),
                         specular=values["XPLANET_SPECULAR"],
                         clouds=values["XPLANET_CLOUDS"],
-                        cloud_gamma=float(values["XPLANET_CLOUD_GAMMA"]),
-                        cloud_threshold=float(values["XPLANET_CLOUD_THRESHOLD"]),
+                        **{
+                            control.name: float(values[control.definition_key])
+                            for control in CLOUD_CONTROLS
+                        },
                     )
                 if version >= 6:
                     view = replace(view, capture_id=values["XPLANET_CLOUD_CAPTURE"])
@@ -2134,8 +2141,7 @@ def recognized_body(config):
             view = replace(
                 view,
                 clouds="captured" if values["cloud_map"] == IMAGE_FILE else "snapshot2011",
-                cloud_gamma=float(values["cloud_gamma"]),
-                cloud_threshold=float(values["cloud_threshold"]),
+                **{control.name: float(values[control.name]) for control in CLOUD_CONTROLS},
             )
         return config == replace(view, **observed).body()
     except (ValueError, KeyError, UnicodeError):
