@@ -8,8 +8,8 @@ data-only use, see [standalone TotalMarker](totalmarker-standalone.md).
 In `config/totalmarker.toml`, use whole units as named in each key:
 
 - **Check intervals:** minutes for clouds, earthquakes and storms; hours for
-  volcanoes (`check_interval_hours = 23`) and NORAD
-  (`check_interval_hours = 2`); days for eclipses (`check_interval_days = 1`).
+  volcanoes (`check_interval_hours = 23`), NORAD (`check_interval_hours = 2`)
+  and eclipses (`check_interval_hours = 24`).
 - **Label warnings:** hours for clouds, earthquakes and storms; days for
   volcanoes and NORAD.
 - **Other settings:** seconds for network timeouts, days for NORAD's
@@ -23,8 +23,8 @@ often; raising it above the scheduled interval can make a run skip a fetch.
 For example, the quake plist runs every 20 minutes, but TotalMarker can
 reuse valid saved quake data fetched less than 18 minutes ago.
 
-Prior seconds and minute spellings and INI settings remain supported without
-rounding. Use only one spelling for a setting.
+Prior TOML spellings (including eclipse `check_interval_days`) and INI
+settings remain supported without rounding. Use only one spelling for a setting.
 Response byte limits still apply by default; existing override keys
 remain supported for deployments such as unusually large cloud maps.
 
@@ -659,6 +659,11 @@ on redraw, with its usual day/night fade. The job checks for changes to your
 base link before it reuses a composite. If the forecast expires, the next
 job invocation selects the original map even if NOAA is unavailable. If the
 job is stopped entirely, it cannot clear the last composite automatically.
+
+When desktop update labels are enabled, the Aurora row appears below Clouds.
+It shows the saved forecast's expiry: green while current (even if it predicts
+no glow), yellow when expired and red when no valid forecast is saved. Aurora
+has no separate warning timer. `--overlay-only` does not touch desktop labels.
 
 To turn it off, set `enabled = false` in `[aurora]` and run
 `./scripts/xplanet.sh aurora --prepare` to restore the original map without

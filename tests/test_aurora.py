@@ -9,9 +9,10 @@ import zlib
 
 from totalmarker.config import load_bytes
 from totalmarker.errors import DownloadError, FeedError, StorageError
-from totalmarker.features import aurora
+from totalmarker.features import aurora, clouds
 from totalmarker.http import Response
 from totalmarker.health import check
+from totalmarker.labels import legacy_time
 from totalmarker.paths import RootFS
 
 NOW = datetime.fromisoformat("2026-11-25T03:00:00Z").timestamp()
@@ -145,6 +146,57 @@ class AuroraTests(unittest.TestCase):
         row = next(r for r in later["products"] if r["product"] == "aurora")
         self.assertEqual(row["status"], "stale")
         self.assertEqual(self.fetcher.fetch.call_count, 1)
+
+    def test_desktop_label_tracks_quiet_forecast_and_expires_without_an_aurora_fetch(self):
+        cloud = '-53 -13 "Cloud Map Last Updated UNKNOWN" color=Red image=none position=pixel\n'
+        quake = '-68 -13 "Earthquake Information Last Updated UNKNOWN" color=Red image=none position=pixel\n'
+        personal = '-113 -74 "Personal marker" image=none position=pixel\n'
+        self.fs.write(self.config.labels, (cloud + quake + personal).encode())
+        quiet = data()
+        for point in quiet["coordinates"]:
+            point[2] = 0
+        self.fetcher.fetch.return_value = Response(200, {}, json.dumps(quiet).encode())
+        first = self.refresh()
+        self.assertEqual(first["outcome"], "changed")
+        name = f'Aurora Forecast Valid Until {legacy_time(first["expires_at"])}'
+        green = f'-68 -13 "{name}" color=Green image=none position=pixel\n'
+        expected = cloud + green + quake.replace("-68", "-83", 1) + personal
+        self.assertEqual(self.fs.read(self.config.labels).decode(), expected)
+        self.fetcher.fetch.side_effect = DownloadError("NOAA unavailable")
+        self.assertEqual(self.refresh(now=NOW+300)["outcome"], "failed")
+        self.assertEqual(self.fs.read(self.config.labels).decode(), expected)
+        clouds.run(self.fs, self.config, label_only=True, now=first["expires_at"])
+        self.assertIn(green.replace("Green", "Yellow"), self.fs.read(self.config.labels).decode())
+        self.assertEqual(self.fetcher.fetch.call_count, 2)
+        off = load_bytes(self.fs, b'[aurora]\nenabled=false\nbase_night_map="images/selected"\n', 'a.toml')
+        self.assertEqual(self.refresh(settings=off, prepare=True)["outcome"], "disabled")
+        self.assertEqual(self.fs.read(self.config.labels).decode(), expected.replace(green, ""))
+
+    def test_unknown_forecast_keeps_custom_label_coordinates_and_headless_leaves_labels_alone(self):
+        initial = ('-53 -13 "Cloud Map Last Updated UNKNOWN" color=Red image=none position=pixel\n'
+                   '-68 -20 "Custom annotation" color=Green position=pixel\n')
+        self.fs.write(self.config.labels, initial.encode())
+        self.refresh(overlay_only=True)
+        self.assertEqual(self.fs.read(self.config.labels).decode(), initial)
+        (self.root / aurora.OVERLAY).unlink()
+        self.fetcher.fetch.side_effect = DownloadError("NOAA unavailable")
+        self.assertEqual(self.refresh()["outcome"], "failed")
+        rows = self.fs.read(self.config.labels).decode().splitlines()
+        self.assertEqual(rows[0], initial.splitlines()[0])
+        self.assertEqual(rows[2], initial.splitlines()[1])
+        self.assertEqual(rows[1], '-83 -13 "Aurora Forecast Valid Until UNKNOWN" '
+                                  'color=Red image=none position=pixel')
+
+    def test_later_cloud_row_puts_aurora_below_it_without_duplicate_rows(self):
+        self.refresh()
+        original = self.fs.read(self.config.labels).decode()
+        self.assertTrue(original.startswith('-53 -13 "Aurora'))
+        clouds.run(self.fs, self.config, label_only=True, now=NOW)
+        lines = self.fs.read(self.config.labels).decode().splitlines()
+        self.assertEqual(len(lines), 2)
+        self.assertIn("Cloud Map", lines[0])
+        self.assertIn("Aurora Forecast", lines[1])
+        self.assertGreater(int(lines[0].split()[0]), int(lines[1].split()[0]))
 
     def test_compositor_error_selects_base(self):
         self.compositor.side_effect = FeedError('test image failure')

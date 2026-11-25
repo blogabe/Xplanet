@@ -1,14 +1,19 @@
 """Legacy local-time product labels; preserve unrelated records verbatim."""
-from .diagnostics import success_at
-import re
 from datetime import datetime
+import hashlib
+import re
 import time
+
+from .aurora_status import MAX_FEED, OVERLAY, read_record
+from .diagnostics import success_at
+from .errors import StorageError
 
 PREFIX = "Cloud Map Last Updated"
 VOLCANO_PREFIX = "Volcano Information Last Updated"
 QUAKE_PREFIX = "Earthquake Information Last Updated"
 STORM_PREFIX = "Storm Information Last Updated"
 NORAD_PREFIX = "NORAD Information Last Updated"
+AURORA_PREFIX = "Aurora Forecast Valid Until"
 LEGACY_PREFIXES = {
     VOLCANO_PREFIX: "Volcano Infomation Last Updated",
     QUAKE_PREFIX: "Earthquake Infomation Last Updated",
@@ -16,7 +21,7 @@ LEGACY_PREFIXES = {
     NORAD_PREFIX: "NORAD Infomation Last Updated",
 }
 # Broad legacy names count as occupied product rows when placing a new label.
-STACK_ROW_PREFIXES = (PREFIX, "Earthquake", "Storm", "Volcano", "NORAD")
+STACK_ROW_PREFIXES = (PREFIX, AURORA_PREFIX, "Earthquake", "Storm", "Volcano", "NORAD")
 ROW = re.compile(r'^(?P<head>\s*-?\d+(?:\.\d+)?\s+-?\d+(?:\.\d+)?\s+")'
                  r'(?P<text>[^"\r\n]*)(?P<tail>"[^\r\n]*)(?P<nl>\r?\n)?$')
 STAMP = re.compile(r"(?:Sun|Mon|Tues?|Wed|Thurs?|Fri|Sat) (\d{1,2}) "
@@ -141,11 +146,100 @@ def render_norad(existing, successful_at, now, warning, colors, *, append=True):
                           colors, append=append, second_coordinate=-13)
 
 
+def _aurora_label(fs, settings, now):
+    try:
+        record = read_record(fs)
+        if record:
+            overlay = fs.read(OVERLAY, MAX_FEED)
+            expires = record["expires_at"]
+            if (overlay is not None and hashlib.sha256(overlay).hexdigest() == record["overlay_sha256"]
+                    and 0 <= record["observed_at"] <= now + 300
+                    and record["observed_at"] <= expires < 253402300799):
+                return legacy_time(expires), settings.colors[0 if now < expires else 1]
+    except (StorageError, OverflowError, OSError, ValueError):
+        pass
+    return "UNKNOWN", settings.colors[2]
+
+
+def _aurora_position(lines, cloud):
+    """Reserve the next stock row without relocating custom markers."""
+    anchor = ROW.match(lines[cloud])
+    first, column = anchor["head"].split()[:2]
+    target = float(first) - 15
+    slots = {}
+    for i, line in enumerate(lines):
+        row = ROW.match(line)
+        if row:
+            slots.setdefault(float(row["head"].split()[0]), []).append((i, row))
+    displaced = []
+    end = target
+    while end in slots:
+        slot = slots[end]
+        occupant = slot[0][1]
+        if (len(slot) != 1 or column != "-13" or end > -53 or (end + 53) % 15
+                or occupant["head"].split()[1] != column
+                or not occupant["tail"].rstrip().endswith("position=pixel")
+                or not any(matches_product(occupant["text"], prefix) for prefix in
+                           (QUAKE_PREFIX, STORM_PREFIX, VOLCANO_PREFIX, NORAD_PREFIX))):
+            # A custom position may be deliberate; leave that stack untouched.
+            while end in slots:
+                end -= 15
+            return end, column
+        displaced.append(slot[0])
+        end -= 15
+    for i, row in displaced:
+        head = re.sub(r"-?\d+(?:\.\d+)?", f'{float(row["head"].split()[0])-15:g}',
+                      row["head"], count=1)
+        lines[i] = head + row["text"] + row["tail"] + (row["nl"] or "")
+    return target, column
+
+
+def refresh_aurora(fs, existing, settings, now, *, append=False):
+    lines = existing.splitlines(keepends=True)
+    own = [i for i, line in enumerate(lines)
+           if (row := ROW.match(line)) and matches_product(row["text"], AURORA_PREFIX)]
+    if not settings.aurora.enabled:
+        return "".join(line for i, line in enumerate(lines) if i not in own)
+    if not own and not append:
+        return existing
+    stamp, color = _aurora_label(fs, settings, now)
+    text = f"{AURORA_PREFIX} {stamp}"
+    cloud = next((i for i, line in enumerate(lines)
+                  if (row := ROW.match(line)) and matches_product(row["text"], PREFIX)
+                  and abs(float(row["head"].split()[0])) <= 2**31), None)
+    if own:
+        row = ROW.match(lines[own[0]])
+        # Keep known coordinates unless a cloud row was subsequently added below.
+        cloud_pos = float(ROW.match(lines[cloud])["head"].split()[0]) if cloud is not None else None
+        if cloud_pos is None or float(row["head"].split()[0]) < cloud_pos:
+            tail, replaced = re.subn(r"(?<!\S)color=\S+", "color=" + color, row["tail"], count=1)
+            if not replaced:
+                tail += " color=" + color
+            lines[own[0]] = row["head"] + text + tail + (row["nl"] or "")
+            return "".join(lines)
+        for i in reversed(own):
+            lines.pop(i)
+            cloud -= i < cloud
+    if cloud is None:
+        used = {float(row["head"].split()[0]) for line in lines if (row := ROW.match(line))}
+        pos, column = -53, "-13"
+        while pos in used:
+            pos -= 15
+        index = len(lines)
+    else:
+        pos, column = _aurora_position(lines, cloud)
+        index = cloud + 1
+    if index and not lines[index - 1].endswith("\n"):
+        lines[index - 1] += "\n"
+    lines.insert(index, f'{pos:g} {column} "{text}" color={color} image=none position=pixel\n')
+    return "".join(lines)
+
+
 def marker_timestamp(record):
     return success_at(record)
 
 
-def refresh_all(existing, state, settings, now, *, append_product=None):
+def refresh_all(existing, state, settings, now, *, fs, append_product=None):
     """Re-age configured rows without changing their saved update timestamps."""
     products = state["products"]
     rows = (
@@ -164,4 +258,4 @@ def refresh_all(existing, state, settings, now, *, append_product=None):
     for product, render, timestamp, warning in rows:
         existing = render(existing, timestamp, now, warning, settings.colors,
                           append=product == append_product)
-    return existing
+    return refresh_aurora(fs, existing, settings, now)

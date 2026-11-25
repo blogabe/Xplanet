@@ -463,7 +463,7 @@ def run(fs, settings, *, fetcher=None, now=None):
                 and (marker is not None or valid_existing)):
             record["successful_at"] = now
         finish(record, now, outcome, message, attempt)
-        label = (refresh_all(old_label, state, settings, now)
+        label = (refresh_all(old_label, state, settings, now, fs=fs)
                  if settings.labels_enabled else None)
         if label == old_label:
             label = None

@@ -126,7 +126,7 @@ def run(fs, settings, *, fetcher=None, now=None):
         if outcome != "failed" and (marker is not None or valid_existing):
             record["successful_at"] = now
         finish(record, now, outcome, message, attempt)
-        label = (refresh_all(old_label, state, settings, now,
+        label = (refresh_all(old_label, state, settings, now, fs=fs,
                              append_product="quake" if marker is not None or valid_existing else None)
                  if settings.labels_enabled else None)
         if label == old_label:
