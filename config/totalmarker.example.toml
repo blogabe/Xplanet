@@ -160,6 +160,9 @@ output = "satellites/totalmarker"
 check_interval_hours = 2
 timeout_seconds = 30
 max_age_days = 14
+# Group and profile colors override this default. The color applies to orbit
+# trails, the optional altitude circle, and visible captions. DarkGoldenrod
+# is a muted alternative to Yellow.
 color = "Yellow"
 
 [[norad.groups]]
