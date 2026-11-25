@@ -265,6 +265,8 @@ class EclipseOptions:
 
 @dataclass(frozen=True)
 class SantaOptions:
+    """Compatibility paths and validation for retired Santa records."""
+
     enabled: bool = False
     marker: str = "markers/santa"
     journal: str = ".state/totalmarker/santa-pending.json"
