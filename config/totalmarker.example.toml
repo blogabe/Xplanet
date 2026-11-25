@@ -139,6 +139,7 @@ arc_output = "arcs/eclipse"
 check_interval_hours = 24
 timeout_seconds = 30
 notify_hours = 48
+# Show the countdown in the upper left. It updates when the eclipse job runs.
 notice_enabled = true
 edge_color = "Grey"
 center_color = "Black"

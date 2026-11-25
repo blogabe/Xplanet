@@ -44,17 +44,20 @@ class EclipseTests(Sandbox):
     def options(self, url=TOTAL_URL):
         return self.config(f"EclipseEnabled=On\nEclipsePathURL={url}\n")
 
-    def previous_notice_state(self, settings):
+    def previous_notice_state(self, settings, *, legacy_key=True):
         marker = self.fs.read(settings.eclipse.marker)
         old_line = (b'-55 1 "Total Solar Eclipse path samples start '
                     b'2027-08-02 11:30 UTC" color=White image=none position=pixel\n')
-        marker = b"".join(old_line if line.startswith(b'-55 1 "') else line
-                          for line in marker.splitlines(keepends=True))
+        marker = marker.replace(b'42 20 "', b'-55 1 "').replace(b'60 20 "', b'-45 1 "')
+        if legacy_key:
+            marker = b"".join(old_line if line.startswith(b'-55 1 "') else line
+                              for line in marker.splitlines(keepends=True))
         self.fs.write(settings.eclipse.marker, marker)
         arc = self.fs.read(settings.eclipse.arc)
         state = self.read_state(settings)
         record = state["products"]["eclipse"]
-        record["source_key"] = _source_key(self.fs, settings.eclipse, legacy_notice=True)
+        if legacy_key:
+            record["source_key"] = _source_key(self.fs, settings.eclipse, legacy_notice=True)
         record["marker_sha256"] = hashlib.sha256(marker).hexdigest()
         record["body_sha256"] = hashlib.sha256(marker + b"\0" + arc).hexdigest()
         self.fs.write(settings.state, json_bytes(state))
@@ -71,7 +74,8 @@ class EclipseTests(Sandbox):
         self.assertEqual(first.outcome, "changed")
         marker = self.fs.read(settings.eclipse.marker)
         arc = self.fs.read(settings.eclipse.arc)
-        self.assertIn(b"Total Solar Eclipse central-path samples begin in 1h 0m (2027-08-02 11:30 UTC)", marker)
+        self.assertIn(b'42 20 "Total Solar Eclipse central-path samples begin in 1h 0m (2027-08-02 11:30 UTC)"', marker)
+        self.assertIn(b'60 20 "NASA predicted central path and limits shown"', marker)
         self.assertIn(b'# center path', arc)
         self.assertIn(b'color=Black spacing=0.2', arc)
         self.assertEqual(len(transport.calls), 1)
@@ -155,7 +159,28 @@ class EclipseTests(Sandbox):
                      now=path.start_at - 3540)
         self.assertEqual(hidden.outcome, "changed")
         self.assertEqual(hidden.successful_at, first.successful_at)
-        self.assertNotIn(b'central-path samples begin in', self.fs.read(off.eclipse.marker))
+        self.assertNotIn(b'position=pixel', self.fs.read(off.eclipse.marker))
+        self.assertEqual(transport.calls, [])
+
+    def test_cached_lower_left_notice_moves_without_fetch(self):
+        path = parse_path(TOTAL, TOTAL_URL)
+        settings = self.options()
+        run(self.fs, settings, fetcher=Fetcher(ScriptedTransport(
+            Response(200, {}, TOTAL))), now=path.start_at - 3600)
+        old = self.previous_notice_state(settings, legacy_key=False)
+        old_arc = self.fs.read(settings.eclipse.arc)
+        transport = ScriptedTransport()
+        result = run(self.fs, settings, fetcher=Fetcher(transport),
+                     now=path.start_at - 3540)
+        marker = self.fs.read(settings.eclipse.marker)
+        self.assertEqual(result.outcome, "changed")
+        self.assertIn(b'42 20 "Total Solar Eclipse central-path samples begin in 0h 59m', marker)
+        self.assertIn(b'60 20 "NASA predicted central path', marker)
+        self.assertNotIn(b'-55 1 "', marker)
+        self.assertNotIn(b'-45 1 "', marker)
+        self.assertEqual([line for line in marker.splitlines() if b"position=pixel" not in line],
+                         [line for line in old.splitlines() if b"position=pixel" not in line])
+        self.assertEqual(self.fs.read(settings.eclipse.arc), old_arc)
         self.assertEqual(transport.calls, [])
 
     def test_previous_notice_key_does_not_adopt_changed_path_selection(self):

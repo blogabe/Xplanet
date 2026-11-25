@@ -141,6 +141,19 @@ class AstronomyCaptureTests(AstronomyCaptureFixture, Sandbox):
             meta["source_hashes"][FILES["eclipse"][0]], meta["files"][FILES["eclipse"][0]]
         )
 
+    def test_eclipse_capture_still_accepts_legacy_notice_anchors(self):
+        settings, path = self.eclipse()
+        raw = self.fs.read(settings.eclipse.marker)
+        old = raw.replace(b'42 20 "', b'-55 1 "').replace(b'60 20 "', b'-45 1 "')
+        self.assertNotEqual(raw, old)
+        frozen = self.capture("eclipse", path.start_at - 1800)
+        first, second = (data for _, data in frozen.payload)
+        markers, arcs = eclipse_pair(
+            old, self.fs.read(settings.eclipse.arc), frozen.metadata, source=True
+        )
+        self.assertEqual(markers, first)
+        self.assertEqual(arcs, second)
+
     def test_eclipse_event_coverage_inclusive_and_not_weather_now_policy(self):
         _, path = self.eclipse()
         frozen = self.capture("eclipse", path.start_at - 1800)
