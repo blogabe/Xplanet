@@ -30,15 +30,14 @@ PYTHONPATH=scripts:. TZ=UTC .state/configurator/venv/bin/python -B -m tests.run_
 ```
 
 Fixtures are offline/synthetic or attributed public captures. Preserve raw fixture
-bytes and `.gitattributes`. To exercise the optional saved NORAD cases, set
-`XPLANET_NORAD_EVIDENCE_FILE` to an absolute path to the matching private
-CelesTrak capture. Missing evidence is reported as a skip.
+bytes and `.gitattributes`.
 Tests use disposable roots and stub operations; do not point them at a working
-installation. See [architecture](../docs/architecture.md#verification-boundaries).
+installation. Prefer native TOML for runtime tests (for example, the
+`Sandbox.toml_config` fixture) and retain explicit legacy INI compatibility
+cases. See [architecture](../docs/architecture.md#verification-boundaries).
 
-The supported macOS runner allows only the two named optional private NORAD
-evidence skips; zero skips is valid when that evidence is available. The portable
-runner additionally permits five explicitly named zsh shell-boundary cases to
+The supported macOS runner requires zero skips. The portable
+runner permits five explicitly named zsh shell-boundary cases to
 skip only when their required `/bin/zsh` or PATH executable is unavailable. It
 does not exempt arbitrary skips by reason text. Other required checks, including
 Git-index privacy, must still run; this is a capability boundary, not evidence
