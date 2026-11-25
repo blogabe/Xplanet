@@ -261,6 +261,10 @@ class HandoffScreen(ModalScreen[tuple]):
                 self.receipt = None
                 self.query_one("#handoff-restore", Button).disabled = True
         except asyncio.CancelledError:
+            # App teardown can remove the modal's children before its worker is
+            # cancelled. Preserve cancellation rather than updating a dead UI.
+            if not self.query("#handoff-content"):
+                raise
             self.invalidate()
             self.result = "Filesystem operation cancelled; inspect the chosen destination for retained partial files before retrying. Source and draft retained; no renderer or job action."
             self.status(self.result)
@@ -288,7 +292,8 @@ class HandoffScreen(ModalScreen[tuple]):
             self.status(message)
         finally:
             self.busy = False
-            self.query_one("#handoff-content").disabled = False
+            for content in self.query("#handoff-content"):
+                content.disabled = False
 
     def selected(self, receipt, message):
         self.invalidate()
