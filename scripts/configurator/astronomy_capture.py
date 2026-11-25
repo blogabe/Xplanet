@@ -74,7 +74,7 @@ def text_lines(raw):
 def satellite_pair(first, second, metadata):
     ids = metadata['selected_ids']; captured = metadata['captured_at']; max_age = metadata['max_age_seconds']
     if (not isinstance(ids, list) or not 1 <= len(ids) <= 16 or
-            any(type(i) is not int or not 1 <= i <= 99999 for i in ids) or len(set(ids)) != len(ids) or
+            any(type(i) is not int or not 1 <= i <= 339999 for i in ids) or len(set(ids)) != len(ids) or
             type(max_age) is not int or not 1 <= max_age <= 2**31):
         raise CaptureError('A nonempty representable NORAD selection and bounded epoch policy are required.')
     rows = text_lines(first); elements = text_lines(second)
@@ -86,7 +86,7 @@ def satellite_pair(first, second, metadata):
         expected=metadata.get('icons',{}).get(str(catalog_id))
         if (icon[1] if icon else None)!=expected:raise CaptureError('NORAD icon association differs from its selected object.')
         if icon:row=row[:icon.start()]+row[icon.end():]
-        match = re.fullmatch(r'([0-9]{1,5}) "([A-Za-z0-9 ._()/+ -]{0,64})" color=([^ ]+) trail=\{orbit,(-?[0-9]+),(-?[0-9]+),([0-9]+)\}(?: transparent=\{([0-9]+),([0-9]+),([0-9]+)\})?(?: altcirc=([0-9]+))?(?: align=(right|left|above|below|center))?', row)
+        match = re.fullmatch(r'([0-9]{1,6}) "([A-Za-z0-9 ._()/+ -]{0,64})" color=([^ ]+) trail=\{orbit,(-?[0-9]+),(-?[0-9]+),([0-9]+)\}(?: transparent=\{([0-9]+),([0-9]+),([0-9]+)\})?(?: altcirc=([0-9]+))?(?: align=(right|left|above|below|center))?', row)
         if not match or int(match[1]) != catalog_id or not TOKEN.fullmatch(match[3]):
             raise CaptureError('Unsupported NORAD selector or image dependency; original files were retained.')
         if ',' in match[3] and any(int(value) > 255 for value in match[3].split(',')):

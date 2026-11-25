@@ -13,7 +13,7 @@ class RendererDiscoveryTests(unittest.TestCase):
     def test_setup_literal_custom_prefix_wins_with_sparse_path_without_execution(self):
         import shlex
         (self.root/'config/xp.def').write_text('XPLANET_BIN='+shlex.quote(str(self.binary))+'\n')
-        with patch('configurator.renderer_discovery.shutil.which',side_effect=AssertionError('no fallback')):
+        with patch('totalmarker.renderer_discovery.shutil.which',side_effect=AssertionError('no fallback')):
             value,note=discover(self.root)
         self.assertEqual(value,str(self.binary));self.assertIn('literal project',note)
         self.assertFalse((self.root/'EXECUTED').exists())
@@ -23,29 +23,40 @@ class RendererDiscoveryTests(unittest.TestCase):
                      'XPLANET_BIN=/one\nXPLANET_BIN=/two\n'):
             with self.subTest(text=text):
                 (self.root/'config/xp.def').write_text(text)
-                with patch('configurator.renderer_discovery.shutil.which',side_effect=AssertionError('no fallback')):
+                with patch('totalmarker.renderer_discovery.shutil.which',side_effect=AssertionError('no fallback')):
                     value,note=discover(self.root)
                 self.assertEqual(value,'');self.assertTrue(note);self.assertFalse((self.root/'EXECUTED').exists())
         (self.root/'config/xp.def').unlink();(self.root/'config/xp.def').symlink_to(self.binary)
         self.assertEqual(discover(self.root)[0],'')
+    def test_home_renderer_expansion_without_evaluating_shell(self):
+        assignment = self.root / "config/xp.def"
+        with patch.dict(os.environ, {"HOME": str(self.root)}):
+            for value in ('"$HOME/custom prefix/bin/xplanet"',
+                          '"${HOME}/custom prefix/bin/xplanet"'):
+                assignment.write_text(f"XPLANET_BIN={value}\n")
+                self.assertEqual(discover(self.root)[0], str(self.binary))
+            assignment.write_text("XPLANET_BIN='$HOME/custom prefix/bin/xplanet'\n")
+            self.assertEqual(discover(self.root)[0], "")
+        self.assertFalse((self.root / "EXECUTED").exists())
+
     def test_explicit_choice_is_authoritative_and_not_validated_by_execution(self):
         value,note=discover(self.root,'/explicit/unavailable')
         self.assertEqual(value,'/explicit/unavailable');self.assertIn('Explicit',note)
     def test_path_and_homebrew_fallbacks_without_package_manager_execution(self):
-        with patch('configurator.renderer_discovery.shutil.which',return_value=str(self.binary)):
+        with patch('totalmarker.renderer_discovery.shutil.which',return_value=str(self.binary)):
             self.assertEqual(discover(self.root)[0],str(self.binary))
         home=self.root/'home';candidate=home/'.homebrew/bin/xplanet'
-        with patch.dict(os.environ,{'HOME':str(home)}),patch('configurator.renderer_discovery.shutil.which',return_value=None),patch('configurator.renderer_discovery.executable',side_effect=lambda value:Path(value)==candidate):
+        with patch.dict(os.environ,{'HOME':str(home)}),patch('totalmarker.renderer_discovery.shutil.which',return_value=None),patch('totalmarker.renderer_discovery.executable',side_effect=lambda value:Path(value)==candidate):
             self.assertEqual(discover(self.root)[0],str(candidate))
     def test_blank_project_assignment_allows_pre_setup_path_discovery(self):
         (self.root/'config/xp.def').write_text("XPLANET_BIN=''\n")
-        with patch('configurator.renderer_discovery.shutil.which',return_value=str(self.binary)):
+        with patch('totalmarker.renderer_discovery.shutil.which',return_value=str(self.binary)):
             self.assertEqual(discover(self.root)[0],str(self.binary))
 
     def test_large_blank_definition_has_bounded_discovery_cost(self):
         import subprocess,sys
         (self.root/'config/xp.def').write_text('\n'*200000)
-        code="from unittest.mock import patch; from pathlib import Path; from configurator.renderer_discovery import discover; import sys; expected=sys.executable; p=patch('configurator.renderer_discovery.shutil.which',return_value=expected); p.start(); assert discover(Path(sys.argv[1]))[0]==expected"
+        code="from unittest.mock import patch; from pathlib import Path; from configurator.renderer_discovery import discover; import sys; expected=sys.executable; p=patch('totalmarker.renderer_discovery.shutil.which',return_value=expected); p.start(); assert discover(Path(sys.argv[1]))[0]==expected"
         result=subprocess.run([sys.executable,'-B','-c',code,str(self.root)],capture_output=True,text=True,timeout=10)
         self.assertEqual(result.returncode,0,result.stderr)
 
@@ -53,6 +64,6 @@ class RendererDiscoveryTests(unittest.TestCase):
         import errno,shlex
         (self.root/'config/xp.def').write_text('XPLANET_BIN='+shlex.quote(str(self.binary))+'\n')
         for code in (errno.EACCES,errno.ENAMETOOLONG):
-            with self.subTest(errno=code),patch('configurator.renderer_discovery.Path.is_file',side_effect=OSError(code,'fixture filesystem failure')),patch('configurator.renderer_discovery.shutil.which',side_effect=AssertionError('no fallback')):
+            with self.subTest(errno=code),patch('totalmarker.renderer_discovery.Path.is_file',side_effect=OSError(code,'fixture filesystem failure')),patch('totalmarker.renderer_discovery.shutil.which',side_effect=AssertionError('no fallback')):
                 value,note=discover(self.root)
                 self.assertEqual(value,'');self.assertIn('unavailable',note)

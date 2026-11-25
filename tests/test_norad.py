@@ -9,8 +9,10 @@ from unittest.mock import patch
 
 from totalmarker.errors import ConfigError, FeedError, StorageError
 from totalmarker.features.norad import parse_group, parse_tle, run
+from totalmarker.features.norad_omm import catalog_field, omm_to_tle
 from totalmarker.config import load
 from totalmarker.http import Fetcher, Response
+from totalmarker.health import saved_norad_freshness
 from totalmarker.state import json_bytes
 from .support import Sandbox, ScriptedTransport
 
@@ -37,6 +39,20 @@ def sample_for(catalog_id, name):
     return ("\n".join(lines) + "\n").encode("ascii")
 
 
+# Published ISS example above represented in OMM units, with a synthetic
+# six-digit identity. This is not a captured Soyuz orbital element set.
+OMM = {
+    "OBJECT_NAME": "SOYUZ MS-TEST", "NORAD_CAT_ID": 100057,
+    "OBJECT_ID": "1998-067A", "EPOCH": "2001-10-13T10:34:49.999872",
+    "MEAN_MOTION": 15.56596996, "ECCENTRICITY": 0.0007838,
+    "INCLINATION": 51.6394, "RA_OF_ASC_NODE": 213.7002,
+    "ARG_OF_PERICENTER": 194.2620, "MEAN_ANOMALY": 314.2054,
+    "EPHEMERIS_TYPE": 0, "CLASSIFICATION_TYPE": "U",
+    "ELEMENT_SET_NO": 595, "REV_AT_EPOCH": 16553,
+    "BSTAR": 0.00081723, "MEAN_MOTION_DOT": 0.00059265, "MEAN_MOTION_DDOT": 0,
+}
+
+
 class NoradTests(Sandbox):
     def options(self):
         return self.config("NoradEnabled=On\nNoradCatalogIds=25544\n")
@@ -46,6 +62,53 @@ class NoradTests(Sandbox):
             '[cloud]\nprovider = "custom"\nurl = "https://cloud.example.invalid/map.jpg"\n'
             f'[norad]\nenabled = true\ncatalog_ids = "{catalog_ids}"\n' + extra)
         return load(self.fs, "config.toml")
+
+    def test_alpha5_omm_matches_known_orbital_fields(self):
+        body = omm_to_tle(json.dumps([OMM]).encode(), 100057)
+        name, first, second, epoch = parse_tle(body, 100057, EPOCH + 5, 3600)
+        self.assertEqual((name, first[2:7], second[2:7]), ("SOYUZ MS-TEST", "A0057", "A0057"))
+        self.assertEqual((first[7:68], second[7:68]), tuple(row[7:68].decode()
+                                                          for row in SAMPLE.splitlines()[1:]))
+        self.assertAlmostEqual(epoch, EPOCH, places=3)
+        self.assertEqual([catalog_field(i) for i in (99999, 100000, 180000, 230000, 339999)],
+                         ["99999", "A0000", "J0000", "P0000", "Z9999"])
+        with self.assertRaises(ValueError):
+            catalog_field(340000)
+        with self.assertRaises(FeedError):
+            parse_tle(body, 100058, EPOCH + 5, 3600)
+
+    def test_alpha5_rejects_invalid_omm(self):
+        for update in ({"NORAD_CAT_ID": 25544}, {"EPHEMERIS_TYPE": 2},
+                       {"MEAN_ELEMENT_THEORY": "SGP4-XP"}, {"REF_FRAME": "ITRF"},
+                       {"MEAN_MOTION": float("inf")}, {"EPOCH": "2057-01-01T00:00:00"},
+                       {"ECCENTRICITY": 0.999999999}):
+            with self.subTest(update=update), self.assertRaises(FeedError):
+                omm_to_tle(json.dumps([OMM | update]).encode(), 100057)
+
+    def test_alpha5_publish_preserves_numeric_identity_and_caches(self):
+        settings = self.native_options(
+            '[[norad.groups]]\nsource = "stations"\nname_contains = "SOYUZ"\n'
+            '[[norad.profiles]]\ncatalog_id = 100057\ncaption = "Soyuz"\n')
+        discovery = json.dumps([{"OBJECT_NAME": "SOYUZ MS-TEST", "NORAD_CAT_ID": 100057},
+                                {"OBJECT_NAME": "SOYUZ UNREPRESENTABLE", "NORAD_CAT_ID": 340000}]).encode()
+        transport = ScriptedTransport(Response(200, {}, discovery), Response(200, {}, SAMPLE),
+                                      Response(200, {}, json.dumps([OMM]).encode()))
+        with patch("totalmarker.features.norad._renderer_supports_alpha5", return_value=True):
+            result = run(self.fs, settings, fetcher=Fetcher(transport), now=EPOCH + 10)
+            cached = run(self.fs, settings, fetcher=Fetcher(transport), now=EPOCH + 11)
+        self.assertEqual((result.outcome, result.count, cached.outcome), ("changed", 2, "unchanged"))
+        self.assertEqual(len(transport.calls), 3)
+        self.assertIn("CATNR=100057&FORMAT=JSON", transport.calls[-1][0])
+        self.assertIn(b'100057 "Soyuz"', self.fs.read(settings.norad.satellite))
+        self.assertIn(b"1 A0057U", self.fs.read(settings.norad.satellite + ".tle"))
+        saved = self.read_state(settings)["products"]["norad"]
+        self.assertEqual(saved["selected_ids"], [25544, 100057])
+        self.assertEqual(saved["skipped_unsupported_ids"], [340000])
+        with patch("totalmarker.features.norad._renderer_supports_alpha5",
+                   side_effect=AssertionError("saved freshness must not execute a renderer")):
+            self.assertEqual(saved_norad_freshness(self.fs, settings, saved,
+                                                   {"verified": True}, EPOCH + 11),
+                             "current")
 
     def test_group_discovery_precedence_dedup_and_profile_styles(self):
         settings = self.native_options('''
@@ -191,7 +254,7 @@ color = "Gold"
                                       Response(200, {}, sample_for(49044, "ISS (NAUKA)")))
         first = run(self.fs, settings, fetcher=Fetcher(transport), now=EPOCH + 10)
         self.assertEqual((first.outcome, first.count), ("changed", 2))
-        self.assertIn("skipped unsupported group catalog IDs 100057", first.message)
+        self.assertIn("skipped unsupported catalog IDs 100057", first.message)
         self.assertIn("coverage is partial", first.message)
         record = self.read_state(settings)["products"]["norad"]
         self.assertEqual(record["selected_ids"], [25544, 49044])
@@ -579,8 +642,8 @@ name_contains = "SOYUZ"
         settings = self.config()
         self.assertEqual(run(self.fs, settings).outcome, "disabled")
         self.assertIsNone(self.fs.read(settings.state))
-        with self.assertRaisesRegex(ConfigError, "one to five"):
-            self.config("NoradEnabled=On\nNoradCatalogIds=123456\n")
+        with self.assertRaisesRegex(ConfigError, "between 1 and 339999"):
+            self.config("NoradEnabled=On\nNoradCatalogIds=340000\n")
 
     def test_numeric_orbital_fields_reject_checksum_correct_garbage(self):
         lines = SAMPLE.decode("ascii").splitlines()

@@ -145,12 +145,13 @@ center_color = "Black"
 notice_color = "White"
 
 [norad]
-# Optional CelesTrak GP TLE product. Select up to 16 one-to-five-digit IDs.
+# Optional CelesTrak orbital elements. Select up to 16 catalog IDs.
+# IDs 100000–339999 require a renderer that reports Alpha-5 in xplanet -version.
 # catalog_ids is a comma-separated string, not a TOML array.
 # Explicit IDs lead; enabled group matches follow in configuration/source order.
 # Duplicate IDs use the first selection, and an ID profile overrides group style.
-# Invalid group responses fail. Unsupported six-digit group IDs are skipped
-# with a warning when supported selections remain; all-unsupported selection
+# Invalid group responses fail. Unsupported IDs are skipped with a warning
+# when supported selections remain; an all-unsupported selection
 # fails without replacing the last good selector/TLE pair.
 # Keep disabled until an operator deliberately configures Xplanet satellite_file.
 enabled = false

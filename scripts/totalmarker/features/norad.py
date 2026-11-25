@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 import re
+import subprocess
 import time
 
 from ..diagnostics import Attempt, finish
@@ -13,9 +14,12 @@ from ..config import NoradStyle
 from ..http import Fetcher
 from ..labels import refresh_all
 from ..state import PairPublisher, json_bytes, load_state, recover_pending, validate_state
+from .norad_omm import ALPHA5_MAX, catalog_field, checksum, omm_to_tle
+from ..renderer_discovery import discover
 
 
 CELESTRAK = "https://celestrak.org/NORAD/elements/gp.php?CATNR={id}&FORMAT=TLE"
+CELESTRAK_OMM = CELESTRAK.replace("FORMAT=TLE", "FORMAT=JSON")
 CELESTRAK_GROUP = "https://celestrak.org/NORAD/elements/gp.php?GROUP={source}&FORMAT=JSON"
 
 
@@ -29,8 +33,16 @@ class Result:
     count: int | None
 
 
-def _checksum(line):
-    return sum(int(ch) if ch.isdigit() else ch == "-" for ch in line[:68]) % 10
+def _renderer_supports_alpha5(fs):
+    renderer, _ = discover(fs.root)
+    if not renderer:
+        return False
+    try:
+        result = subprocess.run([renderer, "-version"], capture_output=True,
+                                timeout=5, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return result.returncode == 0 and b"TLE catalog IDs: Alpha-5" in result.stdout.splitlines()
 
 
 def parse_tle(raw, expected_id, now, max_age):
@@ -49,11 +61,16 @@ def parse_tle(raw, expected_id, now, max_age):
         raise FeedError("CelesTrak returned an incomplete or multiple-object TLE")
     if not re.fullmatch(r"[A-Za-z0-9 ._()/+ -]{1,64}", name):
         name = f"NORAD {expected_id}"
+    try:
+        expected_field = catalog_field(expected_id)
+    except ValueError:
+        raise FeedError("NORAD catalog ID is outside the supported Alpha-5 range") from None
     for number, line in (("1", first), ("2", second)):
         if (len(line) != 69 or not line.startswith(number + " ")
-                or not line[2:7].strip().isdigit()
-                or int(line[2:7]) != expected_id
-                or not line[68].isdigit() or _checksum(line) != int(line[68])):
+                or (line[2:7] != expected_field and not (expected_id < 100000 and
+                    re.fullmatch(r" *[0-9]+", line[2:7]) and int(line[2:7]) == expected_id))
+                or line[2:7] != first[2:7]
+                or not line[68].isdigit() or checksum(line) != int(line[68])):
             raise FeedError("CelesTrak TLE line or checksum is invalid")
     if first[7] != "U" or not re.fullmatch(r"\d{2}\d{3}\.\d{8}", first[18:32]):
         raise FeedError("CelesTrak TLE identification or epoch is invalid")
@@ -95,12 +112,12 @@ def parse_tle(raw, expected_id, now, max_age):
     return name, first, second, epoch_at
 
 
-def _source_key(fs, options):
+def _source_key(fs, options, alpha5):
     style = asdict(options)
     for key in ("interval", "timeout", "max_bytes", "warning", "journal"):
         style.pop(key)
     style["satellite"] = str(fs.resolve(options.satellite, write=True).relative_to(fs.root))
-    style["provider"] = "CelesTrak-GP-TLE-v1"
+    style["provider"] = "CelesTrak-GP-Alpha5-v1" if alpha5 else "CelesTrak-GP-TLE-v1"
     return hashlib.sha256(json.dumps(style, sort_keys=True).encode()).hexdigest()
 
 
@@ -143,7 +160,7 @@ def _style(base, override):
                          for field in fields(base)})
 
 
-def _selections(client, options):
+def _selections(client, options, catalog_max):
     profiles = {profile.catalog_id: profile.style for profile in options.profiles}
     selected, seen, collections = [], set(), {}
     skipped_unsupported = set()
@@ -157,6 +174,9 @@ def _selections(client, options):
         if catalog_id in profiles:
             style = _style(style, profiles[catalog_id])
         if style.enabled is False:
+            return
+        if catalog_id > catalog_max:
+            skipped_unsupported.add(catalog_id)
             return
         selected.append((catalog_id, style, name_contains))
         if len(selected) > 16:
@@ -178,26 +198,24 @@ def _selections(client, options):
         for catalog_id, name in collections[group.source]:
             if group.name_contains in name.upper():
                 matched_group_member = True
-                if catalog_id > 99999:
-                    skipped_unsupported.add(catalog_id)
-                    continue
                 add(catalog_id, group.style, group.name_contains)
     # An empty group result or one containing only unrepresentable matches is
-    # a failed selection. Only explicitly disabled, representable matches are
+    # a failed selection. Only explicitly disabled matches are
     # an intentional empty selection that may clear the old pair.
     if not selected and skipped_unsupported:
         raise FeedError("NORAD selection has no representable TLE objects; "
-                        + _unsupported_warning(skipped_unsupported))
+                        + _unsupported_warning(skipped_unsupported, catalog_max))
     if (not selected and any(group.enabled for group in options.groups)
             and not matched_group_member):
         raise FeedError("NORAD selection contains no available TLE objects")
     return selected, sorted(skipped_unsupported)
 
 
-def _unsupported_warning(catalog_ids):
-    return ("Warning: skipped unsupported group catalog IDs "
-            + ", ".join(map(str, sorted(catalog_ids)))
-            + " (Xplanet TLE supports at most five digits)")
+def _unsupported_warning(catalog_ids, catalog_max):
+    capability = ("Xplanet Alpha-5 cannot represent IDs above 339999" if catalog_max == ALPHA5_MAX
+                  else "Xplanet TLE supports at most five digits without Alpha-5")
+    return ("Warning: skipped unsupported catalog IDs "
+            + ", ".join(map(str, sorted(catalog_ids))) + f" ({capability})")
 
 
 def _selector(fs, catalog_id, name, style, default_color):
@@ -235,12 +253,12 @@ def _icons_valid(fs, icons):
         return False
 
 
-def _cached_tles_valid(raw, options, now, recorded_oldest, selected_ids):
+def _cached_tles_valid(raw, options, now, recorded_oldest, selected_ids, catalog_max):
     """Recheck saved TLEs, including pairs written by older parser versions."""
     try:
         lines = raw.decode("ascii").splitlines()
         if (not isinstance(selected_ids, list) or not 0 <= len(selected_ids) <= 16
-                or any(type(item) is not int or not 1 <= item <= 99999
+                or any(type(item) is not int or not 1 <= item <= catalog_max
                        for item in selected_ids)
                 or len(set(selected_ids)) != len(selected_ids)
                 or len(lines) != 3 * len(selected_ids)):
@@ -261,6 +279,10 @@ def run(fs, settings, *, fetcher=None, now=None):
     options = settings.norad
     if not options.enabled:
         return Result("disabled", "NORAD is disabled in configuration", None, None, None, None)
+    may_need_alpha5 = (any(catalog_id > 99999 for catalog_id in options.catalog_ids)
+                       or any(group.enabled for group in options.groups))
+    alpha5 = may_need_alpha5 and _renderer_supports_alpha5(fs)
+    catalog_max = ALPHA5_MAX if alpha5 else 99999
     with fs.lock(settings.lock):
         now = time.time() if now is None else now
         recover_pending(fs, settings)
@@ -280,7 +302,7 @@ def run(fs, settings, *, fetcher=None, now=None):
             existing_sat is not None and existing_tle is not None
             and hashlib.sha256(existing_sat).hexdigest() == record.get("satellite_sha256")
             and hashlib.sha256(existing_tle).hexdigest() == record.get("tle_sha256"))
-        key = _source_key(fs, options)
+        key = _source_key(fs, options, alpha5)
         elapsed = now - record.get("fetched_at", -1e20)
         oldest = record.get("oldest_epoch_at")
         fresh_epoch = oldest is not None and -24 * 3600 <= now - oldest <= options.max_age
@@ -297,7 +319,7 @@ def run(fs, settings, *, fetcher=None, now=None):
         icons_valid = _icons_valid(fs, record.get("icons", []))
         tle_valid = (valid_existing and fresh_epoch and
                      _cached_tles_valid(existing_tle, options, now, oldest,
-                                        selected_ids))
+                                        selected_ids, catalog_max))
         cached = (valid_existing and record.get("source_key") == key
                   and icons_valid and tle_valid and 0 <= elapsed < options.interval)
         outcome, message, satellite, tle = "unchanged", "Cached NORAD TLEs retained", None, None
@@ -338,15 +360,18 @@ def run(fs, settings, *, fetcher=None, now=None):
             try:
                 client = attempt
                 selectors, elements, epochs = [], [], []
-                selection, skipped_unsupported = _selections(client, options)
+                selection, skipped_unsupported = _selections(client, options, catalog_max)
                 for catalog_id, style, name_contains in selection:
+                    is_omm = catalog_id > 99999
+                    source = CELESTRAK_OMM if is_omm else CELESTRAK
                     response = client.fetch(
-                        CELESTRAK.format(id=catalog_id), timeout=options.timeout,
+                        source.format(id=catalog_id), timeout=options.timeout,
                         max_bytes=options.max_bytes, allow_query=True)
                     if response.status != 200:
-                        raise FeedError("CelesTrak did not return a fresh TLE")
-                    name, first, second, epoch_at = parse_tle(
-                        response.body, catalog_id, now, options.max_age)
+                        raise FeedError("CelesTrak did not return fresh OMM data" if is_omm
+                                        else "CelesTrak did not return a fresh TLE")
+                    raw = omm_to_tle(response.body, catalog_id) if is_omm else response.body
+                    name, first, second, epoch_at = parse_tle(raw, catalog_id, now, options.max_age)
                     # A sanitised/missing display name cannot recheck group
                     # membership. Discovery selected the ID and parse_tle binds
                     # both element lines to that same catalog identity.
@@ -383,7 +408,7 @@ def run(fs, settings, *, fetcher=None, now=None):
                 record.update(before)
                 record["attempted_at"] = now
         if (satellite is not None or valid_existing) and record.get("skipped_unsupported_ids"):
-            warning = _unsupported_warning(record["skipped_unsupported_ids"])
+            warning = _unsupported_warning(record["skipped_unsupported_ids"], catalog_max)
             if warning not in message:
                 message += "; " + warning + "; group coverage is partial"
         if not deferred_refresh and outcome != "failed" and (satellite is not None or valid_existing):
