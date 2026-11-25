@@ -98,10 +98,19 @@ class SandboxFixture:
         self.fs = RootFS(self.root)
 
     def config(self, extra="", *, custom=True):
+        """Write an INI fixture for compatibility cases and unmigrated tests."""
         text = ("CloudProvider=custom\nCloudURL=https://cloud.example.invalid/map.jpg\n"
                 if custom else "") + extra
         (self.root / "config.ini").write_text(text)
         return load(self.fs, "config.ini")
+
+    def toml_config(self, extra=""):
+        """Load native TOML with a deliberately non-routable custom cloud source."""
+        text = ('[cloud]\nprovider = "custom"\n'
+                '[cloud.custom]\nurl_template = "https://cloud.example.invalid/map.jpg"\n'
+                'auth_mode = "none"\n') + extra
+        (self.root / "config.toml").write_text(text)
+        return load(self.fs, "config.toml")
 
     def read_state(self, settings):
         import json

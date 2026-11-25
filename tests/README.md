@@ -32,7 +32,9 @@ PYTHONPATH=scripts:. TZ=UTC .state/configurator/venv/bin/python -B -m tests.run_
 Fixtures are offline/synthetic or attributed public captures. Preserve raw fixture
 bytes and `.gitattributes`.
 Tests use disposable roots and stub operations; do not point them at a working
-installation. See [architecture](../docs/architecture.md#verification-boundaries).
+installation. Prefer native TOML for runtime tests (for example, the
+`Sandbox.toml_config` fixture) and retain explicit legacy INI compatibility
+cases. See [architecture](../docs/architecture.md#verification-boundaries).
 
 The supported macOS runner requires zero skips. The portable
 runner permits five explicitly named zsh shell-boundary cases to

@@ -9,7 +9,6 @@ from unittest.mock import patch
 
 from totalmarker.errors import ConfigError, FeedError, StorageError
 from totalmarker.features.norad import parse_group, parse_tle, run
-from totalmarker.config import load
 from totalmarker.http import Fetcher, Response
 from totalmarker.state import json_bytes
 from .support import Sandbox, ScriptedTransport
@@ -43,17 +42,12 @@ def sample_for(catalog_id, name):
 
 
 class NoradTests(Sandbox):
-    def options(self):
-        return self.config("NoradEnabled=On\nNoradCatalogIds=25544\n")
-
-    def native_options(self, extra, *, catalog_ids="25544"):
-        (self.root / "config.toml").write_text(
-            '[cloud]\nprovider = "custom"\nurl = "https://cloud.example.invalid/map.jpg"\n'
+    def options(self, extra="", *, catalog_ids="25544"):
+        return self.toml_config(
             f'[norad]\nenabled = true\ncatalog_ids = "{catalog_ids}"\n' + extra)
-        return load(self.fs, "config.toml")
 
     def test_group_discovery_precedence_dedup_and_profile_styles(self):
-        settings = self.native_options('''
+        settings = self.options('''
 [[norad.groups]]
 source = "stations"
 name_contains = "ISS"
@@ -89,7 +83,7 @@ altcirc = 0
         self.assertEqual(len(transport.calls), 3)
 
     def test_group_identity_accepts_sanitized_fallback_tle_name(self):
-        settings = self.native_options('''
+        settings = self.options('''
 [[norad.groups]]
 source = "stations"
 name_contains = "ISS"
@@ -110,7 +104,7 @@ name_contains = "ISS"
         run(self.fs, old, fetcher=Fetcher(ScriptedTransport(Response(200, {}, SAMPLE))),
             now=EPOCH + 10)
         before = (self.fs.read(old.norad.satellite), self.fs.read(old.norad.satellite + ".tle"))
-        settings = self.native_options('''
+        settings = self.options('''
 [[norad.groups]]
 source = "stations"
 name_contains = "ISS"
@@ -141,7 +135,7 @@ name_contains = "ISS"
         self.assertEqual(after["checked_at"], EPOCH + 8100)
 
     def test_cooldown_message_uses_configured_interval(self):
-        settings = self.config("NoradEnabled=On\nNoradCatalogIds=25544\nNoradCheckIntervalSeconds=14400\n")
+        settings = self.options("check_interval_hours = 4\n")
         run(self.fs, settings, fetcher=Fetcher(ScriptedTransport(Response(503, {}))), now=EPOCH + 10)
         transport = ScriptedTransport()
         result = run(self.fs, settings, fetcher=Fetcher(transport), now=EPOCH + 8000)
@@ -153,7 +147,7 @@ name_contains = "ISS"
         self.assertEqual(run(self.fs, old, fetcher=Fetcher(ScriptedTransport(
             Response(200, {}, SAMPLE))), now=EPOCH + 10).outcome, "changed")
         prior = self.fs.read(old.norad.satellite)
-        settings = self.native_options('''
+        settings = self.options('''
 [[norad.groups]]
 source = "stations"
 name_contains = "SOYUZ"
@@ -176,7 +170,7 @@ name_contains = "SOYUZ"
         self.assertEqual(failed.successful_at, EPOCH + 10)
 
     def test_group_skips_unsupported_id_with_persistent_partial_warning(self):
-        settings = self.native_options('''
+        settings = self.options('''
 [[norad.groups]]
 source = "stations"
 name_contains = "ISS"
@@ -223,7 +217,7 @@ color = "Gold"
                          ["skipped_unsupported_ids"], [])
 
     def test_unsupported_soyuz_does_not_publish_empty_pair(self):
-        settings = self.native_options('''
+        settings = self.options('''
 [[norad.groups]]
 source = "stations"
 name_contains = "SOYUZ"
@@ -240,7 +234,7 @@ name_contains = "SOYUZ"
         self.assertIsNone(result.successful_at)
 
     def test_unsupported_soyuz_preserves_explicit_iss_with_warning(self):
-        settings = self.native_options('''
+        settings = self.options('''
 [[norad.groups]]
 source = "stations"
 name_contains = "SOYUZ"
@@ -268,7 +262,7 @@ color = "Gold"
         self.assertIn("CATNR=25544&FORMAT=TLE", transport.calls[1][0])
 
     def test_local_icon_required_and_cached_icon_checked(self):
-        settings = self.native_options('''
+        settings = self.options('''
 [[norad.profiles]]
 catalog_id = 25544
 icon = "iss.png"
@@ -285,7 +279,7 @@ caption = ""
         self.assertEqual(run(self.fs, settings, fetcher=Fetcher(transport),
                              now=EPOCH + 100).outcome, "failed")
         self.assertEqual(len(transport.calls), 1)
-        corrected = self.native_options('''
+        corrected = self.options('''
 [[norad.profiles]]
 catalog_id = 25544
 caption = ""
@@ -311,18 +305,11 @@ caption = ""
             Response(200, {}, SAMPLE))), now=EPOCH + 10)
         old_pair = (self.fs.read(original.norad.satellite),
                     self.fs.read(original.norad.satellite + ".tle"))
-        (self.root / "config.toml").write_text('''
-[cloud]
-provider = "custom"
-url = "https://cloud.example.invalid/map.jpg"
-[norad]
-enabled = true
-catalog_ids = ""
+        grouped = self.options('''
 [[norad.groups]]
 source = "stations"
 name_contains = "NO SUCH OBJECT"
-''')
-        grouped = load(self.fs, "config.toml")
+''', catalog_ids="")
         transport = ScriptedTransport(Response(200, {}, STATIONS))
         failed = run(self.fs, grouped, fetcher=Fetcher(transport), now=EPOCH + 8000)
         self.assertEqual(failed.outcome, "failed")
@@ -332,7 +319,7 @@ name_contains = "NO SUCH OBJECT"
                           self.fs.read(grouped.norad.satellite + ".tle")), old_pair)
 
     def test_disabled_profile_and_group_are_not_selected(self):
-        settings = self.native_options('''
+        settings = self.options('''
 [[norad.groups]]
 source = "stations"
 name_contains = "SOYUZ"
@@ -353,7 +340,7 @@ enabled = false
         first = run(self.fs, original, fetcher=Fetcher(ScriptedTransport(
             Response(200, {}, SAMPLE))), now=EPOCH + 10)
         self.assertEqual(first.count, 1)
-        disabled = self.native_options('''
+        disabled = self.options('''
 [[norad.profiles]]
 catalog_id = 25544
 enabled = false
@@ -369,18 +356,11 @@ enabled = false
         self.assertEqual(transport.calls, [])
 
     def test_disabling_final_group_discovered_profile_clears_pair(self):
-        (self.root / "config.toml").write_text('''
-[cloud]
-provider = "custom"
-url = "https://cloud.example.invalid/map.jpg"
-[norad]
-enabled = true
-catalog_ids = ""
+        original = self.options('''
 [[norad.groups]]
 source = "stations"
 name_contains = "SOYUZ"
-''')
-        original = load(self.fs, "config.toml")
+''', catalog_ids="")
         initial = run(self.fs, original, fetcher=Fetcher(ScriptedTransport(
             Response(200, {}, STATIONS),
             Response(200, {}, sample_for(12345, "SOYUZ MS-TEST")))),
@@ -388,21 +368,14 @@ name_contains = "SOYUZ"
         self.assertEqual((initial.outcome, initial.count), ("changed", 1))
         self.assertIn(b'12345 "SOYUZ MS-TEST"',
                       self.fs.read(original.norad.satellite))
-        (self.root / "config.toml").write_text('''
-[cloud]
-provider = "custom"
-url = "https://cloud.example.invalid/map.jpg"
-[norad]
-enabled = true
-catalog_ids = ""
+        disabled = self.options('''
 [[norad.groups]]
 source = "stations"
 name_contains = "SOYUZ"
 [[norad.profiles]]
 catalog_id = 12345
 enabled = false
-''')
-        disabled = load(self.fs, "config.toml")
+''', catalog_ids="")
         transport = ScriptedTransport(Response(200, {}, STATIONS))
         empty = run(self.fs, disabled, fetcher=Fetcher(transport), now=EPOCH + 8000)
         self.assertEqual((empty.outcome, empty.count), ("changed", 0))
@@ -422,8 +395,7 @@ enabled = false
         state = self.read_state(original)
         state["products"]["norad"].pop("attempted_at")
         self.fs.write(original.state, json_bytes(state))
-        changed = self.config("NoradEnabled=On\nNoradCatalogIds=25544\n"
-                              "NoradColor=Orange\n")
+        changed = self.options('color = "Orange"\n')
         deferred = run(self.fs, changed, fetcher=Fetcher(transport), now=EPOCH + 100)
         self.assertEqual(deferred.outcome, "unchanged")
         self.assertEqual(deferred.successful_at, first.successful_at)
@@ -436,8 +408,7 @@ enabled = false
         first = run(self.fs, original, fetcher=Fetcher(transport), now=EPOCH + 10)
         self.assertEqual(first.outcome, "changed")
         before = self.fs.read(original.norad.satellite)
-        changed = self.config("NoradEnabled=On\nNoradCatalogIds=25544\n"
-                              "NoradColor=Orange\n")
+        changed = self.options('color = "Orange"\n')
         deferred = run(self.fs, changed, fetcher=Fetcher(transport), now=EPOCH + 100)
         self.assertEqual(deferred.outcome, "unchanged")
         self.assertEqual(deferred.successful_at, first.successful_at)
@@ -449,19 +420,12 @@ enabled = false
         self.assertEqual(len(transport.calls), 2)
 
     def test_group_only_selection_and_response_limit(self):
-        (self.root / "config.toml").write_text('''
-[cloud]
-provider = "custom"
-url = "https://cloud.example.invalid/map.jpg"
-[norad]
-enabled = true
-catalog_ids = ""
+        settings = self.options('''
 group_max_bytes = 2048
 [[norad.groups]]
 source = "stations"
 name_contains = "SOYUZ"
-''')
-        settings = load(self.fs, "config.toml")
+''', catalog_ids="")
         class LimitsTransport(ScriptedTransport):
             def __init__(self, *responses):
                 super().__init__(*responses)
@@ -560,7 +524,7 @@ name_contains = "SOYUZ"
         self.assertEqual(self.fs.read(settings.norad.satellite + ".tle"), expected)
 
     def test_second_catalog_failure_retains_complete_previous_pair(self):
-        settings = self.config("NoradEnabled=On\nNoradCatalogIds=25544,20580\n")
+        settings = self.options(catalog_ids="25544,20580")
         lines = SAMPLE.decode("ascii").splitlines()
         for index in (1, 2):
             line = lines[index][:2] + "20580" + lines[index][7:68]
@@ -585,11 +549,11 @@ name_contains = "SOYUZ"
                           self.fs.read(settings.norad.satellite + ".tle")), before_pair)
 
     def test_disabled_and_unsupported_catalog(self):
-        settings = self.config()
+        settings = self.toml_config()
         self.assertEqual(run(self.fs, settings).outcome, "disabled")
         self.assertIsNone(self.fs.read(settings.state))
         with self.assertRaisesRegex(ConfigError, "one to five"):
-            self.config("NoradEnabled=On\nNoradCatalogIds=123456\n")
+            self.options(catalog_ids="123456")
 
     def test_numeric_orbital_fields_reject_checksum_correct_garbage(self):
         lines = SAMPLE.decode("ascii").splitlines()
@@ -681,7 +645,7 @@ name_contains = "SOYUZ"
                 for _ in range(2):
                     stream = StringIO()
                     with redirect_stdout(stream):
-                        code = main(["--root", str(self.root), "--config", "config.ini", "norad"])
+                        code = main(["--root", str(self.root), "--config", "config.toml", "norad"])
                     outputs.append((code, json.loads(stream.getvalue())))
         self.assertEqual([code for code, _ in outputs], [0, 1])
         self.assertEqual([body["outcome"] for _, body in outputs], ["changed", "failed"])
