@@ -109,6 +109,31 @@ class NoradTests(Sandbox):
                                                    {"verified": True}, EPOCH + 11),
                              "current")
 
+    def test_alpha5_provider_failure_retains_pre_upgrade_pair(self):
+        settings = self.options(
+            '[[norad.groups]]\nsource = "stations"\nname_contains = "SOYUZ"\n',
+            catalog_ids="25544,20580")
+        hubble = sample_for(20580, "HUBBLE")
+        discovery = Response(200, {}, STATIONS_WITH_UNSUPPORTED_SOYUZ)
+        before_transport = ScriptedTransport(
+            discovery, Response(200, {}, SAMPLE), Response(200, {}, hubble))
+        with patch("totalmarker.features.norad._renderer_supports_alpha5", return_value=False):
+            initial = run(self.fs, settings, fetcher=Fetcher(before_transport), now=EPOCH + 10)
+        self.assertEqual((initial.outcome, initial.count), ("changed", 2))
+        paths = (settings.norad.satellite, settings.norad.satellite + ".tle")
+        original = tuple(self.fs.read(path) for path in paths)
+
+        failing = ScriptedTransport(
+            discovery, Response(200, {}, SAMPLE), Response(200, {}, hubble), Response(503, {}))
+        with patch("totalmarker.features.norad._renderer_supports_alpha5", return_value=True):
+            failed = run(self.fs, settings, fetcher=Fetcher(failing), now=EPOCH + 8000)
+        self.assertEqual(failed.outcome, "failed")
+        self.assertIn("CATNR=100057&FORMAT=JSON", failing.calls[-1][0])
+        self.assertEqual(failed.successful_at, initial.successful_at)
+        self.assertEqual(tuple(self.fs.read(path) for path in paths), original)
+        self.assertEqual(self.read_state(settings)["products"]["norad"]["selected_ids"],
+                         [25544, 20580])
+
     def test_group_discovery_precedence_dedup_and_profile_styles(self):
         settings = self.options('''
 [[norad.groups]]
