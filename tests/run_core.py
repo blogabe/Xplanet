@@ -2,6 +2,7 @@
 from pathlib import Path
 from contextlib import contextmanager
 import os,shutil,tempfile,unittest
+import sys
 
 TEST_ROOT=Path(__file__).resolve().parent
 
@@ -35,11 +36,6 @@ def isolated_environment():
                 if value is None:os.environ.pop(name,None)
                 else:os.environ[name]=value
 
-OPTIONAL_EVIDENCE_SKIPS = {
-    'tests.test_norad.NoradTests.test_saved_live_group_response_skips_soyuz_without_publishing_empty_pair',
-    'tests.test_norad.NoradTests.test_saved_live_group_response_preserves_explicit_iss_with_warning',
-}
-
 ZSH_BOUNDARY_SKIPS = {
     'tests.configurator.test_configurator.LauncherTests.test_help_and_noninteractive_config_need_no_dependencies_or_setup': 'absolute',
     'tests.configurator.test_configurator.LauncherTests.test_configurator_helper_propagates_result_without_parsing_output': 'absolute',
@@ -49,7 +45,7 @@ ZSH_BOUNDARY_SKIPS = {
 }
 
 def unexpected_skips(result, *, portable=False):
-    allowed=set(OPTIONAL_EVIDENCE_SKIPS)
+    allowed=set()
     if portable:
         missing={'absolute':not Path('/bin/zsh').exists(),'path':shutil.which('zsh') is None}
         allowed.update(name for name,kind in ZSH_BOUNDARY_SKIPS.items() if missing[kind])
@@ -57,7 +53,10 @@ def unexpected_skips(result, *, portable=False):
 
 def run(factory, *, portable=False):
     with isolated_environment():
-        result=unittest.TextTestRunner(verbosity=2).run(factory())
+        runner_options = {"verbosity": 2}
+        if sys.version_info >= (3, 12) and os.environ.get("XPLANET_TEST_TIMINGS") == "1":
+            runner_options["durations"] = 20
+        result = unittest.TextTestRunner(**runner_options).run(factory())
         unexpected=unexpected_skips(result,portable=portable)
         for name,reason in unexpected:print('Unexpected skipped required check: '+name+' — '+reason,file=__import__('sys').stderr)
         return result.wasSuccessful() and not unexpected

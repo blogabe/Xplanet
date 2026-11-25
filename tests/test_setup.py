@@ -811,7 +811,7 @@ class SetupTests(Sandbox):
         self.assertIn("Invalid launchd plist", done.stderr)
         self.assertIn("entire selected automation batch was blocked: start, earth-map, quake, storm, volcano", done.stderr)
         self.assertIn("Existing launchd registrations and personal plists were left unchanged", done.stderr)
-        self.assertIn("ABE-CFG source", done.stderr)
+        self.assertIn("update the source template, if you maintain one", done.stderr)
         self.assertIn("then retry:", done.stderr)
         self.assertIn("selected automation batch not registered", done.stderr)
         self.assertEqual(personal.read_bytes(), b"custom local plist")

@@ -1,8 +1,7 @@
 # Frozen native scene contracts
 
 Each pair freezes output from the historical serializer for its recorded version,
-independently of the current serializer. `source_commit` identifies the recorded
-private development revision; do not rely on it resolving in published history.
+independently of the current serializer.
 The checked-in bytes, expected fields and manifest hashes are the public test
 contract, not a claim that this repository can reconstruct the original history.
 The renderer and asset-root arguments use public placeholders; no personal configuration or maps

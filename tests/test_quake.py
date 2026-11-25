@@ -42,16 +42,17 @@ class QuakeTests(Sandbox):
         return result, transport
 
     def test_unmatched_304_fails_without_inventing_output(self):
-        result, transport = self.run_with(self.config(), Response(304, {}))
+        settings = self.toml_config()
+        result, transport = self.run_with(settings, Response(304, {}))
         self.assertEqual(result.outcome, "failed")
         self.assertEqual(len(transport.calls), 1)
         self.assertIsNone(self.fs.read("markers/quake"))
-        record = load_state(self.fs, self.config().state)["products"]["quake"]
+        record = load_state(self.fs, settings.state)["products"]["quake"]
         self.assertEqual(record["last_outcome"], "failed")
         self.assertNotIn("successful_at", record)
 
     def test_invalid_saved_validator_refuses_before_fetch_and_preserves_output(self):
-        settings = self.config("QuakeCheckIntervalSeconds=0\n")
+        settings = self.toml_config("[quake]\ncheck_interval_minutes = 0\n")
         self.run_with(settings, response(feed(feature()), etag='"good"'))
         original = self.fs.read(settings.quake.marker)
         state = load_state(self.fs, settings.state)
@@ -65,15 +66,15 @@ class QuakeTests(Sandbox):
         self.assertFalse(self.fs.file_stat(settings.quake.journal))
 
     def test_config_selects_all_duration_and_size_feeds(self):
-        settings = self.config()
+        settings = self.toml_config()
         self.assertEqual(settings.quake.url,
                          "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson")
         self.assertEqual(settings.quake.minimum, 6)
         self.assertEqual(settings.quake.warning, 10800)
         for duration in ("Day", "Week", "Month"):
             for size in ("All", "1.0", "2.5", "4.5", "Significant"):
-                selected = self.config(f"QuakeReportingDuration={duration}\n"
-                                       f"QuakeReportingSize={size}\n")
+                selected = self.toml_config(f'[quake]\nreporting_duration = "{duration}"\n'
+                                            f'reporting_size = "{size}"\n')
                 self.assertTrue(selected.quake.url.endswith(
                     f"{size.lower()}_{duration.lower()}.geojson"))
 
@@ -98,7 +99,7 @@ class QuakeTests(Sandbox):
                       render_body(events, QuakeOptions()).decode())
 
     def test_oversized_provider_label_keeps_last_good_and_success_time(self):
-        settings = self.config("QuakeCheckIntervalSeconds=0\nQuakeDetailList=<location>\n")
+        settings = self.toml_config('[quake]\ncheck_interval_minutes = 0\ndetail = "<location>"\n')
         self.run_with(settings, response(feed(feature())))
         before = self.fs.read(settings.quake.marker)
         result, _ = self.run_with(settings, response(feed(feature(place="界" * 200), feature("later"))),
@@ -110,7 +111,7 @@ class QuakeTests(Sandbox):
         self.assertIn("510-byte limit", self.read_state(settings)["products"]["quake"]["last_error"]["message"])
 
     def test_previous_parser_identity_forces_unconditional_revalidation(self):
-        settings = self.config("QuakeCheckIntervalSeconds=3600\n")
+        settings = self.toml_config("[quake]\ncheck_interval_minutes = 60\n")
         self.run_with(settings, response(feed(feature()), etag='"old"'))
         state = self.read_state(settings)
         style = asdict(settings.quake)
@@ -153,7 +154,7 @@ class QuakeTests(Sandbox):
             parse_geojson(feed(feature(mag=10 ** 400)), 6)
 
     def test_huge_number_retains_last_good_and_ages_label(self):
-        settings = self.config("QuakeCheckIntervalSeconds=0\n")
+        settings = self.toml_config("[quake]\ncheck_interval_minutes = 0\n")
         first, _ = self.run_with(settings, response(feed(feature())))
         self.assertEqual(first.outcome, "changed")
         marker = self.fs.read(settings.quake.marker)
@@ -172,7 +173,7 @@ class QuakeTests(Sandbox):
         self.assertIn(b'"outcome": "failed"', self.fs.read(settings.log))
 
     def test_publish_revision_age_out_failure_and_valid_empty(self):
-        settings = self.config("QuakeCheckIntervalSeconds=0\n")
+        settings = self.toml_config("[quake]\ncheck_interval_minutes = 0\n")
         old = '-53 -12 "Cloud Map Last Updated UNKNOWN" color=Red image=none position=pixel\n'
         self.fs.write(settings.labels, old.encode())
         first, _ = self.run_with(settings, response(feed(feature()), etag='"a"'))
@@ -211,14 +212,14 @@ class QuakeTests(Sandbox):
         self.assertIn(legacy_time(NOW + 1400), self.fs.read(settings.labels).decode())
 
     def test_failed_initial_fetch_creates_no_success_label(self):
-        settings = self.config("QuakeCheckIntervalSeconds=0\n")
+        settings = self.toml_config("[quake]\ncheck_interval_minutes = 0\n")
         result, _ = self.run_with(settings, response(b"broken"))
         self.assertEqual(result.outcome, "failed")
         self.assertIsNone(self.fs.read(settings.quake.marker))
         self.assertIsNone(self.fs.read(settings.labels))
 
     def test_feed_304_uses_last_good(self):
-        settings = self.config("QuakeCheckIntervalSeconds=0\n")
+        settings = self.toml_config("[quake]\ncheck_interval_minutes = 0\n")
         self.run_with(settings, response(feed(feature()), etag='"v1"'))
         before = self.fs.read(settings.quake.marker)
         result, transport = self.run_with(settings, Response(304, {}), now=NOW + 60)
@@ -229,7 +230,7 @@ class QuakeTests(Sandbox):
         self.assertIn(legacy_time(NOW + 60), self.fs.read(settings.labels).decode())
 
     def test_cache_hit_refreshes_successful_time_without_fetching(self):
-        settings = self.config("QuakeCheckIntervalSeconds=3600\n")
+        settings = self.toml_config("[quake]\ncheck_interval_minutes = 60\n")
         self.run_with(settings, response(feed(feature())))
         before = self.fs.read(settings.quake.marker)
         result, transport = self.run_with(settings, now=NOW + 60)
@@ -240,10 +241,10 @@ class QuakeTests(Sandbox):
         self.assertIn(legacy_time(NOW + 60), self.fs.read(settings.labels).decode())
 
     def test_source_selection_change_with_same_rendered_set_refreshes_execution_time(self):
-        first = self.config("QuakeCheckIntervalSeconds=0\n")
+        first = self.toml_config("[quake]\ncheck_interval_minutes = 0\n")
         self.run_with(first, response(feed(feature())))
         before = self.fs.read(first.quake.marker)
-        second = self.config("QuakeCheckIntervalSeconds=0\nQuakeReportingSize=2.5\n")
+        second = self.toml_config('[quake]\ncheck_interval_minutes = 0\nreporting_size = "2.5"\n')
         result, transport = self.run_with(second, response(feed(feature())), now=NOW + 60)
         self.assertEqual(result.outcome, "unchanged")
         self.assertEqual(self.fs.read(second.quake.marker), before)
@@ -252,7 +253,7 @@ class QuakeTests(Sandbox):
         self.assertTrue(transport.calls[0][0].endswith("2.5_week.geojson"))
 
     def test_pending_quake_marker_recovery_finishes_state_and_label(self):
-        settings = self.config()
+        settings = self.toml_config()
         self.run_with(settings, response(feed(feature())))
         state = load_state(self.fs, settings.state)
         state["products"]["quake"]["installed_at"] = NOW + 1

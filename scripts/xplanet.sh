@@ -256,7 +256,7 @@ case "$switch" in
         "$script_dir/run-totalmarker" storm
         ;;
     volcano)
-        interactive_note "Fetching the live weekly volcano feed with Python TotalMarker."
+        interactive_note "Refreshing volcano markers from the configured source with Python TotalMarker."
         "$script_dir/run-totalmarker" volcano
         ;;
     norad)

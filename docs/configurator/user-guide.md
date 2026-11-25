@@ -34,10 +34,16 @@ Choosing **Configurator** in management offers preparation if its private enviro
 is absent, after an explicit confirmation. Updates and desktop setup do not
 automatically download UI dependencies.
 
-Preparation downloads pinned dependencies into the project's private UI venv.
-It does not install packages globally or change Homebrew/uv selection. If the
-runtime needs rebuilding, preserve `.state/configurator/drafts`; move only the
-old `venv` aside before explicit preparation. See [Python/runtime details](reference.md#prerequisites).
+Preparation uses the compatible interpreter from
+[Python selection](../python-runtime.md) and installs the exact, hash-checked
+Textual dependencies into `.state/configurator/venv`. Both Homebrew and
+uv-managed Python can prepare it; there is no global install or PATH change.
+
+The UI venv keeps its original interpreter even if the TotalMarker selection
+changes. If that interpreter disappears or the dependency lock changes, move
+only the old `venv` aside and run `config --prepare` again. Preserve
+`.state/configurator/drafts`. Preparation does not replace an existing venv;
+an incomplete environment from a failed preparation may remain for inspection.
 
 ## 2. Start from a scene
 
@@ -108,11 +114,14 @@ month, night texture or grid. See the [settings reference](reference.md) and
 ## 4. Preview and compare
 
 **Preview** renders one temporary PNG; **Open latest** explicitly opens it in the
-external image viewer. The studio does not display a continuously updated image
+external image viewer. Each attempt has a 30-second render wait budget and
+owned-process cleanup. The studio does not display a continuously updated image
 inline. **Export latest…** makes an explicit durable copy in a new chosen directory,
 with an image hash and receipt; it does not rerender or overwrite anything.
 A later failure/cancellation keeps the previous successful image, labeled
-when it no longer matches the draft. **Compare…** describes the last two successes.
+when the active settings or executable no longer match. **Compare…** describes
+the last two successes, including camera, time, renderer and completion timestamp;
+it does not align or diff pixels. A matching Now image still shows a past instant.
 
 **Diagnose resources** performs an explicit finite renderer diagnostic and capability
 probe. Outside the editor, use `xplanet.sh diagnostics` explicitly; see the
@@ -158,8 +167,9 @@ files. Keep them together; do not rename only half a pair. A destination without
 `.conf` uses the supported legacy new-directory format. Save-as-new never
 replaces your original configuration.
 
-Save & continue keeps undo/captures and establishes the saved copy as the clean
-baseline. Later Undo does not delete a saved copy. Reopen through Scene library
+Save & continue keeps undo, captures and previews, establishes the saved copy
+as the clean baseline and proposes another name for the next copy. Later Undo
+does not delete a saved copy. Reopen through Scene library
 or `--view` to resume; cross-session undo history is not restored. For example:
 
 ```sh
@@ -265,5 +275,5 @@ activation occurs. See [capture steps, time policy and limits](astronomy-capture
 Use the [installed annotation workflow](installed-annotations.md) for bright-star
 labels, constellation lines, Apollo sites and historical Mars names. Import is
 explicit and read-only for the installed package; saved scenes own bounded snapshots.
-See the [advanced astronomy assessment](advanced-astronomy-assessment.md) for the
-separate atmosphere, flyby and external-ephemeris prerequisites.
+Read the [advanced astronomy limits](advanced-astronomy-assessment.md) before
+interpreting atmosphere, flyby or external-ephemeris examples.

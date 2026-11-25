@@ -24,10 +24,18 @@ shapes and orbits are simplified; small irregular moons are not shape-model view
 
 Choose a projected map or a space view. In space, choose a distinct body as origin,
 or geographic coordinates/range. Projected maps ignore retained body origins.
-Miranda, Pluto and Charon use east-positive longitude like Uranus, Earth and the
-Moon; other added moons follow the renderer's west-positive convention. The
-camera context explains the convention. Inactive Earth layers remain saved,
-without placing Earth clouds or observational markers onto another body.
+Earth, the Moon, Venus, Uranus, Miranda, Pluto and Charon use east-positive
+longitude. Mercury, Mars, Jupiter, Saturn, Neptune and the other supported
+moons use west-positive longitude. The camera explains the convention.
+Inactive Earth layers stay saved without drawing Earth clouds or observational
+markers on another body.
+
+Planetary shadow brightness is native `shade`, a whole 0–100 percent on
+unlit terrain. It is not a planetary night texture. Venus uses a surface
+texture, not its visible cloud deck; giant-planet features are static texture
+details. The renderer draws Saturn's rings in non-projected space views.
+Radius framing includes the outer rings; a nonzero observer latitude helps show
+them. A projected Saturn view may show ring shadows but not the visible rings.
 
 ## Time and ephemerides
 

@@ -35,15 +35,15 @@ class SuiteBoundaryTests(unittest.TestCase):
         self.assertEqual({name:os.environ.get(name) for name in original},original)
         self.assertEqual(tempfile.tempdir,previous)
 
-    def test_skip_policy_allows_only_named_optional_evidence(self):
+    def test_macos_skip_policy_does_not_allow_skips(self):
         class Case:
             def __init__(self,name):self.name=name
             def id(self):return self.name
         result=unittest.TestResult()
-        for name in run_core.OPTIONAL_EVIDENCE_SKIPS:result.addSkip(Case(name),'private evidence unavailable')
         self.assertEqual(run_core.unexpected_skips(result),[])
-        result.addSkip(Case('setUpClass (tests.test_release_content.ReleaseContentTests)'),'not Git')
-        self.assertEqual(run_core.unexpected_skips(result)[0][0],'setUpClass (tests.test_release_content.ReleaseContentTests)')
+        name=next(iter(run_core.ZSH_BOUNDARY_SKIPS))
+        result.addSkip(Case(name),'zsh unavailable')
+        self.assertEqual(run_core.unexpected_skips(result),[(name,'zsh unavailable')])
 
     def test_all_public_core_test_modules_are_accounted_for(self):
         actual=set(run_core.module_names())

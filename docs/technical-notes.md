@@ -275,6 +275,21 @@ members are bounded while decompressed, not solely by archive metadata. Failed
 live-health prerequisites produce a nonzero error with access **not checked**;
 that does not mean an HTTP request failed. Saved health remains network-free.
 
+## Advanced TotalMarker overrides
+
+The shipped example leaves these settings at their built-in defaults. Operators
+with unusually large responses can set `max_bytes` in `[cloud]`, `[quake]`,
+`[storm]`, `[volcano]`, `[norad]`, or `[eclipse]`. In `[norad]`,
+`group_max_bytes` separately limits the group discovery response. These values
+are whole bytes; retain the built-in limits unless a larger response is expected.
+
+The `state`, `journal`, and `lock` keys in `[paths]` override the shared state,
+cloud recovery journal, and job lock. The `journal` key in a product table
+(`[quake]`, `[storm]`, `[volcano]`, `[norad]`, or `[eclipse]`) overrides
+only that product's recovery journal. Keep the default paths unless
+administering a deliberately isolated runtime. Keep paths distinct and do
+not relocate an outstanding journal before recovery.
+
 ## Volcano sources
 
 The shipped personal-config example uses `provider = "weekly_html"` to retrieve

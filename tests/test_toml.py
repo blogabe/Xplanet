@@ -66,6 +66,28 @@ QuakeMinimumSize = "6"
         self.assertEqual(ini.deferred_settings, {})
         self.assertNotIn("DUMMY", repr(toml))
 
+    def test_legacy_quake_and_norad_ini_settings_match_native_toml(self):
+        ini = self.config(
+            "QuakeReportingDuration=Day\nQuakeReportingSize=2.5\n"
+            "QuakeCheckIntervalSeconds=1200\nQuakeDetailList=<location>\n"
+            "NoradEnabled=On\nNoradCatalogIds=25544,20580\n"
+            "NoradCheckIntervalSeconds=14400\nNoradColor=Orange\n")
+        native = self.toml_config("""
+[quake]
+reporting_duration = "Day"
+reporting_size = "2.5"
+check_interval_minutes = 20
+detail = "<location>"
+[norad]
+enabled = true
+catalog_ids = "25544,20580"
+check_interval_hours = 4
+color = "Orange"
+""")
+        self.assertEqual(ini.quake, native.quake)
+        self.assertEqual(ini.norad, native.norad)
+        self.assertEqual((ini.deferred_settings, native.deferred_settings), ({}, {}))
+
     def test_blank_xeric_credentials_validate_but_cannot_fetch(self):
         settings = self.toml("""
 [cloud]
@@ -224,6 +246,12 @@ hours = 72
         self.assertEqual(self.toml("[quake]\ncheck_interval_minutes=18\n").quake.interval, 1080)
         self.assertEqual(self.toml("[eclipse]\ncheck_interval_minutes=1441\n").eclipse.interval, 86460)
         self.assertEqual(self.toml("[cloud]\ntimeout_seconds=7\n").timeout, 7)
+
+    def test_omitted_quake_interval_matches_the_shipped_template(self):
+        omitted = self.toml("")
+        example = self.toml((PROJECT / "config/totalmarker.example.toml").read_text())
+        self.assertEqual(omitted.quake.interval, 1080)
+        self.assertEqual(omitted.quake.interval, example.quake.interval)
 
     def test_omitted_download_limits_keep_defaults_and_accept_overrides(self):
         settings = self.toml((PROJECT / "config/totalmarker.example.toml").read_text())

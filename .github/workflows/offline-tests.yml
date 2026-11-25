@@ -1,5 +1,9 @@
 name: Offline tests
-on: [push, pull_request, workflow_dispatch]
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
@@ -24,6 +28,7 @@ jobs:
         env:
           TZ: UTC
           PYTHONDONTWRITEBYTECODE: '1'
+          XPLANET_TEST_TIMINGS: '1'
         run: |
           export TOTALMARKER_PYTHON="$(command -v python)"
           ./scripts/xplanet.sh test

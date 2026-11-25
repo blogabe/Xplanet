@@ -170,9 +170,8 @@ def _issue_interval(text, kind, rss_issue):
             continue
         if start <= candidate < until:
             issued.add(candidate)
-        # Nov 23, 2026 ABPW reissue: the WMO header and exact RSS link stamp
-        # predate the scheduled body interval by one hour. No standalone or
-        # uncorroborated bulletin gets the same exception.
+        # A reissue header may predate the body interval by up to one hour
+        # only when the exact RSS link corroborates its timestamp.
         elif (earliest <= candidate < start
               and reissue_matches_rss(candidate.timestamp(), rss_issue)):
             issued.add(candidate)
