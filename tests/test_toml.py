@@ -172,6 +172,29 @@ hours = 72
                     with self.assertRaises(DownloadError):
                         settings.auth.resolve({})
 
+    def test_example_hides_internal_paths_without_changing_defaults_or_overrides(self):
+        path = self.root / "example.toml"
+        path.write_bytes((PROJECT / "config/totalmarker.example.toml").read_bytes())
+        document = tomllib.loads(path.read_text())
+        for section in ("paths", "quake", "volcano", "storm", "norad", "eclipse"):
+            self.assertNotIn("journal", document[section])
+        self.assertNotIn("state", document["paths"])
+        self.assertNotIn("lock", document["paths"])
+        settings = load(self.fs, "example.toml")
+        self.assertEqual(settings.state, ".state/totalmarker/state.json")
+        self.assertEqual(settings.lock, ".state/totalmarker/job.lock")
+        self.assertEqual(settings.journal, ".state/totalmarker/pending.json")
+        for section in ("quake", "volcano", "storm", "norad", "eclipse", "santa"):
+            self.assertEqual(getattr(settings, section).journal,
+                             f".state/totalmarker/{section}-pending.json")
+        path.write_text('[paths]\njournal=".state/totalmarker/custom.json"\nstate=".state/totalmarker/custom-state.json"\nlock=".state/totalmarker/custom.lock"\n'
+                        '[storm]\njournal=".state/totalmarker/other-storm.json"\n')
+        override = load(self.fs, "example.toml")
+        self.assertEqual(override.state, ".state/totalmarker/custom-state.json")
+        self.assertEqual(override.lock, ".state/totalmarker/custom.lock")
+        self.assertEqual(override.journal, ".state/totalmarker/custom.json")
+        self.assertEqual(override.storm.journal, ".state/totalmarker/other-storm.json")
+
     def test_segmented_project_example_applies_quake_volcano_and_storm(self):
         raw = (PROJECT / "config/totalmarker.example.toml").read_bytes()
         document = tomllib.loads(raw.decode("utf-8"))
@@ -213,9 +236,11 @@ hours = 72
             elif match := re.match(r"([a-z][a-z0-9_]*)\s*=", line):
                 documented.add(f"{section}.{match[1]}")
         alternatives = {"cloud.url", "cloud.auth_mode", "cloud.local_image_name"}
+        runtime_only = {key for key in TOML_KEYS if key.endswith(".journal")} | {"paths.state", "paths.lock"}
+        self.assertFalse(runtime_only & documented)
         first_class = {key for key in TOML_KEYS if not (
             key.startswith("storm.") and key.rsplit(".", 1)[-1][:1].isupper()
-        )} - alternatives
+        )} - alternatives - runtime_only
         self.assertFalse(first_class - documented)
 
         def active_keys(table, prefix=""):

@@ -7,9 +7,6 @@
 # Relative paths resolve against --root, not this file or the current directory.
 image = "images/{local_image_name}"
 labels = "markers/updatelabel"
-state = ".state/totalmarker/state.json"
-journal = ".state/totalmarker/pending.json"
-lock = ".state/totalmarker/job.lock"
 log = "logs/totalmarker/events.jsonl"
 
 [labels]
@@ -61,7 +58,6 @@ reporting_duration = "Week"
 reporting_size = "All"
 minimum_magnitude = 6.0
 output = "markers/quake"
-journal = ".state/totalmarker/quake-pending.json"
 check_interval_seconds = 1100
 timeout_seconds = 30
 max_bytes = 33554432
@@ -86,7 +82,6 @@ detail_align = "Above"
 provider = "weekly_html"
 url = "https://volcano.si.edu/news/WeeklyVolcanoCAP.xml"
 output = "markers/volcano"
-journal = ".state/totalmarker/volcano-pending.json"
 check_interval_seconds = 82800
 timeout_seconds = 30
 max_bytes = 8388608
@@ -110,7 +105,6 @@ detail_color = "Brown"
 # the last good marker/arc pair.
 output = "markers/storm"
 arc_output = "arcs/storm"
-journal = ".state/totalmarker/storm-pending.json"
 check_interval_seconds = 1800
 timeout_seconds = 30
 max_bytes = 16777216
@@ -138,7 +132,6 @@ track_enabled = true
 enabled = false
 catalog_ids = "25544"
 output = "satellites/totalmarker"
-journal = ".state/totalmarker/norad-pending.json"
 check_interval_seconds = 7200
 timeout_seconds = 30
 max_bytes = 65536
@@ -175,7 +168,6 @@ enabled = false
 path_url = ""
 marker_output = "markers/eclipse"
 arc_output = "arcs/eclipse"
-journal = ".state/totalmarker/eclipse-pending.json"
 check_interval_seconds = 86400
 timeout_seconds = 30
 max_bytes = 2097152
@@ -189,5 +181,4 @@ notice_color = "White"
 # [santa]
 # enabled = false
 # output = "markers/santa"
-# journal = ".state/totalmarker/santa-pending.json"
 # freshness_seconds = 0
