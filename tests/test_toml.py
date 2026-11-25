@@ -239,8 +239,11 @@ hours = 72
         raw = (PROJECT / "config/totalmarker.example.toml").read_bytes()
         document = tomllib.loads(raw.decode("utf-8"))
         self.assertEqual(document["volcano"]["url"], "")
-        self.assertEqual(list(document), ["paths", "labels", "cloud", "quake",
-                                          "volcano", "storm", "norad", "eclipse", "aurora"])
+        self.assertEqual(list(document), ["paths", "labels", "cloud", "aurora", "quake",
+                                          "storm", "volcano", "eclipse", "norad"])
+        self.assertEqual([k for k in document["labels"] if k.startswith("warning_")],
+                         ["warning_cloud_hours", "warning_quake_hours",
+                          "warning_storm_hours", "warning_volcano_days", "warning_norad_days"])
         self.assertIn("track_real_color", document["storm"])
         self.assertNotIn("StormColorTrackReal", document["storm"])
         self.assertNotIn("legacy", document)

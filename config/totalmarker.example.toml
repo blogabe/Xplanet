@@ -17,8 +17,8 @@ log = "logs/totalmarker/events.jsonl"
 enabled = true
 warning_cloud_hours = 6
 warning_quake_hours = 3
-warning_volcano_days = 3
 warning_storm_hours = 3
+warning_volcano_days = 3
 warning_norad_days = 1
 
 [labels.colors]
@@ -54,6 +54,12 @@ password = ""
 username_env = ""
 password_env = ""
 
+# NOAA OVATION aurora. New configurations enable it; absent means disabled.
+# Set this to your original image or symlink, never to the derived night-current.
+[aurora]
+enabled = true
+base_night_map = "maps/lights/earth_lights_4800.tiff"
+
 [quake]
 # Day/Week/Month and All/1.0/2.5/4.5/Significant select USGS GeoJSON.
 reporting_duration = "Week"
@@ -75,6 +81,25 @@ detail_color_min = "Green"
 detail_color_int = "Yellow"
 detail_color_max = "Red"
 detail_align = "Above"
+
+[storm]
+# NHC/JTWC are fixed public sources. Missing or stale source coverage retains
+# the last good marker/arc pair.
+output = "markers/storm"
+arc_output = "arcs/storm"
+check_interval_minutes = 30
+timeout_seconds = 30
+track_real_color = "Blue"
+track_forecast_color = "SkyBlue"
+name_enabled = true
+name_color = "SkyBlue"
+name_align = "Above"
+detail_align = "Below"
+detail = "<type>"
+detail_color = "SkyBlue"
+image = ""
+image_transparent = ""
+track_enabled = true
 
 [volcano]
 # Weekly HTML and CAP are two formats of the same Smithsonian/USGS weekly report.
@@ -102,24 +127,22 @@ detail = ""
 detail_align = "Below"
 detail_color = "Brown"
 
-[storm]
-# NHC/JTWC are fixed public sources. Missing or stale source coverage retains
-# the last good marker/arc pair.
-output = "markers/storm"
-arc_output = "arcs/storm"
-check_interval_minutes = 30
+[eclipse]
+# Optional NASA GSFC central path product. Blank URL discovers the upcoming
+# or current central event; a specific total, annular, or hybrid URL overrides.
+# Partial-only events have no central path. Xplanet marker_file/arc_file
+# references require a separate deliberate operator change.
+enabled = false
+path_url = ""
+marker_output = "markers/eclipse"
+arc_output = "arcs/eclipse"
+check_interval_hours = 24
 timeout_seconds = 30
-track_real_color = "Blue"
-track_forecast_color = "SkyBlue"
-name_enabled = true
-name_color = "SkyBlue"
-name_align = "Above"
-detail_align = "Below"
-detail = "<type>"
-detail_color = "SkyBlue"
-image = ""
-image_transparent = ""
-track_enabled = true
+notify_hours = 48
+notice_enabled = true
+edge_color = "Grey"
+center_color = "Black"
+notice_color = "White"
 
 [norad]
 # Optional CelesTrak GP TLE product. Select up to 16 one-to-five-digit IDs.
@@ -158,32 +181,8 @@ trail = [-30, 30, 5]
 # altcirc = 0
 # align = "Above"
 
-[eclipse]
-# Optional NASA GSFC central path product. Blank URL discovers the upcoming
-# or current central event; a specific total, annular, or hybrid URL overrides.
-# Partial-only events have no central path. Xplanet marker_file/arc_file
-# references require a separate deliberate operator change.
-enabled = false
-path_url = ""
-marker_output = "markers/eclipse"
-arc_output = "arcs/eclipse"
-check_interval_hours = 24
-timeout_seconds = 30
-notify_hours = 48
-notice_enabled = true
-edge_color = "Grey"
-center_color = "Black"
-notice_color = "White"
-
 # Santa is an unsupported stub; keep this section commented.
 # [santa]
 # enabled = false
 # output = "markers/santa"
 # freshness_seconds = 0
-
-
-# NOAA OVATION aurora. New configurations enable it; absent means disabled.
-# Set this to your original image or symlink, never to the derived night-current.
-[aurora]
-enabled = true
-base_night_map = "maps/lights/earth_lights_4800.tiff"
