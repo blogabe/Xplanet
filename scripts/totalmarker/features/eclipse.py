@@ -33,6 +33,11 @@ MONTHS = {month: index for index, month in enumerate(
 TYPE_CODE = {"Total": "T", "Annular": "A", "Hybrid": "H"}
 INDEX_URL = "https://eclipse.gsfc.nasa.gov/SEpath/SEpath.html"
 INDEX_LIMIT = 2 * 1024 * 1024
+# Pixel positions use y, x. Keep the previous lower-left anchors readable.
+NOTICE_ANCHORS = ("42 20", "-55 1")
+CONTEXT_ANCHORS = ("60 20", "-45 1")
+_NOTICE_PREFIXES = tuple(f'{anchor} "'.encode("ascii") for anchor in NOTICE_ANCHORS)
+_CONTEXT_PREFIXES = tuple(f'{anchor} "'.encode("ascii") for anchor in CONTEXT_ANCHORS)
 
 
 class _Text(HTMLParser):
@@ -252,19 +257,27 @@ def _notice_line(kind, start_at, end_at, now, color):
     else:
         finished = datetime.fromtimestamp(end_at, timezone.utc).strftime("%Y-%m-%d %H:%M")
         message = f"{kind} Solar Eclipse central-path sampling ended {finished} UTC"
-    return f'-55 1 "{message}" color={color} image=none position=pixel\n'
+    return f'{NOTICE_ANCHORS[0]} "{message}" color={color} image=none position=pixel\n'
 
 
 def _notice_context(color):
-    return (f'-45 1 "NASA predicted central path and limits shown" '
+    return (f'{CONTEXT_ANCHORS[0]} "NASA predicted central path and limits shown" '
             f'color={color} image=none position=pixel\n')
 
 
 def _refresh_notice(raw, kind, start_at, end_at, now, color):
-    old = [line for line in raw.splitlines(keepends=True) if line.startswith(b'-55 1 "')]
-    if len(old) != 1:
+    lines = raw.splitlines(keepends=True)
+    if sum(_pixel_notice(line, _NOTICE_PREFIXES) for line in lines) != 1:
         return None
-    return raw.replace(old[0], _notice_line(kind, start_at, end_at, now, color).encode("ascii"), 1)
+    notice = _notice_line(kind, start_at, end_at, now, color).encode("ascii")
+    context = _notice_context(color).encode("ascii")
+    return b"".join(notice if _pixel_notice(line, _NOTICE_PREFIXES)
+                    else context if _pixel_notice(line, _CONTEXT_PREFIXES)
+                    else line for line in lines)
+
+
+def _pixel_notice(line, prefixes):
+    return line.startswith(prefixes) and line.rstrip().endswith(b" position=pixel")
 
 
 def _source_key(fs, options, *, parser_version=2, legacy_notice=False):
@@ -386,7 +399,7 @@ def run(fs, settings, *, fetcher=None, now=None):
                           _notice_context(options.notice_color).encode("ascii"))
             else:
                 marker = b"".join(line for line in existing_marker.splitlines(keepends=True)
-                                  if not line.startswith((b'-55 1 "', b'-45 1 "')))
+                                  if not _pixel_notice(line, _NOTICE_PREFIXES + _CONTEXT_PREFIXES))
             arc = existing_arc
             record["marker_sha256"] = hashlib.sha256(marker).hexdigest()
             record["arc_sha256"] = hashlib.sha256(arc).hexdigest()

@@ -235,7 +235,9 @@ def eclipse_pair(first, second, metadata, *, source=False):
             if source and not arcs and "position=pixel" in row:
                 # These are wallclock-derived producer notices, never scene labels.
                 notice = re.fullmatch(
-                    r'-55 1 "'
+                    r"(?:"
+                    + "|".join(map(re.escape, eclipse_product.NOTICE_ANCHORS))
+                    + r') "'
                     + kind
                     + r" Solar Eclipse central-path (?:samples begin in [0-9]+h [0-9]+m \("
                     + date
@@ -247,7 +249,9 @@ def eclipse_pair(first, second, metadata, *, source=False):
                     row,
                 )
                 context = re.fullmatch(
-                    r'-45 1 "NASA predicted central path and limits shown" color=([^ ]+) image=none position=pixel',
+                    r"(?:"
+                    + "|".join(map(re.escape, eclipse_product.CONTEXT_ANCHORS))
+                    + r') "NASA predicted central path and limits shown" color=([^ ]+) image=none position=pixel',
                     row,
                 )
                 if (not notice and not context) or not TOKEN.fullmatch((notice or context)[1]):

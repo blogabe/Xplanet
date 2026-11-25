@@ -69,8 +69,8 @@ class EclipseDiscoveryTests(Sandbox):
         self.assertEqual(second.successful_at, first.successful_at)
         refreshed = self.fs.read(settings.eclipse.marker)
         self.assertEqual([line for line in refreshed.splitlines()
-                          if not line.startswith(b'-55 1 "')],
+                          if not line.startswith(b'42 20 "')],
                          [line for line in marker.splitlines()
-                          if not line.startswith(b'-55 1 "')])
+                          if not line.startswith(b'42 20 "')])
         self.assertIn(b'central-path sampling underway', refreshed)
         self.assertEqual(self.fs.read(settings.eclipse.arc), arc)

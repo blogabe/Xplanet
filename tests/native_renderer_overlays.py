@@ -124,6 +124,18 @@ def verify(renderer):
         assert arcs_only != visible  # time-label markers add visible pixels
         assert any(cyan(arcs_only[yy * 720 + xx]) for yy in range(y - 4, y + 5)
                    for xx in range(x - 4, x + 5)), (point, x, y)
+        notice_options = replace(options, notice_enabled=True, notice_color='Magenta')
+        notice_marker, _ = eclipse.render(path, notice_options, path.start_at - 3600, True)
+        (root / 'eclipse.marker').write_bytes(notice_marker)
+        with_notice = render('eclipse-notice', date,
+                             f'arc_file={root}/eclipse.arc\nmarker_file={root}/eclipse.marker\n')
+        changed = [divmod(i, 720) for i, (a, b) in
+                   enumerate(zip(visible, with_notice)) if a != b]
+        assert len(changed) > 40
+        assert all(20 <= y <= 82 for y, _ in changed), 'Eclipse notice painted outside upper band'
+        assert min(x for _, x in changed) < 34, 'Eclipse notice did not anchor near the left edge'
+        assert max(x for _, x in changed) < 719, 'Eclipse notice clipped at the right edge'
+        print(f'Eclipse countdown and caption: {len(changed)} changed pixels in upper-left band')
         marker, arc = eclipse.render(path, options, path.end_at + 86400, False)
         (root / 'eclipse.marker').write_bytes(marker)
         (root / 'eclipse.arc').write_bytes(arc)
