@@ -14,6 +14,7 @@ from .features.quake import run as run_quake
 from .features.storm import run as run_storm
 from .features.norad import run as run_norad
 from .features.eclipse import run as run_eclipse
+from .features.aurora import run as run_aurora
 from .features.santa import run as run_santa
 from .paths import RootFS
 from .log_trim import trim as trim_log
@@ -62,7 +63,7 @@ def _main(argv=None):
     parser = argparse.ArgumentParser(prog="totalmarker")
     parser.add_argument("--root", required=True, help="Existing isolated project root")
     parser.add_argument("--config", help="INI or TOML path within root (never rewritten)")
-    parser.add_argument("command", choices=["clouds", "labels", "quake", "storm", "volcano", "norad", "eclipse", "santa", "health", "log-trim", "log-view"])
+    parser.add_argument("command", choices=["clouds", "labels", "quake", "storm", "volcano", "norad", "eclipse", "aurora", "santa", "health", "log-trim", "log-view"])
     parser.add_argument("--live", action="store_true", help="Health: validate sources in a temporary root")
     parser.add_argument("--json", action="store_true", help="Health: output structured JSON")
     parser.add_argument("--verbose", action="store_true", help="Health: include source and diagnostic details")
@@ -70,7 +71,12 @@ def _main(argv=None):
     parser.add_argument("--days", type=int, help="Log trim: retain this many days (default 30)")
     parser.add_argument("--dry-run", action="store_true", help="Log trim: report without writing")
     parser.add_argument("--file", help="Log view: file within root (default logs/xplanet-error.log)")
+    aurora_mode = parser.add_mutually_exclusive_group()
+    aurora_mode.add_argument("--overlay-only", action="store_true", help="Aurora: write only the transparent PNG (no desktop or compositor)")
+    aurora_mode.add_argument("--prepare", action="store_true", help="Aurora: select a local night map without contacting NOAA")
     args = parser.parse_args(argv)
+    if (args.overlay_only or args.prepare) and args.command != "aurora":
+        parser.error("--overlay-only and --prepare are aurora options")
     if args.file is not None and args.command != "log-view":
         parser.error("--file is a log-view option")
     if args.command != "log-trim" and (args.days is not None or args.dry_run):
@@ -97,6 +103,10 @@ def _main(argv=None):
             print(format_dashboard(report) if args.dashboard else json.dumps(report) if args.json else format_report(
                 report, verbose=args.verbose, color=color))
             return health_status(report)
+        if args.command == "aurora":
+            result = run_aurora(fs, settings, overlay_only=args.overlay_only, prepare=args.prepare)
+            print(json.dumps(result))
+            return 1 if result["outcome"] == "failed" else 0
         if args.command == "volcano":
             result = run_volcano(fs, settings)
         elif args.command == "quake":

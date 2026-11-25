@@ -57,15 +57,16 @@ prepare_launchd_files() (
     plist_has() { plist_type "$1" "$2" >/dev/null; }
     plist_set() { /usr/bin/plutil -replace "$2" -string "$3" -- "$1" >/dev/null || fail "Cannot render $1"; }
 
-    (( $# >= 2 && $# <= 4 )) || fail "expected --home PATH [--include-clouds] [--exclude-volcano]"
+    (( $# >= 2 && $# <= 5 )) || fail "expected --home PATH [--include-clouds] [--exclude-volcano] [--include-aurora]"
     [[ "$1" == --home ]] || fail "expected --home PATH"
     home="$2"
     shift 2
-    local include_clouds=false include_volcano=true
+    local include_clouds=false include_volcano=true include_aurora=false
     for flag in "$@"; do
         case "$flag" in
             --include-clouds) include_clouds=true ;;
             --exclude-volcano) include_volcano=false ;;
+            --include-aurora) include_aurora=true ;;
             *) fail "unknown option: $flag" ;;
         esac
     done
@@ -209,6 +210,7 @@ prepare_launchd_files() (
     jobs=(start earth-map quake storm)
     [[ "$include_volcano" == false ]] || jobs+=(volcano)
     [[ "$include_clouds" == false ]] || jobs+=(clouds)
+    [[ "$include_aurora" == false ]] || jobs+=(aurora)
     agents="$home/Library/LaunchAgents"
     for directory in "$home/Library" "$agents"; do
         if entry_exists "$directory"; then real_dir "$directory"; fi
@@ -622,6 +624,12 @@ for index in "${missing_personal[@]}"; do
                         print -n -- x) || fail "Could not prepare the selected volcano source from the example"
         (setopt noclobber; print -rn -- "${selected_toml%x}" > "$entry") ||
             fail "Preparation stopped at $personal_names[index]; existing files are never replaced"
+    elif [[ "$entry" == "$project_root/config/xp.conf" &&
+            -f "$project_root/maps/lights/earth_lights_4800.tiff" &&
+            ! -e "$project_root/config/totalmarker.toml" ]]; then
+        # New copies only. Keep the user's original map selector separate.
+        (setopt noclobber; sed 's|^night_map=night.jpg$|night_map=.state/totalmarker/aurora/night-current|' "$example" > "$entry") ||
+            fail "Preparation stopped at $personal_names[index]; existing files are never replaced"
     else
         (setopt noclobber; cat -- "$example" > "$entry") ||
             fail "Preparation stopped at $personal_names[index]; existing files are never replaced"
@@ -661,6 +669,13 @@ print -- "Explore sample views with scripts/xplanet.sh config; saving there does
 print -- "Review or edit $project_root/config/totalmarker.toml now."
 print -- "The file controls feed sources, styling and cloud credentials."
 print -- "Existing personal settings are preserved; no credentials are collected here."
+aurora_bound() {
+    grep -Fqx 'night_map=.state/totalmarker/aurora/night-current' "$project_root/config/xp.conf"
+}
+if aurora_bound; then
+    "$script_dir/run-totalmarker" aurora --prepare ||
+        fail "Could not initialize the aurora night-map link; inspect [aurora] base_night_map"
+fi
 local_reply=''
 read -r "local_reply?Press Enter after reviewing the TOML, or type q to stop: " ||
     fail "input ended before marker refresh"
@@ -757,6 +772,14 @@ if ask "Step 3) Install and register Xplanet automation?"; then
         jobs+=(volcano)
     else
         arguments+=(--exclude-volcano)
+    fi
+    if aurora_bound; then
+        aurora_state=$("$script_dir/run-totalmarker" aurora --prepare) ||
+            fail "Could not prepare the aurora night-map link"
+        if [[ "$aurora_state" == *'"outcome": "ready"'* ]]; then
+            arguments+=(--include-aurora)
+            jobs+=(aurora)
+        fi
     fi
     if [[ "$cloud_selected" == true ]]; then
         arguments+=(--include-clouds)

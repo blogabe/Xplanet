@@ -11,11 +11,13 @@ start/restart. See the [stock scenes](docs/configurator/stock-scenes.md).
 TotalMarker downloads cloud imagery and generates earthquake, volcano and storm
 markers, storm tracks and update labels. Optional NORAD satellite and central
 eclipse products are disabled by default; Santa remains a disabled stub.
+[Aurora](docs/management.md#aurora) adds a NOAA forecast glow to the night map
+on new guided setups and can run independently on Linux.
 
 `xplanet.sh` manages installation, setup, updates and desktop control; optional
 launchd jobs start the display and schedule refreshes. Both the configurator and
 TotalMarker require Python 3.11+. The configurator's UI dependencies are isolated;
-TotalMarker uses only the Python standard library.
+TotalMarker's standalone overlays use only the Python standard library.
 
 [Xplanet](https://xplanet.sourceforge.net/) is by Hari Nair. Michael Dear wrote
 and maintained the original Perl TotalMarker, which inspired this Python version;
@@ -65,10 +67,11 @@ current-data overlays. A compiled feature, an available file and a configured
 scene are separate requirements. See [resources and prerequisites](docs/resources.md)
 for lookup rules, optional data and the limits of packaged examples.
 
-The stock configuration uses `earth.jpg` and `night.jpg` from the installed
+The stock template uses `earth.jpg` and `night.jpg` from the installed
 [Xplanet data directory](https://xplanet.sourceforge.net/README). It includes
 Earth, quake, volcano and storm marker entries; generated files appear after
-successful refreshes. To display clouds with the stock maps, select 2048-pixel
+successful refreshes. New guided setups select the bundled Earthlights night
+map through the aurora link without modifying the original. To display clouds with the stock maps, select 2048-pixel
 clouds in `config/totalmarker.toml` and enable `cloud_map=clouds-2048.jpg` in
 `config/xp.conf` after downloading a cloud image.
 
@@ -116,6 +119,7 @@ with uv-managed Python available as an explicit choice.
 | `log-trim [--dry-run] [--days N]` | Trim recognized event logs older than 30 days by default |
 | `health [--live] [--json] [--verbose]` | Read saved health, or validate sources without updating outputs |
 | `norad`, `eclipse` | Run an explicitly configured optional product |
+| `aurora` | Refresh NOAA aurora; `--prepare` selects the night map offline, `--overlay-only` skips compositing |
 | `diagnostics [--show]` | Explicitly probe renderer support, or show saved evidence |
 | `test` | Run the supported macOS offline test suite |
 

@@ -9,7 +9,7 @@ from .support import PROJECT
 DIRECTORY = PROJECT / "scripts/launchd"
 ORIGINAL_JOBS = {"clouds", "earth-map", "quake", "start", "storm", "volcano"}
 OPTIONAL_JOBS = {"norad", "eclipse"}
-ALL_EXAMPLES = ORIGINAL_JOBS | OPTIONAL_JOBS
+ALL_EXAMPLES = ORIGINAL_JOBS | OPTIONAL_JOBS | {"aurora"}
 
 
 class LaunchdExampleTests(unittest.TestCase):

@@ -49,3 +49,21 @@ In a Git checkout, run `PYTHONPATH=scripts:. python3 -B -m tests.run_portable`
 for the portable subset. `xplanet.sh test` runs the supported macOS suite and is
 not the Linux entry point. Hosted CI currently covers macOS only; Linux standalone
 support is distinct from continuous Linux validation.
+
+## Standalone aurora overlay
+
+With `[aurora] enabled = true` in your TOML, run:
+
+```sh
+./scripts/run-totalmarker aurora --overlay-only
+```
+
+Schedule it independently every five minutes if desired. It writes a transparent
+2:1 equirectangular PNG to `.state/totalmarker/aurora/overlay.png` and reports
+observation, forecast, and expiry times as Unix timestamps. Consume that PNG
+only while fresh; the saved file can remain for diagnostics after expiry.
+No Xplanet process, display, cloud feed, or additional Python package is
+needed. Optional night-map compositing on Linux needs Pillow available to the
+selected interpreter; macOS uses the built-in graphics frameworks via Swift.
+See [Aurora](management.md#aurora) for the local night-map handoff and disable
+procedure.

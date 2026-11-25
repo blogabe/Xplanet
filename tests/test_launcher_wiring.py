@@ -137,7 +137,7 @@ class LauncherWiringTests(Sandbox):
             "Explore and configure": ("config", "preview", "render"),
             "Install and maintain": ("bootstrap", "install", "setup", "update"),
             "Control the desktop": ("start", "stop", "restart", "earth"),
-            "Refresh data (Python TotalMarker)": ("clouds", "quake", "storm", "volcano", "norad", "eclipse", "label"),
+            "Refresh data (Python TotalMarker)": ("clouds", "quake", "storm", "volcano", "norad", "eclipse", "aurora", "label"),
             "Inspect and troubleshoot": ("log-view", "health", "diagnostics"),
             "Housekeeping and development": ("log-trim", "test"),
             "Unavailable": ("santa",),

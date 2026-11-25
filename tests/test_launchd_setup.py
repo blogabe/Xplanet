@@ -26,13 +26,25 @@ class LaunchdSetupTests(Sandbox):
             shutil.copy2(source, self.source / source.name)
         self.agents = self.home / "Library/LaunchAgents"
 
-    def prepare(self, *, clouds=False, home=None):
+    def prepare(self, *, clouds=False, aurora=False, home=None):
         command = [str(self.root / "scripts/xp-setup.sh"), "--prepare-launchd", "--home",
                    str(self.home if home is None else home)]
         if clouds:
             command.append("--include-clouds")
+        if aurora:
+            command.append("--include-aurora")
         return subprocess.run(command, cwd=PROJECT, capture_output=True,
                               text=True, check=False)
+
+    def test_aurora_is_an_independent_five_minute_job(self):
+        first = self.prepare(aurora=True)
+        self.assertEqual(first.returncode, 0, first.stderr)
+        job = self.source / "local.xplanet.aurora.plist"
+        plist = plistlib.loads(job.read_bytes())
+        self.assertEqual(plist["StartInterval"], 300)
+        self.assertEqual(plist["ProgramArguments"], [str(self.root / "scripts/xplanet.sh"), "aurora"])
+        self.assertEqual((self.agents / job.name).readlink(), job)
+        self.assertFalse((self.agents / "local.xplanet.clouds.plist").exists())
 
     def test_existing_working_directory_alias_to_same_checkout_is_preserved(self):
         first=self.prepare();self.assertEqual(first.returncode,0,first.stderr)

@@ -81,7 +81,7 @@ class LogTrimTests(Sandbox):
     def test_all_project_features_use_the_same_event_contract(self):
         data = b''.join(event(0, feature=feature) for feature in sorted(log_trim.FEATURES))
         settings = self.setup_log(data)
-        self.assertEqual(log_trim.trim(self.fs, settings, now=NOW)['removed'], 6)
+        self.assertEqual(log_trim.trim(self.fs, settings, now=NOW)['removed'], len(log_trim.FEATURES))
         self.assertEqual(self.fs.read(settings.log), b'')
 
     def test_unknown_undated_and_incomplete_records_remain_byte_exact(self):
