@@ -4,7 +4,6 @@ from contextlib import redirect_stdout
 from io import StringIO
 import json
 import hashlib
-import os
 from pathlib import Path
 from unittest.mock import patch
 
@@ -25,7 +24,12 @@ SAMPLE = (
 EPOCH = (datetime(2001, 1, 1, tzinfo=timezone.utc)
          + timedelta(days=286.44085648 - 1)).timestamp()
 STATIONS = (Path(__file__).parent / "fixtures/norad/stations-selected.synthetic.json").read_bytes()
-SAVED_STATIONS = os.environ.get("XPLANET_NORAD_EVIDENCE_FILE")
+# Synthetic group discovery with a matching ID outside Xplanet's 5-digit
+# TLE representation. The other row is intentionally not a SOYUZ match.
+STATIONS_WITH_UNSUPPORTED_SOYUZ = (
+    b'[{"OBJECT_NAME":"ISS (ZARYA)","NORAD_CAT_ID":25544},'
+    b'{"OBJECT_NAME":"SOYUZ MS-TEST","NORAD_CAT_ID":100057}]'
+)
 
 
 def sample_for(catalog_id, name):
@@ -218,26 +222,24 @@ color = "Gold"
         self.assertEqual(self.read_state(settings)["products"]["norad"]
                          ["skipped_unsupported_ids"], [])
 
-    def test_saved_live_group_response_skips_soyuz_without_publishing_empty_pair(self):
-        if not SAVED_STATIONS or not Path(SAVED_STATIONS).is_file():
-            self.skipTest("private saved CelesTrak group response is unavailable")
+    def test_unsupported_soyuz_does_not_publish_empty_pair(self):
         settings = self.native_options('''
 [[norad.groups]]
 source = "stations"
 name_contains = "SOYUZ"
 ''', catalog_ids="")
-        transport = ScriptedTransport(Response(200, {}, Path(SAVED_STATIONS).read_bytes()))
+        transport = ScriptedTransport(Response(200, {}, STATIONS_WITH_UNSUPPORTED_SOYUZ))
         result = run(self.fs, settings, fetcher=Fetcher(transport), now=EPOCH + 10)
         self.assertEqual(result.outcome, "failed")
         self.assertIn("100057", result.message)
+        self.assertIn("no representable TLE objects", result.message)
         self.assertEqual(len(transport.calls), 1)
+        self.assertIn("GROUP=STATIONS&FORMAT=JSON", transport.calls[0][0])
         self.assertIsNone(self.fs.read(settings.norad.satellite))
         self.assertIsNone(self.fs.read(settings.norad.satellite + ".tle"))
         self.assertIsNone(result.successful_at)
 
-    def test_saved_live_group_response_preserves_explicit_iss_with_warning(self):
-        if not SAVED_STATIONS or not Path(SAVED_STATIONS).is_file():
-            self.skipTest("private saved CelesTrak group response is unavailable")
+    def test_unsupported_soyuz_preserves_explicit_iss_with_warning(self):
         settings = self.native_options('''
 [[norad.groups]]
 source = "stations"
@@ -247,7 +249,7 @@ catalog_id = 25544
 caption = "ISS EXPLICIT"
 color = "Gold"
 ''')
-        transport = ScriptedTransport(Response(200, {}, Path(SAVED_STATIONS).read_bytes()),
+        transport = ScriptedTransport(Response(200, {}, STATIONS_WITH_UNSUPPORTED_SOYUZ),
                                       Response(200, {}, SAMPLE))
         result = run(self.fs, settings, fetcher=Fetcher(transport), now=EPOCH + 10)
         self.assertEqual((result.outcome, result.count), ("changed", 1))
@@ -255,9 +257,15 @@ color = "Gold"
         self.assertIn("coverage is partial", result.message)
         self.assertEqual(self.read_state(settings)["products"]["norad"]
                          ["skipped_unsupported_ids"], [100057])
-        self.assertIn(b'25544 "ISS EXPLICIT" color=Gold',
-                      self.fs.read(settings.norad.satellite))
+        selector = self.fs.read(settings.norad.satellite).splitlines()
+        self.assertEqual(len(selector), 1)
+        self.assertTrue(selector[0].startswith(b'25544 "ISS EXPLICIT" color=Gold '))
+        tle_name, _, _, _ = parse_tle(self.fs.read(settings.norad.satellite + ".tle"),
+                                      25544, EPOCH + 10, settings.norad.max_age)
+        self.assertEqual(tle_name, "ISS (ZARYA)")
         self.assertEqual(len(transport.calls), 2)
+        self.assertIn("GROUP=STATIONS&FORMAT=JSON", transport.calls[0][0])
+        self.assertIn("CATNR=25544&FORMAT=TLE", transport.calls[1][0])
 
     def test_local_icon_required_and_cached_icon_checked(self):
         settings = self.native_options('''
