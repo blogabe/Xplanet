@@ -27,9 +27,14 @@ jobs:
         run: |
           export TOTALMARKER_PYTHON="$(command -v python)"
           ./scripts/xplanet.sh test
-  configurator:
+  configurator_ui:
+    name: Configurator UI (${{ matrix.shard }}/2)
     runs-on: macos-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -39,10 +44,23 @@ jobs:
           python-version: '3.11'
       - name: Isolated configurator interactions
         env:
+          UI_SHARD: ${{ matrix.shard }}
           TZ: UTC
           PYTHONPATH: scripts:.
           PYTHONDONTWRITEBYTECODE: '1'
         run: |
           python -m venv "$RUNNER_TEMP/configurator"
           "$RUNNER_TEMP/configurator/bin/python" -m pip install --require-hashes --only-binary=:all: -r scripts/configurator/requirements.txt
-          "$RUNNER_TEMP/configurator/bin/python" -B -m unittest discover -s tests/configurator/ui -v
+          "$RUNNER_TEMP/configurator/bin/python" -B -m tests.run_configurator_ui --shard "$UI_SHARD"
+
+  configurator:
+    # Preserve the existing check name: both UI shards must pass.
+    if: ${{ always() }}
+    needs: configurator_ui
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      UI_RESULT: ${{ needs.configurator_ui.result }}
+    steps:
+      - name: Require both Configurator UI shards
+        run: test "$UI_RESULT" = success

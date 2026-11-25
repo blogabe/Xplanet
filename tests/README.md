@@ -21,6 +21,14 @@ explicitly preparing the isolated configurator runtime, run:
 PYTHONPATH=scripts:. .state/configurator/venv/bin/python -B -m unittest discover -s tests/configurator/ui -v
 ```
 
+GitHub runs the same UI suite in two parallel shards. Modules stay together
+and new modules go in shard 2 unless assigned to shard 1 for balance. The
+`configurator` check requires both shards to succeed. To reproduce one locally:
+
+```sh
+PYTHONPATH=scripts:. TZ=UTC .state/configurator/venv/bin/python -B -m tests.run_configurator_ui --shard 1
+```
+
 Fixtures are offline/synthetic or attributed public captures. Preserve raw fixture
 bytes and `.gitattributes`. Optional private NORAD captures remain under ignored
 `dev/workbench/validation`; missing optional evidence is reported as a skip, not invented.
