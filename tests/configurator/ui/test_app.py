@@ -10,14 +10,13 @@ import termios
 import time
 from pathlib import Path
 import sys
-import tempfile
 import unittest
 
 from textual.widgets import Input, Select, Static, TextArea
 from configurator.app import ConfiguratorApp
 from configurator.model import View
-from configurator.workspace import Workspace, save_view, open_view
-from tests.configurator.ui.fixtures import setup_editor, prepare_editor, click, enter_native
+from configurator.workspace import save_view, open_view
+from tests.configurator.ui.fixtures import setup_editor, prepare_editor, click
 
 
 class AppTests(unittest.IsolatedAsyncioTestCase):

@@ -1,7 +1,5 @@
 """Astronomy controls never refresh providers or activate a scene."""
 
-import asyncio
-from dataclasses import replace
 from pathlib import Path
 import sys
 import tempfile

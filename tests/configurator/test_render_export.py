@@ -1,11 +1,10 @@
 """Durable copies preserve owned snapshots and never overwrite personal files."""
 
-import asyncio, hashlib, json, os, sys, tempfile, unittest
+import asyncio, hashlib, json, unittest
 from pathlib import Path
 from unittest.mock import patch
 from configurator.comparison import plan, render_set
-from configurator.model import View, SAMPLE
-from configurator.workspace import Workspace
+from configurator.model import SAMPLE
 from configurator.render_export import export_snapshot, default_destination
 from tests.configurator import support_comparison as fixtures
 

@@ -2,7 +2,6 @@
 
 import io, sys, tempfile, unittest
 from contextlib import redirect_stdout, redirect_stderr
-from pathlib import Path
 from unittest.mock import patch
 from configurator.__main__ import report_result
 from configurator import handoff_cli

@@ -4,7 +4,7 @@ from dataclasses import replace
 from datetime import datetime, timezone
 import json, unittest
 from unittest.mock import patch
-from configurator.comparison import plan, reason, render_set
+from configurator.comparison import plan, render_set
 from configurator.model import View
 from configurator.render_export import export_snapshot
 from tests.configurator import support_comparison as fixtures

@@ -1,23 +1,18 @@
 """Frozen observation adapter tests use only disposable producer fixtures."""
 
-import hashlib, json, os, struct, tempfile, unittest, zlib
-from pathlib import Path
+import struct, unittest, zlib
 from unittest.mock import patch
-from configurator.model import ROOT
 from configurator.observation_capture import (
-    capture_existing,
     FrozenObservations,
     CaptureError,
     CaptureRace,
     native,
     names,
-    png,
     describe,
     json_bytes,
 )
 from totalmarker.quake_geojson import render_marker as quake_marker
-from totalmarker.volcano_cap import render_marker as volcano_marker
-from totalmarker.storm_model import render_marker as storm_marker, render_arc
+from totalmarker.storm_model import render_arc
 
 
 def icon():

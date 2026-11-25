@@ -1,12 +1,10 @@
 """Bounded framing sets preserve ordinary previews and never activate anything."""
 
-import asyncio, os, sys, tempfile, unittest
+import asyncio, sys, unittest
 from datetime import datetime, timezone
-from pathlib import Path
 from unittest.mock import patch
-from configurator.comparison import plan, reason, render_set, GEOMETRY
+from configurator.comparison import plan, render_set, GEOMETRY
 from configurator.model import View, SAMPLE
-from configurator.workspace import Workspace
 
 from tests.configurator.support_comparison import ComparisonFixture
 

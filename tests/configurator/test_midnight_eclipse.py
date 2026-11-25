@@ -1,8 +1,7 @@
 """Explicitly synthetic midnight timestamps exercise rollover, not eclipse science."""
 
 from dataclasses import replace
-from datetime import datetime, timezone
-import asyncio, hashlib, sys
+import asyncio, sys
 from configurator.astronomy_capture import (
     local_eclipse,
     capture_existing,

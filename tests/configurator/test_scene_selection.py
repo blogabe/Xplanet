@@ -1,11 +1,6 @@
 """Immutable reviewed scene references; no desktop/service/provider execution."""
 
-from pathlib import Path
-import sys, unittest
-from tests.configurator import support_handoff as fixtures
-from configurator.handoff import stage_plan, create_plan
-from configurator.library import save_named
-from configurator.model import View
+import unittest
 from configurator.selection import (
     SELECTOR,
     REVISIONS,

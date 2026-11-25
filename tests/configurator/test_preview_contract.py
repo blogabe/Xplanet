@@ -1,6 +1,6 @@
 """A finite renderer fixture records the full invocation and creates a real PNG."""
 
-import asyncio, json, os, struct, sys, tempfile, unittest, zlib
+import json, os, struct, sys, tempfile, unittest, zlib
 from pathlib import Path
 from unittest.mock import patch
 from configurator.model import View

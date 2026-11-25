@@ -1,10 +1,9 @@
 """Local files are unverified inputs, never fabricated provider successes."""
 
-import asyncio, hashlib, json, sys, tempfile, unittest
-from dataclasses import replace
+import hashlib, sys, tempfile, unittest
 from pathlib import Path
 from unittest.mock import patch
-from configurator.astronomy_capture import local_eclipse, FrozenAstronomy, describe, reference_url
+from configurator.astronomy_capture import local_eclipse, FrozenAstronomy, describe
 from configurator.cloud_capture import CaptureError, json_bytes
 from configurator.model import View, SAMPLE
 from configurator.workspace import Workspace, open_view

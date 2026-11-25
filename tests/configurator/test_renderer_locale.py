@@ -1,8 +1,5 @@
 """Literal decimal arguments work independently of the user's numeric locale."""
 
-import os
-from pathlib import Path
-import subprocess
 import unittest
 from configurator.resources import renderer_environment
 

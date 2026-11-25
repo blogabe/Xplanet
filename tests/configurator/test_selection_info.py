@@ -1,6 +1,5 @@
 """Inspect the next-start selection without assuming a live renderer or editing it."""
 
-from pathlib import Path
 import unittest
 from unittest.mock import patch
 from tests.configurator import support_selection as fixtures

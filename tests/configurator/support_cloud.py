@@ -6,7 +6,7 @@ import tempfile
 
 class CloudCaptureFixture:
     def setUp(self):
-        import hashlib, json
+        import hashlib
         from configurator.model import ROOT
 
         self.tmp = tempfile.TemporaryDirectory()

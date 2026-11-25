@@ -1,6 +1,6 @@
 """Binary evidence is explicit, bounded, scoped and never guessed from failure."""
 
-import asyncio, io, os, sys, tempfile, unittest
+import asyncio, io, sys, tempfile, unittest
 from pathlib import Path
 from dataclasses import replace
 from configurator.model import View, parse_saved_view
@@ -11,7 +11,7 @@ from configurator.resources import (
     capability_issues,
     resource_evidence,
 )
-from configurator.workspace import Workspace, configuration_issues
+from configurator.workspace import Workspace
 from configurator.geometry import geometry
 
 

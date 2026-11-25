@@ -1,10 +1,8 @@
 """Review/export never evaluates legacy or selects/starts a desktop scene."""
 
-from dataclasses import replace
-from pathlib import Path
-import json, os, sys, tempfile, unittest
+import json, os, sys, unittest
 from unittest.mock import patch
-from configurator.model import View, PLANET_MAPS
+from configurator.model import View
 from configurator.library import save_named
 from configurator.handoff import (
     create_plan,

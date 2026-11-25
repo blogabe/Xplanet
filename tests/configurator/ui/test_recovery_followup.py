@@ -1,6 +1,6 @@
 """Completed saves remain truthful when owned reopen/recovery work is cancelled."""
 
-import asyncio, threading, unittest
+import threading, unittest
 from unittest.mock import patch
 from textual.widgets import Input, Static
 from configurator.app import ConfiguratorApp

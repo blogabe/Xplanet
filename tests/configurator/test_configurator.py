@@ -16,7 +16,6 @@ from unittest.mock import patch
 from configurator.model import ROOT, SAMPLE, View, parse_saved_view, utc_date, number
 from configurator.workspace import (
     Workspace,
-    renderer_path,
     save_view,
     open_view,
     configuration_issues,
@@ -865,7 +864,6 @@ class AppearanceTests(unittest.TestCase):
 
     def test_appearance_changes_mark_retained_preview_stale(self):
         from configurator.workspace import PreviewSnapshot
-        import hashlib
 
         base = View()
         snap = PreviewSnapshot(
@@ -1440,7 +1438,6 @@ class CloudCaptureTests(CloudCaptureFixture, unittest.TestCase):
             self.capture()
 
     def test_forged_or_deep_provenance_is_normalized_and_rejected(self):
-        import json
         from configurator.cloud_capture import FrozenCloud, json_bytes
 
         frozen = self.capture()

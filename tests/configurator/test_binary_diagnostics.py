@@ -1,6 +1,6 @@
 """Explicit support inspection uses disposable executables and private state only."""
 
-import asyncio, contextlib, io, json, os, shutil, subprocess, sys, tempfile, time, unittest
+import contextlib, io, json, shutil, subprocess, sys, tempfile, time, unittest
 from pathlib import Path
 from unittest.mock import patch
 from configurator import binary_diagnostics as diagnostic

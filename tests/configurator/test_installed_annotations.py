@@ -2,7 +2,7 @@
 
 import asyncio
 from dataclasses import replace
-import hashlib, json, os, sys, tempfile, unittest
+import hashlib, os, sys, tempfile, unittest
 from pathlib import Path
 from unittest.mock import patch
 from configurator.installed_annotations import (
@@ -13,7 +13,7 @@ from configurator.installed_annotations import (
     validate_text,
 )
 from configurator.model import View, SAMPLE, parse_saved_view, recognized_body, PLANET_MAPS
-from configurator.workspace import Workspace, open_view, save_view
+from configurator.workspace import Workspace, open_view
 from configurator.library import save_named
 from configurator.recovery import (
     raw_fields,

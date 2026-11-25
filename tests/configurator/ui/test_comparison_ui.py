@@ -1,8 +1,7 @@
 """The framing-set UI never changes the draft or opens a viewer implicitly."""
 
 from tests.configurator.ui.support_comparison import ComparisonUIFixture
-import sys, unittest
-from pathlib import Path
+import unittest
 from unittest.mock import patch
 from textual.widgets import Button, Input, Select, Static
 from tests.configurator.ui import fixtures

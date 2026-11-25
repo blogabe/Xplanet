@@ -1,7 +1,6 @@
 """Scene exchange is inert canonical data; never general archive extraction."""
 
 from dataclasses import replace
-import io
 import json
 import os
 from pathlib import Path

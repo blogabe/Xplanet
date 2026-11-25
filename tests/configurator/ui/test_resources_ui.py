@@ -1,14 +1,12 @@
 """Explicit resource diagnostics and geometry never apply scenes or run jobs."""
 
 from tests.configurator.ui.support_resources import ResourceUIFixture
-import sys, unittest
+import unittest
 from unittest.mock import patch
 from configurator.binary_diagnostics import load as load_binary_evidence
 from configurator.app import ConfiguratorApp
 from configurator.workspace import Workspace
-from pathlib import Path
 from textual.widgets import Input, Static
-from configurator.model import View
 from configurator.workspace import open_view
 from tests.configurator.ui import fixtures
 

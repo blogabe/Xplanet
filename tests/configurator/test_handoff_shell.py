@@ -3,7 +3,7 @@
 import os, shlex, shutil, subprocess, sys, unittest
 from tests.configurator import support_handoff as fixtures
 from configurator.model import ROOT
-from configurator.handoff import create_plan, stage_plan, check_bundle
+from configurator.handoff import stage_plan, check_bundle
 
 
 class HandoffShellTests(unittest.TestCase):

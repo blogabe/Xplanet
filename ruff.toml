@@ -1,0 +1,6 @@
+# Configurator and its tests. Keep behavioral changes separate from formatting.
+line-length = 100
+target-version = "py311"
+
+[lint]
+select = ["E701", "E702", "F401", "F821"]

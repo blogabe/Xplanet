@@ -1,11 +1,8 @@
 """End-to-end frozen astronomy association without user or provider operations."""
 
 from tests.support import prepare_fixture
-import asyncio
 from dataclasses import replace
 from datetime import datetime, timezone
-import hashlib
-import json
 import os
 from pathlib import Path
 import sys
@@ -13,10 +10,9 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from configurator.astronomy_capture import capture_existing, FrozenAstronomy, FILES
+from configurator.astronomy_capture import FrozenAstronomy
 from configurator.cloud_capture import json_bytes
 from configurator.model import View, SAMPLE, parse_saved_view, SCENE_HEADERS
-from configurator.library import save_named
 from configurator.workspace import Workspace, open_view, configuration_issues, save_view
 from configurator.native_inspection import inspect_native, copy_unchanged
 from configurator.handoff import create_plan, stage_plan, command
@@ -24,11 +20,8 @@ from configurator.selection import stage_revision, read_revision, runtime_files
 from configurator.comparison import plan, reason
 from configurator.exchange import export_scene
 from configurator.recovery import pack, raw_fields, RecoveryStore, encoded, digest, LEGACY_FIELDS
-from totalmarker.features import norad, eclipse
-from totalmarker.http import Fetcher, Response
-from tests.support import Sandbox, ScriptedTransport
-from tests.configurator import support_astronomy_capture as capture_fixtures
-from tests.test_norad import SAMPLE as TLE, EPOCH
+from tests.support import Sandbox
+from tests.test_norad import SAMPLE as TLE
 
 
 def synthetic_current_tle():

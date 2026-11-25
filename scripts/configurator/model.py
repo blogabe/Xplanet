@@ -4,7 +4,7 @@ from dataclasses import dataclass, replace, field
 from datetime import datetime, timezone, timedelta
 import math
 import hashlib
-from .cloud_capture import FrozenCloud, IMAGE_FILE, META_FILE
+from .cloud_capture import FrozenCloud, IMAGE_FILE
 from .observation_capture import (
     FrozenObservations,
     PRODUCTS as OBS_PRODUCTS,

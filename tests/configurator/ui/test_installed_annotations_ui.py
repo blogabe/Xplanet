@@ -1,7 +1,6 @@
 """Explicit import, mode retention and undo/save remain usable in the editor."""
 
 import asyncio, unittest
-from pathlib import Path
 from unittest.mock import patch
 from textual.widgets import Input, Select, Static
 from tests.configurator.ui import fixtures

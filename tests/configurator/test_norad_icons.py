@@ -1,10 +1,8 @@
 """Bounded PNG dependency capture with no provider or desktop operations."""
 
-from dataclasses import replace
 import hashlib, json, struct, sys, zlib
-from pathlib import Path
 from unittest.mock import patch
-from configurator.astronomy_capture import capture_existing, FrozenAstronomy, normalize_icon, FILES
+from configurator.astronomy_capture import capture_existing, FrozenAstronomy, normalize_icon
 from configurator.cloud_capture import CaptureError, CaptureRace, json_bytes
 from configurator.model import View, SAMPLE
 from configurator.workspace import Workspace, open_view
@@ -16,7 +14,7 @@ from totalmarker.config import load
 from totalmarker.features import norad
 from totalmarker.http import Fetcher, Response
 from tests.support import Sandbox, ScriptedTransport
-from tests.test_norad import SAMPLE as TLE, EPOCH, sample_for
+from tests.test_norad import EPOCH, sample_for
 from tests.configurator.test_scene_exchange import png, chunk
 
 

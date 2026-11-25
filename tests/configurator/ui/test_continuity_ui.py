@@ -3,7 +3,7 @@
 from tests.configurator.ui.terminal_support import open_terminal
 import io, unittest
 from contextlib import redirect_stdout
-from textual.widgets import Button, Input, Static, Select
+from textual.widgets import Button, Input, Static
 from configurator.__main__ import report_result
 from configurator.workspace import open_view
 from configurator.model import ROOT

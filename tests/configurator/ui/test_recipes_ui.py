@@ -2,7 +2,7 @@
 
 import unittest
 from unittest.mock import patch
-from textual.widgets import Input, Select, Button, Static
+from textual.widgets import Input, Button, Static
 from configurator.recipes_ui import RecipeBrowser
 from configurator.library_ui import SceneLibrary
 from tests.configurator.ui import fixtures

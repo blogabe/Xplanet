@@ -1,26 +1,19 @@
 """Only synthetic/disposable producer fixtures; never real source operations."""
 
-from dataclasses import replace
 from datetime import datetime, timezone
 import hashlib
-import json
 import re
-from pathlib import Path
 from unittest.mock import patch
 
 from configurator.astronomy_capture import (
-    capture_existing,
     FrozenAstronomy,
     satellite_pair,
     eclipse_pair,
     FILES,
 )
 from configurator.cloud_capture import CaptureError, CaptureRace, json_bytes
-from totalmarker.features import norad, eclipse
-from totalmarker.http import Fetcher, Response
-from tests.support import Sandbox, ScriptedTransport
-from tests.test_norad import SAMPLE, EPOCH
-from tests.test_eclipse import TOTAL, TOTAL_URL
+from tests.support import Sandbox
+from tests.test_norad import EPOCH
 
 
 from tests.configurator.support_astronomy_capture import AstronomyCaptureFixture

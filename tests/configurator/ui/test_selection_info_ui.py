@@ -1,6 +1,5 @@
 """Selection clarity is an explicit, readonly flow with deliberate draft opening."""
 
-from pathlib import Path
 import sys, unittest
 from textual.widgets import Button, Input, Static
 from tests.configurator.ui import fixtures

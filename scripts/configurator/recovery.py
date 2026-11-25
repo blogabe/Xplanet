@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 import fcntl, hashlib, json, math, os, re, stat, time, uuid
 from pathlib import Path
 from .cloud_capture import FrozenCloud, IMAGE_FILE, META_FILE
-from .observation_capture import FrozenObservations, META_FILE as OBS_META
+from .observation_capture import FrozenObservations
 from .astronomy_capture import (
     FrozenAstronomy,
     FILES as ASTRONOMY_FILES,

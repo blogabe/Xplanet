@@ -3,7 +3,7 @@
 from pathlib import Path
 import contextlib, io, os, shutil, subprocess, sys, tempfile, unittest
 from unittest.mock import patch
-from configurator.guide import read_guide, GUIDE, LIMIT
+from configurator.guide import read_guide, LIMIT
 from configurator.model import ROOT
 
 

@@ -3,14 +3,10 @@
 from tests.configurator.ui.support_handoff import HandoffUIFixture, prepare_handoff
 from tests.configurator.ui.terminal_support import open_terminal
 from pathlib import Path
-import errno, sys, tempfile, unittest, asyncio, threading
+import errno, sys, unittest, asyncio, threading
 from unittest.mock import patch
 from textual.widgets import Button, Input, Static
-from configurator.app import ConfiguratorApp
 from configurator.handoff import check_bundle
-from configurator.library import save_named
-from configurator.model import View
-from configurator.workspace import Workspace
 from configurator.fileio import OwnedFiles
 from tests.configurator.ui.fixtures import click
 
