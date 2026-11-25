@@ -1,1 +1,1 @@
-"""Sample-view editor; independent of TotalMarker and desktop lifecycle."""
+"""Xplanet scene studio for editing, previewing, and handing off scenes."""

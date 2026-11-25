@@ -795,7 +795,7 @@ if ask "Step 3) Install and register Xplanet automation?"; then
         print -u2 -- "launchd file preparation failed; no jobs were registered by this setup attempt."
         print -u2 -- "The entire selected automation batch was blocked: ${(j:, :)jobs}."
         print -u2 -- "Existing launchd registrations and personal plists were left unchanged; a running desktop does not prove marker jobs are registered."
-        print -ru2 -- "Resolve the reported launchd preparation error. If editing a personal plist, preserve its schedule and update its ABE-CFG source, if used; then retry: ${(q)launcher} setup"
+        print -ru2 -- "Resolve the reported launchd preparation error. If editing a personal plist, preserve its schedule and update the source template, if you maintain one; then retry: ${(q)launcher} setup"
         failures+=("launchd preparation: selected automation batch not registered; see the plist error above")
     else
         print -- "If macOS asks to let Xplanet control Finder, choose Allow for desktop updates."

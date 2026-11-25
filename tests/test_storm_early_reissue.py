@@ -28,8 +28,8 @@ class EarlyPacket(ReceiptPacket):
     def __init__(self):
         # The original failed snapshot lacks HTTP Date headers.
         super().__init__(FIXTURE, default_date=formatdate(NOW, usegmt=True))
-        # Old code stopped on ABPW before it fetched ABIO. This separate,
-        # synthetic 18Z bulletin corroborates the captured active 98S TCFA.
+        # The synthetic 18Z ABIO covers the active 98S TCFA omitted from
+        # the captured packet.
         abio = (empty_advisory("abio")
                 .replace(b"ABIO10 PGTW 190900", b"ABIO10 PGTW 231800")
                 .replace(b"190900Z-200600ZOCT2026", b"231800Z-241800ZNOV2026"))

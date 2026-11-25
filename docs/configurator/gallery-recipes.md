@@ -60,7 +60,7 @@ source; it was not a systematic gallery review. This review complements it, not
 replaces source-backed limits. The broader official README, README.config, FAQ,
 OS X, Maps & Scripts, Clouds and Links pages were also surveyed. The upstream
 [OS X](https://xplanet.sourceforge.net/OSX.php.html) and
-[Links](https://xplanet.sourceforge.net/links.php.html) pages reference Abe's guide;
+[Links](https://xplanet.sourceforge.net/links.php.html) pages reference this project's earlier guide;
 [Maps & Scripts](https://xplanet.sourceforge.net/maps.php.html) documents the wider
 image/marker ecosystem behind the project.
 

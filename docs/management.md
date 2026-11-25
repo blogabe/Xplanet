@@ -25,8 +25,8 @@ reuse valid saved quake data fetched less than 18 minutes ago.
 
 Prior TOML spellings (including eclipse `check_interval_days`) and INI
 settings remain supported without rounding. Use only one spelling for a setting.
-Response byte limits still apply by default; existing override keys
-remain supported for deployments such as unusually large cloud maps.
+The [advanced TotalMarker overrides](technical-notes.md#advanced-totalmarker-overrides)
+are available for deployments such as unusually large cloud maps.
 
 ## Quick start
 
@@ -522,8 +522,8 @@ history is less useful for development and historical comparisons.
   asynchronous, not proof of a frame.
 - Restart reports that `local.xplanet.desktop` was not found: let any in-flight
   lifecycle request finish, then retry `restart` once. Restart uses the stop scope
-  above. If it recurs, retain the exact error and desktop log rather than repeatedly
-  stopping/starting or assuming the earlier intermittent incident was fixed.
+  above. If it recurs, retain the exact error and desktop log instead of
+  repeatedly stopping and starting.
 - Source problems: run saved `health` first, then explicitly choose `health --live`
   if provider access should be checked. Retained output is not proof of freshness.
 

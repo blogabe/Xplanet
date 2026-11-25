@@ -30,8 +30,9 @@ PYTHONPATH=scripts:. TZ=UTC .state/configurator/venv/bin/python -B -m tests.run_
 ```
 
 Fixtures are offline/synthetic or attributed public captures. Preserve raw fixture
-bytes and `.gitattributes`. Optional private NORAD captures remain under ignored
-`dev/workbench/validation`; missing optional evidence is reported as a skip, not invented.
+bytes and `.gitattributes`. To exercise the optional saved NORAD cases, set
+`XPLANET_NORAD_EVIDENCE_FILE` to an absolute path to the matching private
+CelesTrak capture. Missing evidence is reported as a skip.
 Tests use disposable roots and stub operations; do not point them at a working
 installation. See [architecture](../docs/architecture.md#verification-boundaries).
 
@@ -41,15 +42,15 @@ runner additionally permits five explicitly named zsh shell-boundary cases to
 skip only when their required `/bin/zsh` or PATH executable is unavailable. It
 does not exempt arbitrary skips by reason text. Other required checks, including
 Git-index privacy, must still run; this is a capability boundary, not evidence
-that the R2 suite has executed on every Linux host. Use a
-complete Git checkout for release verification. Running selected tests directly
+that the portable suite has run on every Linux host. Use a complete Git
+checkout for release verification. Running selected tests directly
 in a source-only copy is useful development evidence, not a verified release.
 UI fixtures are plain helpers; blocking PTY tests use synchronous runners with
 explicit geometry. File-identity tests use local `/tmp` storage with nanosecond
 ctime/mtime evidence; a filesystem without that evidence is outside those fixtures
 (the production safety checks are not weakened to make the tests pass).
-Hosted CI covers macOS Python 3.11/3.13 and the isolated Textual suite. Linux
-runtime support is unchanged; Ubuntu CI remains deliberately disabled.
+Hosted CI runs the core and isolated Textual suites on macOS. The Ubuntu job
+reports the combined Textual results; it does not run Linux runtime tests.
 
 ## Indexed privacy and fixture receipts
 
@@ -63,9 +64,8 @@ secret or license scanner.
 
 [Selected fixture receipts](fixtures/provenance.json) pin current bytes and state
 where original retrieval metadata is unknown. The historical scene
-[goldens](fixtures/configurator/scenes/README.md) retain their hashes and versions;
-private development revision IDs are not public-history links. Do not regenerate
-fixture bytes to accommodate current parsers.
+[goldens](fixtures/configurator/scenes/README.md) retain their hashes and versions.
+Do not regenerate fixture bytes to accommodate current parsers.
 
 ## Explicit native resource lookup check
 

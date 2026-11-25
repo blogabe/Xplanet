@@ -225,6 +225,12 @@ hours = 72
         self.assertEqual(self.toml("[eclipse]\ncheck_interval_minutes=1441\n").eclipse.interval, 86460)
         self.assertEqual(self.toml("[cloud]\ntimeout_seconds=7\n").timeout, 7)
 
+    def test_omitted_quake_interval_matches_the_shipped_template(self):
+        omitted = self.toml("")
+        example = self.toml((PROJECT / "config/totalmarker.example.toml").read_text())
+        self.assertEqual(omitted.quake.interval, 1080)
+        self.assertEqual(omitted.quake.interval, example.quake.interval)
+
     def test_omitted_download_limits_keep_defaults_and_accept_overrides(self):
         settings = self.toml((PROJECT / "config/totalmarker.example.toml").read_text())
         self.assertEqual((settings.max_bytes, settings.quake.max_bytes,

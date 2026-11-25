@@ -158,7 +158,7 @@ class QuakeOptions:
     minimum: float = 6.0
     marker: str = "markers/quake"
     journal: str = ".state/totalmarker/quake-pending.json"
-    interval: int = 1100
+    interval: int = 18 * 60
     timeout: int = 30
     max_bytes: int = 32 * 1024 * 1024
     warning: int = 3 * 3600
@@ -802,7 +802,7 @@ def load_bytes(fs, raw, path):
         duration=duration, size=size, minimum=decimal("QuakeMinimumSize", 6),
         marker=get("QuakeOutput") or QuakeOptions.marker,
         journal=get("QuakeJournalFile") or QuakeOptions.journal,
-        interval=number("QuakeCheckIntervalSeconds", 1100),
+        interval=number("QuakeCheckIntervalSeconds", QuakeOptions.interval),
         timeout=number("QuakeTimeoutSeconds", 30, minimum=1, maximum=300),
         max_bytes=number("QuakeMaxBytes", 32 * 1024 * 1024, minimum=1024,
                          maximum=128 * 1024 * 1024),
