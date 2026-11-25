@@ -44,10 +44,6 @@ def selected(view):
     )
 
 
-def resource_requests(view):
-    return tuple((DATASETS[key][3], DATASETS[key][1]) for key in selected(view))
-
-
 def _rows(text, key):
     if not isinstance(text, str) or len(text.encode("utf-8")) > LIMIT:
         raise ValueError("Annotation input exceeds 96 KiB.")

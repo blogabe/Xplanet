@@ -1,4 +1,4 @@
-# Configurator and its tests. Keep behavioral changes separate from formatting.
+# Lint Configurator, TotalMarker, and all Python tests. Format only Configurator and its tests.
 line-length = 100
 target-version = "py311"
 
