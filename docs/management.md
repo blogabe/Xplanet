@@ -7,9 +7,9 @@ data-only use, see [standalone TotalMarker](totalmarker-standalone.md).
 
 In `config/totalmarker.toml`, use whole units as named in each key:
 
-- **Check intervals:** minutes for clouds, earthquakes, storms and eclipses;
-  hours for volcanoes (`check_interval_hours = 23`) and NORAD
-  (`check_interval_hours = 2`).
+- **Check intervals:** minutes for clouds, earthquakes and storms; hours for
+  volcanoes (`check_interval_hours = 23`) and NORAD
+  (`check_interval_hours = 2`); days for eclipses (`check_interval_days = 1`).
 - **Label warnings:** hours for clouds, earthquakes and storms; days for
   volcanoes and NORAD.
 - **Other settings:** seconds for network timeouts, days for NORAD's

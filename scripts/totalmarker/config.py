@@ -391,7 +391,7 @@ TOML_DURATION_UNITS = {
     "storm.check_interval_seconds": ("minutes",),
     "volcano.check_interval_seconds": ("hours", "minutes"),
     "norad.check_interval_seconds": ("hours", "minutes"),
-    "eclipse.check_interval_seconds": ("minutes",),
+    "eclipse.check_interval_seconds": ("days", "minutes"),
     "labels.warning_cloud_seconds": ("hours", "minutes"),
     "labels.warning_quake_seconds": ("hours", "minutes"),
     "labels.warning_storm_seconds": ("hours", "minutes"),
