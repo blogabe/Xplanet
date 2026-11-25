@@ -222,6 +222,7 @@ hours = 72
         self.assertEqual(self.toml("[labels]\nwarning_norad_minutes=1441\n").norad.warning, 86460)
         self.assertEqual(self.toml("[quake]\ncheck_interval_seconds=1100\n").quake.interval, 1100)
         self.assertEqual(self.toml("[quake]\ncheck_interval_minutes=18\n").quake.interval, 1080)
+        self.assertEqual(self.toml("[eclipse]\ncheck_interval_minutes=1441\n").eclipse.interval, 86460)
         self.assertEqual(self.toml("[cloud]\ntimeout_seconds=7\n").timeout, 7)
 
     def test_omitted_download_limits_keep_defaults_and_accept_overrides(self):
@@ -237,6 +238,7 @@ hours = 72
     def test_segmented_project_example_applies_quake_volcano_and_storm(self):
         raw = (PROJECT / "config/totalmarker.example.toml").read_bytes()
         document = tomllib.loads(raw.decode("utf-8"))
+        self.assertEqual(document["volcano"]["url"], "")
         self.assertEqual(list(document), ["paths", "labels", "cloud", "quake",
                                           "volcano", "storm", "norad", "eclipse", "aurora"])
         self.assertIn("track_real_color", document["storm"])
@@ -244,6 +246,7 @@ hours = 72
         self.assertNotIn("legacy", document)
         self.assertFalse(document["norad"]["enabled"])
         self.assertFalse(document["eclipse"]["enabled"])
+        self.assertEqual(document["eclipse"]["check_interval_days"], 1)
         self.assertTrue(document["aurora"]["enabled"])
         self.assertNotIn("santa", document)
         (self.root / "example.toml").write_bytes(raw)

@@ -1,7 +1,10 @@
 # Example only. Keep personal config/totalmarker.toml separate; never overwrite it.
 # The selected .invalid custom source cannot be fetched; choose sources deliberately.
 # Timing fields use the whole unit named in their key; network timeouts use seconds.
-# Fetch intervals leave a margin below the example launchd periods for start jitter.
+# The scheduler (such as a launchd plist) decides when TotalMarker runs.
+# check_interval_* is the minimum time between fetches when saved data can
+# still be reused. It does not change the scheduler. The example intervals
+# allow some launchd start jitter.
 
 [paths]
 # Relative paths resolve against --root, not this file or the current directory.
@@ -74,11 +77,13 @@ detail_color_max = "Red"
 detail_align = "Above"
 
 [volcano]
-# The "weekly_html" provider uses the official GVP Weekly Report and ignores url.
-# For "cap", set url to https://volcano.si.edu/news/WeeklyVolcanoCAP.xml.
+# Weekly HTML and CAP are two formats of the same Smithsonian/USGS weekly report.
+# Weekly HTML uses the public report page; leave url blank.
+# For CAP, set provider = "cap" and use the commented URL instead of the blank one.
 # Failed refreshes retain prior markers and the last successful refresh time.
 provider = "weekly_html"
-url = "https://volcano.si.edu/news/WeeklyVolcanoCAP.xml"
+url = ""
+# url = "https://volcano.si.edu/news/WeeklyVolcanoCAP.xml"
 output = "markers/volcano"
 check_interval_hours = 23
 timeout_seconds = 30
@@ -162,7 +167,7 @@ enabled = false
 path_url = ""
 marker_output = "markers/eclipse"
 arc_output = "arcs/eclipse"
-check_interval_minutes = 1440
+check_interval_days = 1
 timeout_seconds = 30
 notify_hours = 48
 notice_enabled = true

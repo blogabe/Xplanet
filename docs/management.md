@@ -7,18 +7,21 @@ data-only use, see [standalone TotalMarker](totalmarker-standalone.md).
 
 In `config/totalmarker.toml`, use whole units as named in each key:
 
-- **Check intervals:** minutes for clouds, earthquakes, storms and eclipses;
-  hours for volcanoes (`check_interval_hours = 23`) and NORAD
-  (`check_interval_hours = 2`).
+- **Check intervals:** minutes for clouds, earthquakes and storms; hours for
+  volcanoes (`check_interval_hours = 23`) and NORAD
+  (`check_interval_hours = 2`); days for eclipses (`check_interval_days = 1`).
 - **Label warnings:** hours for clouds, earthquakes and storms; days for
   volcanoes and NORAD.
 - **Other settings:** seconds for network timeouts, days for NORAD's
   `max_age_days` and hours for eclipse `notify_hours`.
 
-A check interval limits how often an invocation can fetch data. It does not
-change the launchd, cron, or systemd schedule. The bundled launchd schedule
-still checks volcanoes daily and earthquakes every 20 minutes, while the
-TOML allows a volcano fetch after 23 hours and a quake fetch after 18 minutes.
+The scheduler (launchd plist, cron, or systemd timer) decides when
+TotalMarker runs. The TOML `check_interval_*` is the minimum time between
+fetches when saved data can still be reused. A manual run can also reuse
+recent data. Lowering the TOML value does not make the scheduler run more
+often; raising it above the scheduled interval can make a run skip a fetch.
+For example, the quake plist runs every 20 minutes, but TotalMarker can
+reuse valid saved quake data fetched less than 18 minutes ago.
 
 Prior seconds and minute spellings and INI settings remain supported without
 rounding. Use only one spelling for a setting.

@@ -77,14 +77,16 @@ def template_region(data):
     end = re.search(r"(?m)^\[", data[start:])
     stop = start + end.start() if end else len(data)
     part = data[start:stop]
-    for setting in ('provider = "weekly_html"', f'url = "{CAP}"'):
-        if len(re.findall(rf"(?m)^{re.escape(setting)}\r?$", part)) != 1:
-            raise ValueError
-    return start, stop
+    provider = re.findall(r'(?m)^provider = "weekly_html"\r?$', part)
+    # Accept the previous stock template too. Never replace the commented URL.
+    url_lines = re.findall(rf'(?m)^(url = "(?:{re.escape(CAP)})?")\r?$', part)
+    if len(provider) != 1 or len(url_lines) != 1:
+        raise ValueError
+    return start, stop, url_lines[0]
 
 
 def choose(data, choice):
-    start, stop = template_region(data)
+    start, stop, url_line = template_region(data)
     if choice == "weekly_html":
         return data
 
@@ -92,10 +94,10 @@ def choose(data, choice):
         return re.sub(rf"(?m)^{re.escape(old)}(?=\r?$)", new, section, count=1)
 
     part = replace_setting(data[start:stop], 'provider = "weekly_html"', 'provider = "cap"')
-    if choice == "skip":
-        part = replace_setting(part, f'url = "{CAP}"', f'url = "{PLACEHOLDER}"')
-    elif choice != "cap":
+    if choice not in {"cap", "skip"}:
         raise ValueError
+    url = CAP if choice == "cap" else PLACEHOLDER
+    part = replace_setting(part, url_line, f'url = "{url}"')
     result = data[:start] + part + data[stop:]
     if source(result) != ("unconfigured" if choice == "skip" else "ready"):
         raise ValueError

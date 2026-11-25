@@ -590,8 +590,13 @@ class SetupTests(Sandbox):
                 current = config.read_bytes()
                 volcano = tomllib.loads(current.decode())["volcano"]
                 self.assertEqual(volcano["provider"], provider)
-                self.assertEqual(volcano["url"], "https://volcano.si.edu/news/WeeklyVolcanoCAP.xml"
-                                 if selected else "https://volcano.example.invalid/WeeklyVolcanoCAP.xml")
+                expected_url = {
+                    "1": "https://volcano.si.edu/news/WeeklyVolcanoCAP.xml",
+                    "2": "",
+                    "": "",
+                    "3": "https://volcano.example.invalid/WeeklyVolcanoCAP.xml",
+                }
+                self.assertEqual(volcano["url"], expected_url[choice])
                 if provider == "weekly_html":
                     self.assertEqual(current, source_template)
                 self.assertEqual("Refresh volcano markers now?" in output, selected)
