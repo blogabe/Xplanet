@@ -39,14 +39,14 @@ class HealthFormatTests(unittest.TestCase):
                        product('storm', freshness='current', last_error={
                            'at': NOW - 7200, 'message': 'Old contradictory JTWC source'}),
                        product('volcano'),
-                       *(product(name, status='disabled') for name in ('norad', 'eclipse', 'santa')))
+                       *(product(name, status='disabled') for name in ('norad', 'eclipse')))
         before = deepcopy(saved)
         self.assertEqual(format_report(saved), '''TotalMarker saved status (no network check)
 Clouds: saved output current; last success 1h ago
 Earthquakes: saved output; freshness not assessed; last success 1h ago
 Storms: saved output current; last success 1h ago
 Volcanoes: saved output; freshness not assessed; last success 1h ago
-Disabled: Satellites, Eclipses, Santa''')
+Disabled: Satellites, Eclipses''')
         self.assertEqual(saved, before)
         self.assertEqual(exit_status(saved), 0)
         verbose = format_report(saved, verbose=True)

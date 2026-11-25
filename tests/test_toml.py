@@ -290,7 +290,9 @@ hours = 72
         alternatives = {"cloud.url", "cloud.auth_mode", "cloud.local_image_name"}
         runtime_only = {key for key in TOML_KEYS if key.endswith(
             (".journal", ".max_bytes", ".group_max_bytes")
-        )} | {"paths.state", "paths.lock"} | TOML_LEGACY_DURATION_KEYS
+        )} | {"paths.state", "paths.lock"} | TOML_LEGACY_DURATION_KEYS | {
+            key for key in TOML_KEYS if key.startswith("santa.")
+        }
         self.assertFalse(runtime_only & documented)
         first_class = {key for key in TOML_KEYS if not (
             key.startswith("storm.") and key.rsplit(".", 1)[-1][:1].isupper()

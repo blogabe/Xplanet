@@ -180,9 +180,3 @@ trail = [-30, 30, 5]
 # transparent = [0, 0, 0]
 # altcirc = 0
 # align = "Above"
-
-# Santa is an unsupported stub; keep this section commented.
-# [santa]
-# enabled = false
-# output = "markers/santa"
-# freshness_seconds = 0

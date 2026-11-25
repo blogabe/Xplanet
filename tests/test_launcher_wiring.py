@@ -131,7 +131,6 @@ class LauncherWiringTests(Sandbox):
             "Refresh data (Python TotalMarker)": ("clouds", "quake", "storm", "volcano", "norad", "eclipse", "aurora", "label"),
             "Inspect and troubleshoot": ("log-view", "health", "diagnostics"),
             "Housekeeping and development": ("log-trim", "test"),
-            "Unavailable": ("santa",),
         }
         headings = list(groups)
         rows = re.findall(r"^  ([a-z][a-z-]*) {2,}", result.stdout, re.M)
