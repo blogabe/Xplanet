@@ -4,6 +4,9 @@ import json
 import os
 import subprocess
 import sys
+from unittest.mock import patch
+
+from totalmarker.features.norad import _renderer_supports_alpha5 as probe_norad_renderer
 
 from .support import PROJECT, Sandbox, jpeg, cloud_template
 
@@ -72,6 +75,56 @@ class RuntimeFixture(Sandbox):
             env=self.env, text=True, capture_output=True, timeout=10)
 
 class RuntimePathIntegrationTests(RuntimeFixture):
+    def test_norad_upgrades_legacy_group_state_with_a_fixture_alpha5_renderer(self):
+        from totalmarker.features.norad import run
+        from totalmarker.http import Fetcher, Response
+        from .support import ScriptedTransport
+        from .test_norad import EPOCH, OMM, SAMPLE, STATIONS_WITH_UNSUPPORTED_SOYUZ, sample_for
+
+        settings = self.toml_config(
+            '[norad]\nenabled = true\ncatalog_ids = "25544,20580"\n'
+            '[[norad.groups]]\nsource = "stations"\nname_contains = "SOYUZ"\n')
+        discovery = Response(200, {}, STATIONS_WITH_UNSUPPORTED_SOYUZ)
+        hubble = Response(200, {}, sample_for(20580, "HUBBLE"))
+        legacy_transport = ScriptedTransport(discovery, Response(200, {}, SAMPLE), hubble)
+        with patch("totalmarker.features.norad.discover",
+                   side_effect=AssertionError("the legacy fixture must not discover a host renderer")):
+            legacy = run(self.fs, settings, fetcher=Fetcher(legacy_transport), now=EPOCH + 10)
+        self.assertEqual((legacy.outcome, legacy.count), ("changed", 2))
+        previous = self.read_state(settings)["products"]["norad"]
+        self.assertEqual(previous["selected_ids"], [25544, 20580])
+        self.assertEqual(previous["skipped_unsupported_ids"], [100057])
+        legacy_tle = self.fs.read(settings.norad.satellite + ".tle")
+        self.assertNotIn(b"A0057", legacy_tle)
+
+        executable = self.base / "fixture-xplanet"
+        executable.write_text(
+            '#!/bin/sh\n[ "$#" -eq 1 ] && [ "$1" = -version ] || exit 2\n'
+            "printf '%s\\n' 'TLE catalog IDs: Alpha-5'\n")
+        executable.chmod(0o700)
+        (self.root / "config/xp.def").write_text(f'XPLANET_BIN="{executable}"\n')
+        upgraded_transport = ScriptedTransport(
+            discovery, Response(200, {}, SAMPLE), hubble, Response(200, {}, json.dumps([OMM]).encode()))
+        with patch("totalmarker.features.norad._renderer_supports_alpha5", wraps=probe_norad_renderer):
+            # A renderer upgrade does not bypass the provider interval or discard the old pair.
+            early_transport = ScriptedTransport()
+            early = run(self.fs, settings, fetcher=Fetcher(early_transport), now=EPOCH + 11)
+            self.assertEqual((early.outcome, early.count), ("unchanged", 2))
+            self.assertIn("provider interval", early.message)
+            self.assertEqual(early_transport.calls, [])
+            self.assertEqual(self.fs.read(settings.norad.satellite + ".tle"), legacy_tle)
+            when = EPOCH + 10 + settings.norad.interval
+            upgraded = run(self.fs, settings, fetcher=Fetcher(upgraded_transport), now=when)
+            cached = run(self.fs, settings, fetcher=Fetcher(ScriptedTransport()), now=when + 1)
+        self.assertEqual((upgraded.outcome, upgraded.count, cached.outcome), ("changed", 3, "unchanged"))
+        self.assertIn("CATNR=100057&FORMAT=JSON", upgraded_transport.calls[-1][0])
+        self.assertEqual(self.fs.read(settings.norad.satellite + ".tle").count(b"A0057"), 2)
+        current = self.read_state(settings)["products"]["norad"]
+        self.assertEqual(current["selected_ids"], [25544, 20580, 100057])
+        self.assertEqual(current["skipped_unsupported_ids"], [])
+        self.assertNotEqual(current["source_key"], previous["source_key"])
+        self.assertGreater(current["successful_at"], previous["successful_at"])
+
     def test_single_source_launcher_help_from_unrelated_directory(self):
         launcher = PROJECT / "scripts/run-totalmarker"
         environment = {**self.env, "PYTHONPATH": ""}

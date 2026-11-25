@@ -7,6 +7,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest.mock import patch
 
 from totalmarker.config import load
 from totalmarker.http import Response
@@ -96,6 +97,12 @@ class SandboxFixture:
         self.root = self.base / "sandbox"
         self.root.mkdir()
         self.fs = RootFS(self.root)
+
+        # Offline fixtures must not discover or execute the host renderer.
+        # Tests for Alpha-5 can explicitly opt in with a controlled renderer.
+        capability = patch("totalmarker.features.norad._renderer_supports_alpha5", return_value=False)
+        capability.start()
+        self.addCleanup(capability.stop)
 
     def config(self, extra="", *, custom=True):
         """Write an INI fixture for compatibility cases and unmigrated tests."""
