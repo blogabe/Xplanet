@@ -58,14 +58,6 @@ OMM = {
 
 
 class NoradTests(Sandbox):
-    def setUp(self):
-        super().setUp()
-        # Legacy renderer behavior is the fixture default, independent of the
-        # developer's installed Xplanet. Capability tests opt into Alpha-5.
-        renderer = patch("totalmarker.features.norad._renderer_supports_alpha5", return_value=False)
-        renderer.start()
-        self.addCleanup(renderer.stop)
-
     def options(self, extra="", *, catalog_ids="25544"):
         return self.toml_config(
             f'[norad]\nenabled = true\ncatalog_ids = "{catalog_ids}"\n' + extra)
