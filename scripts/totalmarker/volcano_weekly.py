@@ -234,6 +234,10 @@ def load_coordinate_catalogue(path=CATALOGUE):
         result[int(key)] = tuple(coords)
     if not result:
         raise FeedError("Static volcano coordinate catalogue is empty")
+    if path == CATALOGUE:
+        # Official GVP profile for Pelorus Reef, absent from the GDACS snapshot.
+        # https://volcano.si.edu/volcano.cfm?vn=243018
+        result.setdefault(243018, (-22.846, -176.43))
     return result
 
 

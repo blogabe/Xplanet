@@ -14,3 +14,10 @@ GVP display names always come from its weekly report, not this cache. GVP
 31.5772° N, 130.6589° E. Matching IDs do not establish that this is GVP's
 preferred current reference point. A missing future ID must fail the whole
 weekly update until the catalogue is reviewed and refreshed.
+
+The HTML reader supplements the unchanged GDACS snapshot with the official
+[GVP Pelorus Reef profile](https://volcano.si.edu/volcano.cfm?vn=243018)
+(ID 243018, 22.846° S, 176.43° W), which appears in the
+[12–18 November 2026 weekly report](https://volcano.si.edu/showreport.cfm?gvpvar=GVP.WVAR20261112-243018).
+Use the volcano's reference point, not the nearby explosion coordinates in
+the account. Other unknown IDs still fail the update.
