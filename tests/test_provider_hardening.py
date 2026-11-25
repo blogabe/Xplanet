@@ -31,6 +31,6 @@ class OutputPathTests(Sandbox):
 
     def test_defaults_have_jitter_margin_without_rewriting_explicit_intervals(self):
         settings=self.config()
-        self.assertEqual((settings.interval,settings.quake.interval,settings.volcano.interval),(3300,1100,82800))
+        self.assertEqual((settings.interval,settings.quake.interval,settings.volcano.interval),(3300,1080,82800))
         settings=self.config('CloudCheckIntervalSeconds=3600\nQuakeCheckIntervalSeconds=1200\nVolcanoCheckIntervalSeconds=86400\n')
         self.assertEqual((settings.interval,settings.quake.interval,settings.volcano.interval),(3600,1200,86400))

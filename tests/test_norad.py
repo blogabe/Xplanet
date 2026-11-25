@@ -4,6 +4,7 @@ from contextlib import redirect_stdout
 from io import StringIO
 import json
 import hashlib
+import os
 from pathlib import Path
 from unittest.mock import patch
 
@@ -24,7 +25,7 @@ SAMPLE = (
 EPOCH = (datetime(2001, 1, 1, tzinfo=timezone.utc)
          + timedelta(days=286.44085648 - 1)).timestamp()
 STATIONS = (Path(__file__).parent / "fixtures/norad/stations-selected.synthetic.json").read_bytes()
-SAVED_STATIONS = (Path(__file__).parents[1] / "dev/workbench/validation/norad-group-20261019/group-response.bin")
+SAVED_STATIONS = os.environ.get("XPLANET_NORAD_EVIDENCE_FILE")
 
 
 def sample_for(catalog_id, name):
@@ -218,14 +219,14 @@ color = "Gold"
                          ["skipped_unsupported_ids"], [])
 
     def test_saved_live_group_response_skips_soyuz_without_publishing_empty_pair(self):
-        if not SAVED_STATIONS.exists():
+        if not SAVED_STATIONS or not Path(SAVED_STATIONS).is_file():
             self.skipTest("private saved CelesTrak group response is unavailable")
         settings = self.native_options('''
 [[norad.groups]]
 source = "stations"
 name_contains = "SOYUZ"
 ''', catalog_ids="")
-        transport = ScriptedTransport(Response(200, {}, SAVED_STATIONS.read_bytes()))
+        transport = ScriptedTransport(Response(200, {}, Path(SAVED_STATIONS).read_bytes()))
         result = run(self.fs, settings, fetcher=Fetcher(transport), now=EPOCH + 10)
         self.assertEqual(result.outcome, "failed")
         self.assertIn("100057", result.message)
@@ -235,7 +236,7 @@ name_contains = "SOYUZ"
         self.assertIsNone(result.successful_at)
 
     def test_saved_live_group_response_preserves_explicit_iss_with_warning(self):
-        if not SAVED_STATIONS.exists():
+        if not SAVED_STATIONS or not Path(SAVED_STATIONS).is_file():
             self.skipTest("private saved CelesTrak group response is unavailable")
         settings = self.native_options('''
 [[norad.groups]]
@@ -246,7 +247,7 @@ catalog_id = 25544
 caption = "ISS EXPLICIT"
 color = "Gold"
 ''')
-        transport = ScriptedTransport(Response(200, {}, SAVED_STATIONS.read_bytes()),
+        transport = ScriptedTransport(Response(200, {}, Path(SAVED_STATIONS).read_bytes()),
                                       Response(200, {}, SAMPLE))
         result = run(self.fs, settings, fetcher=Fetcher(transport), now=EPOCH + 10)
         self.assertEqual((result.outcome, result.count), ("changed", 1))

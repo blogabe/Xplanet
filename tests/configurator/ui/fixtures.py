@@ -21,7 +21,7 @@ def prepare_editor(self):
     self.workspace = Workspace()
     self.addCleanup(self.workspace.close)
     self.app = ConfiguratorApp(self.root, str(Path(sys.executable).resolve()), self.workspace,recovery=False)
-    # Existing interaction regressions deliberately retain the supported legacy destination flow.
+    # The stub selects a deterministic destination to exercise the legacy copy flow.
     self.app.copy_destination=lambda:str(self.app.document.source.with_name(self.app.document.source.name+'-copy') if self.app.document.source else self.root/'dev/earth-view')
 
 async def enter_native(self,pilot,path):

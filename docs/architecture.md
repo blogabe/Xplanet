@@ -6,18 +6,24 @@ requested workflow:
 
 - `xp-bootstrap.sh`: acquire a new checkout and invoke install.
 - `lib/xplanet/install.zsh`: Homebrew installation and setup handoff.
+- `lib/xplanet/build-options.zsh`: select and validate renderer build options.
 - `lib/xplanet/update.zsh`: Git fast-forward and formula comparison/rebuild.
 - `lib/xplanet/display.zsh`: render, process lifecycle and monthly map selection.
 - `lib/xplanet/desktop.zsh`: private foreground renderer entrypoint for launchd.
+- `lib/xplanet/desktop-agent.zsh`: prepare and inspect the desktop LaunchAgent.
 - `lib/xplanet/lifecycle.zsh`: per-user native lock and lifecycle serialization.
 - `lib/xplanet/configurator.zsh`: shell handoff and result presentation for the studio.
-- `xp-setup.sh`: preserve/prepare personal configuration and launchd jobs.
-- `lib/xplanet/management*.zsh`: interactive input, presentation and action orchestration.
+- `xp-setup.sh`: prepare missing personal configuration and optional launchd jobs.
+- `lib/xplanet/volcano-setup.py`: inspect or render the fresh-install volcano source choice.
+- `lib/xplanet/management.zsh`: orchestrate the interactive management menu.
+- `lib/xplanet/management-dashboard.zsh` and `lib/xplanet/management-view.zsh`: collect and present dashboard status.
+- `lib/xplanet/management-input.zsh` and `lib/xplanet/management-troubleshooting.zsh`: handle terminal input and recovery guidance.
 - `lib/xplanet/scene.zsh`: validate and resolve the immutable selected revision.
-- `lib/xplanet/python*.zsh`: explicit interpreter selection and provider preparation.
+- `lib/xplanet/python-runtime.zsh`: explicit interpreter selection and provider preparation.
 - `lib/xplanet/diagnostics.zsh`: explicit renderer-support collection and saved evidence.
 - `run-totalmarker`: select compatible Python and invoke the data CLI.
 - `run-configurator`: prepare/check the private Textual runtime and invoke the studio.
+- `import-satellite-icons`: explicitly import installed renderer icons into one checkout.
 
 Bootstrap and setup remain separately executable alongside `xplanet.sh`. A
 complete checkout supplies the private helper files; a downloaded bootstrap entry
@@ -121,9 +127,10 @@ process-identity database or native ABI is used.
 Setup validates on-disk plists with plutil and leaves registered labels alone.
 Loaded settings are explicitly unverified; presence is not configuration equality.
 Python remains behind run-totalmarker for data commands, not desktop lifecycle.
-Product-specific validation and setup remain explicit; no provider plugin framework,
-configuration migration is added. The separate [configurator](configurator/architecture.md)
-uses Python/Textual as an explicit UI boundary; lifecycle remains zsh. Interpreter selection delegates provisioning
+Product-specific validation and setup do not use a provider plugin framework.
+Setup preserves personal settings unless the operator approves a specific change. The separate
+[configurator](configurator/architecture.md) uses Python and Textual for its UI;
+zsh owns the desktop lifecycle. Interpreter selection delegates provisioning
 to Homebrew/uv without owning package or machine migration; see
 [Python runtime](python-runtime.md).
 

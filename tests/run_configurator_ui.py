@@ -5,8 +5,7 @@ import unittest
 
 
 UI_ROOT = Path(__file__).resolve().parent / 'configurator/ui'
-# Keep the slowest module intact. These three plus the remaining modules each
-# accounted for about half of the measured GitHub UI runtime (run 45331979122).
+# Keep the slowest module intact and balance the shards by measured runtime.
 FIRST_SHARD = frozenset({'test_app', 'test_continuity_ui', 'test_resources_ui'})
 
 

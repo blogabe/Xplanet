@@ -1,1 +1,1 @@
-"""Independent feature entry points; other TotalMarker features remain planned."""
+"""Product entry points for provider retrieval and output publication."""

@@ -118,7 +118,7 @@ class HandoffTests(HandoffFixture, unittest.TestCase):
         self.assertFalse((self.root/'forbidden').exists())
 
     def test_forged_plan_cannot_expand_legacy_read_scope_or_write_paths(self):
-        plan=self.plan();data=plan.metadata;data['legacy']['dev/ABE-CFG']='never read'
+        plan=self.plan();data=plan.metadata;data['legacy']['dev/private-scene']='never read'
         forged=HandoffPlan(canonical(data),plan.native)
         with self.assertRaises(ValueError):stage_plan(forged,self.target)
         self.assertFalse(self.target.exists())

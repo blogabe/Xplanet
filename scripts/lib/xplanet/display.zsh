@@ -14,8 +14,6 @@ renderer_numeric_locale() {
 source "$script_dir/lib/xplanet/scene.zsh" || return 2
 source "$script_dir/lib/xplanet/lifecycle.zsh" || return 2
 
-# Private zsh helpers, sourced by xplanet.sh after root discovery.
-
 select_earth_map() (
     local checking=false
     [[ "${1:-}" != --check ]] || checking=true
