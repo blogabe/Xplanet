@@ -6,10 +6,10 @@ import hashlib
 import json
 import time
 
-from ..diagnostics import Attempt, finish
-from ..errors import DownloadError, FeedError, StorageError
-from ..http import Fetcher, safe_header
-from ..labels import refresh_all, volcano_timestamp
+from ..diagnostics import Attempt, append_event, finish
+from ..errors import DownloadError, FeedError
+from ..http import Fetcher, conditional_validators, store_validators
+from ..labels import read_labels, refresh_all, volcano_timestamp
 from ..state import load_state, MarkerPublisher, recover_pending
 from ..volcano_cap import coverage_end_at, parse_cap, render_body, render_marker
 from ..volcano_weekly import (WEEKLY_URL, join_coordinates,
@@ -61,11 +61,7 @@ def run(fs, settings, *, fetcher=None, now=None):
         publisher = MarkerPublisher(fs, settings)
         state = load_state(fs, settings.state)
         record = state["products"].setdefault("volcano", {})
-        raw_label = fs.read(settings.labels, 2 * 1024 * 1024)
-        try:
-            old_label = raw_label.decode("utf-8") if raw_label is not None else ""
-        except UnicodeError:
-            raise StorageError("Existing labels are not valid UTF-8") from None
+        old_label = read_labels(fs, settings.labels)
         if record.get("installed_at") is None and record.get("legacy_label_at") is None:
             legacy = volcano_timestamp(old_label)
             if legacy is not None:
@@ -89,15 +85,7 @@ def run(fs, settings, *, fetcher=None, now=None):
         if not cached:
             before_attempt = copy.deepcopy(record)
             try:
-                validators = {}
-                if matching:
-                    for key_name, header in [("etag", "If-None-Match"),
-                                             ("last_modified", "If-Modified-Since")]:
-                        value = record.get(key_name)
-                        if value is not None:
-                            if not safe_header(value):
-                                raise StorageError("Invalid stored HTTP validator")
-                            validators[header] = value
+                validators = conditional_validators(record) if matching else {}
                 source_url = WEEKLY_URL if options.provider == "weekly_html" else options.url
                 response = attempt.fetch(
                     source_url, validators=validators, credentials=None,
@@ -158,14 +146,7 @@ def run(fs, settings, *, fetcher=None, now=None):
                     record["provider"] = options.provider
                 else:
                     raise DownloadError("Unexpected volcano HTTP response")
-                for key_name, header in [("etag", "etag"), ("last_modified", "last-modified")]:
-                    value = response.headers.get(header)
-                    if value is not None:
-                        if not safe_header(value):
-                            raise DownloadError("Source returned an invalid HTTP validator")
-                        record[key_name] = value
-                    elif response.status == 200:
-                        record.pop(key_name, None)
+                store_validators(record, response)
                 record["source_modified_at"] = modified_time(record.get("last_modified"))
                 record["fetched_at"] = now  # Last successful source verification.
             except (DownloadError, FeedError) as error:
@@ -191,9 +172,7 @@ def run(fs, settings, *, fetcher=None, now=None):
                      "report_period_end": record.get("report_period_end"),
                      "provider": record.get("provider"),
                      "count": record.get("count")}
-            try:
-                fs.append(settings.log, (json.dumps(event) + "\n").encode())
-            except StorageError:
+            if not append_event(fs, settings.log, event):
                 message += "; diagnostic log unavailable"
         return Result(outcome, message, record.get("installed_at"),
                       record.get("successful_at"),

@@ -18,8 +18,8 @@ import zlib
 from ..aurora_status import DIR, OVERLAY, RECORD, MAX_FEED, read_record as _record
 from ..errors import ConfigError, DownloadError, FeedError, StorageError
 from ..http import Fetcher
-from ..labels import refresh_aurora
-from ..state import STATE_LIMIT, recover_pending
+from ..labels import LABEL_LIMIT, read_labels, refresh_aurora
+from ..state import recover_pending
 
 URL = "https://services.swpc.noaa.gov/json/ovation_aurora_latest.json"
 CURRENT = DIR + "/night-current"
@@ -259,16 +259,13 @@ def run(fs, settings, *, overlay_only=False, prepare=False, fetcher=None, now=No
         with fs.lock(settings.lock):
             if write_label:
                 recover_pending(fs, settings)
-                old = fs.read(settings.labels, STATE_LIMIT) or b""
-                try:
-                    existing = old.decode("utf-8")
-                except UnicodeError:
-                    raise StorageError("Existing labels are not valid UTF-8") from None
-                label = refresh_aurora(fs, existing, settings, now, append=True).encode("utf-8")
-                if len(label) > STATE_LIMIT:
+                old = read_labels(fs, settings.labels)
+                label = refresh_aurora(fs, old, settings, now, append=True)
+                raw = label.encode("utf-8")
+                if len(raw) > LABEL_LIMIT:
                     raise StorageError("Label output exceeds its size limit")
                 if label != old:
-                    fs.write(settings.labels, label)
+                    fs.write(settings.labels, raw)
             if write_log:
                 fs.append(settings.log, (json.dumps({"feature": "aurora", "time": now, **result})
                                          + "\n").encode("utf-8"))
