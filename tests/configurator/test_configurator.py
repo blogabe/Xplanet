@@ -1184,6 +1184,30 @@ class GeographyTests(unittest.TestCase):
 
 
 class EarthLayerTests(unittest.TestCase):
+    def test_cloud_controls_keep_literal_native_keys_and_legacy_metadata_order(self):
+        from dataclasses import replace
+
+        view = View(
+            clouds="snapshot2011", cloud_gamma=1.75, cloud_threshold=120.0, geometry="800x600"
+        )
+        self.assertTrue(
+            view.body().endswith(
+                b"cloud_map=maps/clouds/clouds_26Aug2011_2048.jpeg\n"
+                b"cloud_gamma=1.75\ncloud_threshold=120\n"
+            )
+        )
+        for version in (5, 17):
+            with self.subTest(version=version):
+                definition = view.definition("/trusted/xplanet", version=version).encode()
+                self.assertIn(
+                    b"XPLANET_CLOUDS=snapshot2011\nXPLANET_CLOUD_GAMMA=1.75\n"
+                    b"XPLANET_CLOUD_THRESHOLD=120\n",
+                    definition,
+                )
+                self.assertEqual(parse_saved_view(definition, view.body()).view, view)
+        with self.assertRaisesRegex(ValueError, "cannot retain layer settings"):
+            replace(view, clouds="off").definition("/trusted/xplanet", version=4)
+
     def test_layer_combinations_roundtrip_and_use_only_whitelisted_resources(self):
         from configurator.model import recognized_body, ROOT
 
