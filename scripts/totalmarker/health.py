@@ -187,7 +187,8 @@ def _freshness(product, record, settings, now):
 
 def observational_freshness(product,record,now):
     """Read-only shared age policy for frozen Earth observational snapshots."""
-    if product not in ('quake','storm','volcano'):raise ValueError('Unsupported observational product')
+    if product not in ('quake','storm','volcano'):
+        raise ValueError('Unsupported observational product')
     return _freshness(product,record,None,now)
 
 
@@ -540,12 +541,15 @@ def format_dashboard(report):
     lines=['snapshot\t'+_stamp(report['checked_at'])]
     for row in report['products']:
         title=_TITLES[row['product']]
-        if row['status']=='disabled':tone,summary,detail='disabled','disabled',''
+        if row['status']=='disabled':
+            tone,summary,detail='disabled','disabled',''
         else:
             tone=_report_tone(row,False)
             summary,detail=_summary(row,False)
             summary+='; '+_success_age(row['last_success_at'],report['checked_at'])
-            if row['output']['retained']:summary+='; prior output retained'
+            if row['output']['retained']:
+                summary+='; prior output retained'
         lines.append(tone+'\t'+title+'\t'+plain(summary)+'\t'+plain(detail))
-    if report['warning']:lines.append('note\t'+plain(report['warning']))
+    if report['warning']:
+        lines.append('note\t'+plain(report['warning']))
     return '\n'.join(lines)

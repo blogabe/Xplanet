@@ -9,7 +9,8 @@ from .support import Sandbox
 class InternalDiagnosticTests(Sandbox):
     def test_machine_contract_stays_generic_and_stderr_contains_only_type_and_code_location(self):
         secret='https://user:credential@private.invalid/path?token=secret'
-        out=io.StringIO();err=io.StringIO()
+        out=io.StringIO()
+        err=io.StringIO()
         with patch('totalmarker.cli.load',return_value=SimpleNamespace(deferred_settings=())), patch('totalmarker.cli.run',side_effect=RuntimeError(secret)),redirect_stdout(out),redirect_stderr(err):
             code=main(['--root',str(self.root),'clouds'])
         self.assertEqual(code,2)
@@ -22,7 +23,8 @@ class InternalDiagnosticTests(Sandbox):
         secret=type('PrivateCredentialError',(Exception,),{})('secret message')
         text=internal_diagnostic(secret)
         self.assertEqual(text,'Internal diagnostic: Exception at unavailable')
-        self.assertNotIn('PrivateCredential',text);self.assertNotIn('secret',text)
+        self.assertNotIn('PrivateCredential',text)
+        self.assertNotIn('secret',text)
 
     def test_unavailable_diagnostic_sink_preserves_json_and_exit_two(self):
         class Broken:

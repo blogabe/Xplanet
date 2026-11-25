@@ -7,7 +7,10 @@ from . import run_core
 class SuiteBoundaryTests(unittest.TestCase):
     def test_only_explicit_core_containers_are_enumerated(self):
         with tempfile.TemporaryDirectory() as folder:
-            root=Path(folder);(root/'configurator/ui').mkdir(parents=True);(root/'.tmp').mkdir();(root/'configurator/.tmp').mkdir()
+            root=Path(folder)
+            (root/'configurator/ui').mkdir(parents=True)
+            (root/'.tmp').mkdir()
+            (root/'configurator/.tmp').mkdir()
             for name in ('test_a.py','configurator/test_b.py','configurator/ui/test_optional.py','.tmp/test_private.py','configurator/.tmp/test_private.py'):
                 (root/name).write_text('raise AssertionError("must not execute while enumerating")')
             with patch.object(run_core,'TEST_ROOT',root):
@@ -24,11 +27,13 @@ class SuiteBoundaryTests(unittest.TestCase):
                 self.assertEqual(first.stat().st_mode & 0o777,0o700)
                 self.assertEqual(Path(tempfile.gettempdir()),first)
                 self.assertEqual(Path(os.environ['XDG_CACHE_HOME']),first/'cache')
-                owned=first/'owned';owned.write_text('fixture')
+                owned=first/'owned'
+                owned.write_text('fixture')
                 with run_core.isolated_environment() as second:
                     self.assertNotEqual(first,second)
                     self.assertEqual(Path(tempfile.gettempdir()),second)
-                self.assertFalse(second.exists());self.assertTrue(owned.is_file())
+                self.assertFalse(second.exists())
+                self.assertTrue(owned.is_file())
                 self.assertEqual(Path(tempfile.gettempdir()),first)
                 raise RuntimeError('fixture failure')
         self.assertFalse(first.exists())
@@ -49,7 +54,8 @@ class SuiteBoundaryTests(unittest.TestCase):
         actual=set(run_core.module_names())
         for path in run_core.TEST_ROOT.rglob('test_*.py'):
             relative=path.relative_to(run_core.TEST_ROOT)
-            if relative.parts[:2]==('configurator','ui') or any(part.startswith('.') or part=='__pycache__' for part in relative.parts):continue
+            if relative.parts[:2]==('configurator','ui') or any(part.startswith('.') or part=='__pycache__' for part in relative.parts):
+                continue
             self.assertIn('tests.'+'.'.join(relative.with_suffix('').parts),actual,str(relative))
 
     def test_portable_missing_zsh_allows_only_named_shell_boundaries(self):
@@ -57,7 +63,8 @@ class SuiteBoundaryTests(unittest.TestCase):
             def __init__(self,name):self.name=name
             def id(self):return self.name
         result=unittest.TestResult()
-        for name in run_core.ZSH_BOUNDARY_SKIPS:result.addSkip(Case(name),'zsh is unavailable')
+        for name in run_core.ZSH_BOUNDARY_SKIPS:
+            result.addSkip(Case(name),'zsh is unavailable')
         with patch('tests.run_core.Path.exists',return_value=False),patch('tests.run_core.shutil.which',return_value=None):
             self.assertEqual(run_core.unexpected_skips(result,portable=True),[])
             self.assertEqual(len(run_core.unexpected_skips(result)),len(run_core.ZSH_BOUNDARY_SKIPS))

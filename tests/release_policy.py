@@ -49,15 +49,23 @@ def index_text(root):
     """Read bounded text blobs by immutable index identities, with no filters."""
     import subprocess
     raw=subprocess.check_output(['git','ls-files','--stage','-z'],cwd=root)
-    rows={};text=[];binary=[]
+    rows={}
+    text=[]
+    binary=[]
     for row in raw.split(b'\0'):
-        if not row:continue
-        metadata,name=row.split(b'\t',1);name=name.decode();mode,identity,stage=metadata.decode().split()
-        if stage!='0':raise RuntimeError('Unmerged index entry: '+name)
+        if not row:
+            continue
+        metadata,name=row.split(b'\t',1)
+        name=name.decode()
+        mode,identity,stage=metadata.decode().split()
+        if stage!='0':
+            raise RuntimeError('Unmerged index entry: '+name)
         rows[name]=metadata.decode()
         path=PurePosixPath(name)
-        if path.suffix.lower() in TEXT_SUFFIXES or path.name in {'LICENSE','.gitignore','.gitattributes','run-totalmarker','run-configurator','import-satellite-icons'}:text.append((name,identity))
-        elif not name.startswith(('maps/','assets/')):binary.append((name,identity))
+        if path.suffix.lower() in TEXT_SUFFIXES or path.name in {'LICENSE','.gitignore','.gitattributes','run-totalmarker','run-configurator','import-satellite-icons'}:
+            text.append((name,identity))
+        elif not name.startswith(('maps/','assets/')):
+            binary.append((name,identity))
     check_source_paths(rows)
     # Binary fixtures are not decoded by the identifier scan. Bound their indexed
     # sizes separately; shipped imagery has its own regular-file/asset checks.
@@ -67,18 +75,23 @@ def index_text(root):
         sizes=[int(line.split()[2]) for line in checked]
         if any(size>BINARY_LIMIT for size in sizes) or sum(sizes)>BINARY_TOTAL_LIMIT:
             raise RuntimeError('Indexed binary source/fixtures exceed the reviewed size budget')
-    if not text:return []
+    if not text:
+        return []
     request=''.join(identity+'\n' for _,identity in text).encode()
     checked=subprocess.check_output(['git','cat-file','--batch-check'],cwd=root,input=request).splitlines()
     sizes=[int(line.split()[2]) for line in checked]
-    if any(size>TEXT_LIMIT for size in sizes) or sum(sizes)>TEXT_TOTAL_LIMIT:raise RuntimeError('Indexed text exceeds the reviewed privacy-scan budget')
+    if any(size>TEXT_LIMIT for size in sizes) or sum(sizes)>TEXT_TOTAL_LIMIT:
+        raise RuntimeError('Indexed text exceeds the reviewed privacy-scan budget')
     raw=subprocess.check_output(['git','cat-file','--batch'],cwd=root,input=request)
     import io
-    stream=io.BytesIO(raw);result=[]
+    stream=io.BytesIO(raw)
+    result=[]
     for (name,identity),size in zip(text,sizes):
         header=stream.readline().decode().strip().split()
-        if header!=[identity,'blob',str(size)]:raise RuntimeError('Unexpected indexed text object')
+        if header!=[identity,'blob',str(size)]:
+            raise RuntimeError('Unexpected indexed text object')
         data=stream.read(size)
-        if len(data)!=size or stream.read(1)!=b'\n':raise RuntimeError('Incomplete indexed text object')
+        if len(data)!=size or stream.read(1)!=b'\n':
+            raise RuntimeError('Incomplete indexed text object')
         result.append((name,data))
     return result

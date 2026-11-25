@@ -7,7 +7,7 @@ import sys
 import shutil
 import subprocess
 
-from .support import copy_launcher, PROJECT, Sandbox, stub_desktop_launchctl
+from .support import copy_launcher, Sandbox, stub_desktop_launchctl
 from .support_terminal import run_with_terminal_stdout
 
 
@@ -133,30 +133,49 @@ class LauncherRenderTests(Sandbox):
                 self.assertEqual(json.loads(self.capture.read_text())["cwd"], str(self.root))
 
     def test_render_preserves_legacy_preview_exports_and_native_scenes(self):
-        legacy=self.root/'dev/preview/old.png';legacy.parent.mkdir(parents=True);legacy.write_bytes(b'old preview')
-        export=self.root/'output/exports/keep/preview.png';export.parent.mkdir(parents=True);export.write_bytes(b'user export')
-        scene=self.root/'config/scenes/keep.conf';scene.parent.mkdir();scene.write_bytes(b'user scene')
+        legacy=self.root/'dev/preview/old.png'
+        legacy.parent.mkdir(parents=True)
+        legacy.write_bytes(b'old preview')
+        export=self.root/'output/exports/keep/preview.png'
+        export.parent.mkdir(parents=True)
+        export.write_bytes(b'user export')
+        scene=self.root/'config/scenes/keep.conf'
+        scene.parent.mkdir()
+        scene.write_bytes(b'user scene')
         for command in ('preview','render'):
-            result=self.invoke(command);self.assertEqual(result.returncode,0,result.stderr)
-        self.assertEqual(legacy.read_bytes(),b'old preview');self.assertEqual(export.read_bytes(),b'user export')
+            result=self.invoke(command)
+            self.assertEqual(result.returncode,0,result.stderr)
+        self.assertEqual(legacy.read_bytes(),b'old preview')
+        self.assertEqual(export.read_bytes(),b'user export')
         self.assertEqual(scene.read_bytes(),b'user scene')
 
     def test_preview_refuses_linked_directories_and_output_files(self):
-        outside=self.base/'outside';outside.mkdir();sentinel=outside/'keep';sentinel.write_bytes(b'outside')
+        outside=self.base/'outside'
+        outside.mkdir()
+        sentinel=outside/'keep'
+        sentinel.write_bytes(b'outside')
         for relative in ('output','output/preview','output/preview/tmp','output/preview/cache','output/preview/earth-manual.png'):
             with self.subTest(relative=relative):
-                target=self.root/relative;target.parent.mkdir(parents=True,exist_ok=True)
+                target=self.root/relative
+                target.parent.mkdir(parents=True,exist_ok=True)
                 target.symlink_to(outside if relative.rsplit('/',1)[-1]!='earth-manual.png' else sentinel)
-                result=self.invoke('preview');self.assertEqual(result.returncode,2,result.stderr)
-                self.assertIn('symlink',result.stderr);self.assertFalse(self.capture.exists())
-                self.assertEqual(list(outside.iterdir()),[sentinel]);self.assertEqual(sentinel.read_bytes(),b'outside')
+                result=self.invoke('preview')
+                self.assertEqual(result.returncode,2,result.stderr)
+                self.assertIn('symlink',result.stderr)
+                self.assertFalse(self.capture.exists())
+                self.assertEqual(list(outside.iterdir()),[sentinel])
+                self.assertEqual(sentinel.read_bytes(),b'outside')
                 target.unlink()
-                if (self.root/'output').exists():shutil.rmtree(self.root/'output')
+                if (self.root/'output').exists():
+                    shutil.rmtree(self.root/'output')
 
     def test_preview_refuses_non_directory_parent_without_overwrite(self):
-        target=self.root/'output';target.write_bytes(b'user file')
-        result=self.invoke('preview');self.assertEqual(result.returncode,2,result.stderr)
-        self.assertEqual(target.read_bytes(),b'user file');self.assertFalse(self.capture.exists())
+        target=self.root/'output'
+        target.write_bytes(b'user file')
+        result=self.invoke('preview')
+        self.assertEqual(result.returncode,2,result.stderr)
+        self.assertEqual(target.read_bytes(),b'user file')
+        self.assertFalse(self.capture.exists())
 
     def test_preview_requires_longitude_from_xp_def_before_launch(self):
         config = self.root / "config/xp.def"
@@ -536,7 +555,6 @@ sys.exit(4)
         env['MOCK_PGREP_TRACE'] = str(probes)
         result = self.invoke('start', env)
         self.assertEqual(result.returncode, 0, result.stderr)
-        import plistlib
         self.assertEqual(self.invoke('stop', env).returncode, 0)
         patterns = [json.loads(line)[-1] for line in probes.read_text().splitlines()]
         self.assertIn('a-long-symlink\\.with\\+regex-characters', patterns)

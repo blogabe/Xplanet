@@ -7,7 +7,7 @@ import subprocess
 import sys
 
 from .build_options_support import FORMULA_JSON
-from .support import copy_launcher, PROJECT, Sandbox, stub_desktop_launchctl
+from .support import copy_launcher, Sandbox, stub_desktop_launchctl
 
 
 class LauncherUpdateTests(Sandbox):

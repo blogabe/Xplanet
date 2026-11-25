@@ -181,7 +181,8 @@ class MonthlyMapTests(Sandbox):
         self.assertIn("real directory", result.stderr)
 
     def test_known_old_map_link_moves_to_current_layout_during_normal_selection(self):
-        self.link.unlink();self.link.symlink_to('../assets/maps/world/world.200401.3x5400x2700.png')
+        self.link.unlink()
+        self.link.symlink_to('../assets/maps/world/world.200401.3x5400x2700.png')
         result=self.run_earth()
         self.assertEqual(result.returncode,0,result.stderr)
         self.assertEqual(self.link.readlink(),Path('../maps/world/'+self.filename))
@@ -190,7 +191,8 @@ class MonthlyMapTests(Sandbox):
 
     def test_unknown_old_custom_map_link_is_not_silently_relocated(self):
         old='../assets/maps/bathymetry/custom.png'
-        self.link.unlink();self.link.symlink_to(old)
+        self.link.unlink()
+        self.link.symlink_to(old)
         result=self.run_earth()
         self.assertEqual(result.returncode,2,result.stderr)
         self.assertIn('unrecognized old map link',result.stderr)
@@ -218,7 +220,8 @@ class MonthlyMapTests(Sandbox):
         state = self.root / '.state'
         state.mkdir()
         for directory in (state, state / 'totalmarker'):
-            if not directory.exists(): directory.mkdir()
+            if not directory.exists():
+                directory.mkdir()
             directory.chmod(0o500)
             try:
                 result = subprocess.run([str(self.root / 'scripts/xplanet.sh'), 'restart'],

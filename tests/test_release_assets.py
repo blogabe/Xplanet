@@ -77,7 +77,8 @@ class ReleaseAssetsTests(unittest.TestCase):
             self.assertEqual(git('ls-files', '--', 'maps/').decode().splitlines(),
                              ['maps/final-family/day.png', 'maps/final-family/night.png'])
             private = root / 'maps/new-private-family/personal.png'
-            private.parent.mkdir(); private.write_bytes(b'not authorized for release')
+            private.parent.mkdir()
+            private.write_bytes(b'not authorized for release')
             git('add', '-A')
             self.assertEqual(git('check-ignore', 'maps/new-private-family/personal.png').strip(),
                              b'maps/new-private-family/personal.png')

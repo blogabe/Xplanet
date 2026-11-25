@@ -1,9 +1,8 @@
-from dataclasses import replace
 import tomllib
 
 from totalmarker.config import load
 from totalmarker.errors import ConfigError, StorageError
-from .support import PROJECT, Sandbox, cloud_template
+from .support import Sandbox, cloud_template
 
 
 class CloudTemplateTests(Sandbox):

@@ -58,14 +58,16 @@ def discover(root, explicit=None):
                 return '', 'Project definitions are not a bounded regular file; choose the renderer explicitly.'
             raw = stream.read(256 * 1024 + 1)
         try:
-            if len(raw) > 256 * 1024:raise ValueError
+            if len(raw) > 256 * 1024:
+                raise ValueError
             text = raw.decode('utf-8')
         except (ValueError, UnicodeError):
             return '', 'Project definitions cannot be read safely; choose the renderer explicitly.'
     assignments = re.findall(r'^[ \t]*(?:export[ \t]+)?XPLANET_BIN[ \t]*=(.*)$', text, re.MULTILINE)
     if assignments:
         try:
-            if len(assignments) != 1:raise ValueError
+            if len(assignments) != 1:
+                raise ValueError
             value = _literal_renderer(assignments[0])
             if value:
                 if not executable(value):
@@ -74,10 +76,13 @@ def discover(root, explicit=None):
         except ValueError:
             return '', 'Project XPLANET_BIN needs shell evaluation or is ambiguous; choose the renderer explicitly. No definitions executed.'
     located = shutil.which('xplanet')
-    if located and executable(located):return located, 'Renderer discovered on PATH; stock/saved scene metadata is not adopted.'
+    if located and executable(located):
+        return located, 'Renderer discovered on PATH; stock/saved scene metadata is not adopted.'
     candidates = [Path('/opt/homebrew/bin/xplanet'), Path('/usr/local/bin/xplanet')]
     home = os.environ.get('HOME')
-    if home:candidates.append(Path(home) / '.homebrew/bin/xplanet')
+    if home:
+        candidates.append(Path(home) / '.homebrew/bin/xplanet')
     for candidate in candidates:
-        if executable(candidate):return str(candidate), 'Renderer discovered at a standard Homebrew path; no package manager was run.'
+        if executable(candidate):
+            return str(candidate), 'Renderer discovered at a standard Homebrew path; no package manager was run.'
     return '', 'No local Xplanet found. Use setup/install or choose its executable explicitly.'

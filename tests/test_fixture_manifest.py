@@ -1,6 +1,5 @@
 """Unreceipted provider fixtures still have an immutable byte contract."""
 import hashlib,json,unittest
-from pathlib import Path
 from .support import PROJECT
 
 class FixtureManifestTests(unittest.TestCase):

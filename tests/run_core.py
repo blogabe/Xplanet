@@ -9,14 +9,17 @@ TEST_ROOT=Path(__file__).resolve().parent
 def module_names():
     names=[]
     for directory in (TEST_ROOT,TEST_ROOT/'configurator'):
-        if not directory.is_dir():raise RuntimeError('Missing core test container: '+str(directory))
+        if not directory.is_dir():
+            raise RuntimeError('Missing core test container: '+str(directory))
         for path in sorted(directory.glob('test_*.py')):
             names.append('tests.'+'.'.join(path.relative_to(TEST_ROOT).with_suffix('').parts))
     return names
 
 def suite(*,exclude=()):
-    names=module_names();excluded=set(exclude)
-    if excluded-set(names):raise ValueError('Unknown test exclusions: '+', '.join(sorted(excluded-set(names))))
+    names=module_names()
+    excluded=set(exclude)
+    if excluded-set(names):
+        raise ValueError('Unknown test exclusions: '+', '.join(sorted(excluded-set(names))))
     return unittest.TestLoader().loadTestsFromNames([name for name in names if name not in excluded])
 
 @contextmanager
@@ -25,16 +28,21 @@ def isolated_environment():
     previous={name:os.environ.get(name) for name in ('TMPDIR','XDG_CACHE_HOME')}
     previous_temp=tempfile.tempdir
     with tempfile.TemporaryDirectory(prefix='xplanet-tests-',dir='/tmp') as directory:
-        root=Path(directory).resolve();cache=root/'cache';cache.mkdir()
+        root=Path(directory).resolve()
+        cache=root/'cache'
+        cache.mkdir()
         try:
-            os.environ['TMPDIR']=str(root);os.environ['XDG_CACHE_HOME']=str(cache)
+            os.environ['TMPDIR']=str(root)
+            os.environ['XDG_CACHE_HOME']=str(cache)
             tempfile.tempdir=str(root)
             yield root
         finally:
             tempfile.tempdir=previous_temp
             for name,value in previous.items():
-                if value is None:os.environ.pop(name,None)
-                else:os.environ[name]=value
+                if value is None:
+                    os.environ.pop(name,None)
+                else:
+                    os.environ[name]=value
 
 ZSH_BOUNDARY_SKIPS = {
     'tests.configurator.test_configurator.LauncherTests.test_help_and_noninteractive_config_need_no_dependencies_or_setup': 'absolute',
@@ -58,7 +66,8 @@ def run(factory, *, portable=False):
             runner_options["durations"] = 20
         result = unittest.TextTestRunner(**runner_options).run(factory())
         unexpected=unexpected_skips(result,portable=portable)
-        for name,reason in unexpected:print('Unexpected skipped required check: '+name+' — '+reason,file=__import__('sys').stderr)
+        for name,reason in unexpected:
+            print('Unexpected skipped required check: '+name+' — '+reason,file=__import__('sys').stderr)
         return result.wasSuccessful() and not unexpected
 
 if __name__=='__main__':

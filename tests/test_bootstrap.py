@@ -181,18 +181,24 @@ raise SystemExit(subprocess.call(
         destination = self.home / ".xplanet"
         for kind in ("directory", "file", "symlink", "dangling symlink"):
             with self.subTest(kind=kind):
-                if kind == "directory": destination.mkdir()
-                elif kind == "file": destination.write_text("keep")
-                else: destination.symlink_to(self.base if kind == "symlink" else self.base / "absent")
+                if kind == "directory":
+                    destination.mkdir()
+                elif kind == "file":
+                    destination.write_text("keep")
+                else:
+                    destination.symlink_to(self.base if kind == "symlink" else self.base / "absent")
                 self.trace.unlink(missing_ok=True)
                 result = self.run_bootstrap()
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn("already exists", result.stderr)
                 self.assertEqual(sum(call[0] == "curl" for call in self.calls()), 1)
-                if kind == "directory": destination.rmdir()
+                if kind == "directory":
+                    destination.rmdir()
                 else:
-                    if kind == "file": self.assertEqual(destination.read_text(), "keep")
-                    else: self.assertTrue(destination.is_symlink())
+                    if kind == "file":
+                        self.assertEqual(destination.read_text(), "keep")
+                    else:
+                        self.assertTrue(destination.is_symlink())
                     destination.unlink()
 
     def test_missing_homebrew_stops_before_clone(self):

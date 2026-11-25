@@ -28,9 +28,11 @@ def server(mode):
                     redirect=self.path=='/data'
                     body=b'' if redirect else b'complete'
                     self.send_response(302 if redirect else 200)
-                    if redirect:self.send_header('Location','https://fixture.invalid/final')
+                    if redirect:
+                        self.send_header('Location','https://fixture.invalid/final')
                     self.send_header('Content-Length',str(len(body)))
-                    self.end_headers();self.wfile.write(body)
+                    self.end_headers()
+                    self.wfile.write(body)
                     return
                 if mode == 'headers':
                     # No socket inactivity occurs during DNS or header parsing
@@ -130,10 +132,12 @@ class DeadlineTests(Sandbox):
             self.assertEqual(result.body,b'complete')
             self.assertEqual(observed['paths'],['/data','/final'])
             self.assertEqual(len(deadlines),2)
-            self.assertIsNotNone(deadlines[0]);self.assertEqual(deadlines[0],deadlines[1])
+            self.assertIsNotNone(deadlines[0])
+            self.assertEqual(deadlines[0],deadlines[1])
 
     def test_redirect_hop_keeps_original_deadline_when_only_two_seconds_remain(self):
-        clock=[0.0];deadlines=[]
+        clock=[0.0]
+        deadlines=[]
         class BoundaryTransport(http.HTTPTransport):
             def request(self,url,headers,timeout,max_bytes,*,deadline=None):
                 deadlines.append(deadline)

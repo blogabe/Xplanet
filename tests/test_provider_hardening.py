@@ -3,7 +3,6 @@ import unittest
 from totalmarker.xmlsafe import parse
 from totalmarker.errors import FeedError, StorageError
 from totalmarker.state import publication_bytes
-from totalmarker.paths import RootFS
 from .support import Sandbox
 
 class ProviderInputTests(unittest.TestCase):

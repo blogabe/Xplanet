@@ -22,7 +22,8 @@ CAP_CONFIG = b'[volcano]\nprovider = "cap"\nurl = "https://volcano.si.edu/news/W
 class SetupTests(Sandbox):
     def test_literal_map_assignment_accepts_quotes_export_and_never_executes_expressions(self):
         scripts,env,_=self._shell_fixture()
-        definition=self.root/'config/xp.def';original=definition.read_text()
+        definition=self.root/'config/xp.def'
+        original=definition.read_text()
         for assignment in ('export EARTH_MAP_PRE="world/world"',"EARTH_MAP_PRE='world/world'",' EARTH_MAP_PRE = world/world '):
             definition.write_text(original.replace('EARTH_MAP_PRE=world/world',assignment))
             result=self._inspect(scripts,env,'--dry-run')
@@ -769,12 +770,14 @@ class SetupTests(Sandbox):
                    TM_BREW_PREFIX=str(prefix))
         active=selected
         if override:
-            active=self.base/'temporary interpreter';active.symlink_to(sys.executable)
+            active=self.base/'temporary interpreter'
+            active.symlink_to(sys.executable)
             env['TOTALMARKER_PYTHON']=str(active)
         done = self._inspect(scripts, env, input="y\n\nn\nn\nn\nn\ny\n")
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertIn(f"TotalMarker will use {active}", done.stdout)
-        if override:self.assertIn(f'unpinned scheduled jobs use {selected}',done.stdout)
+        if override:
+            self.assertIn(f'unpinned scheduled jobs use {selected}',done.stdout)
         for job in ("start", "earth-map", "quake", "storm", "volcano"):
             local = examples / f"local.xplanet.{job}.plist"
             document = plistlib.loads(local.read_bytes())
@@ -1153,8 +1156,10 @@ class SetupTests(Sandbox):
 
     def test_upgrade_relocates_only_known_map_links_after_confirmation(self):
         scripts, env, _ = self._shell_fixture()
-        images=self.root/'images';images.mkdir()
-        solar=self.root/'maps/solarsystem';solar.mkdir()
+        images=self.root/'images'
+        images.mkdir()
+        solar=self.root/'maps/solarsystem'
+        solar.mkdir()
         old={
             'earth.png':'../assets/maps/world/world.200401.3x5400x2700.png',
             'lights.tiff':'../assets/maps/lights/earth_lights_4800.tiff',
@@ -1162,14 +1167,16 @@ class SetupTests(Sandbox):
             'specular.png':'../assets/maps/specular/specular.png',
             'solarsystem':'../assets/maps/solarsystem',
         }
-        for name,target in old.items():(images/name).symlink_to(target)
+        for name,target in old.items():
+            (images/name).symlink_to(target)
         dry=self._inspect(scripts,env,'--dry-run')
         self.assertEqual(dry.returncode,0,dry.stderr)
         self.assertEqual(dry.stdout.count('Would relocate '),5)
         self.assertEqual(self._inspect(scripts,env,'--check').returncode,1)
         cancelled=self._inspect(scripts,env,input='n\n')
         self.assertEqual(cancelled.returncode,3,cancelled.stderr)
-        for name,target in old.items():self.assertEqual(str((images/name).readlink()),target)
+        for name,target in old.items():
+            self.assertEqual(str((images/name).readlink()),target)
         done=self._inspect(scripts,env,input='y\nq\n')
         self.assertEqual(done.returncode,3,done.stderr)
         for name,target in old.items():
@@ -1180,9 +1187,13 @@ class SetupTests(Sandbox):
 
     def test_upgrade_does_not_rewrite_custom_old_layout_link(self):
         scripts,env,products=self._shell_fixture()
-        images=self.root/'images';images.mkdir()
-        custom=self.root/'maps/bathymetry/custom.png';custom.parent.mkdir();custom.write_bytes(b'custom')
-        link=images/'earth.png';link.symlink_to('../assets/maps/bathymetry/custom.png')
+        images=self.root/'images'
+        images.mkdir()
+        custom=self.root/'maps/bathymetry/custom.png'
+        custom.parent.mkdir()
+        custom.write_bytes(b'custom')
+        link=images/'earth.png'
+        link.symlink_to('../assets/maps/bathymetry/custom.png')
         result=self._inspect(scripts,env,input='y\nq\n')
         self.assertEqual(result.returncode,2,result.stderr)
         self.assertEqual(str(link.readlink()),'../assets/maps/bathymetry/custom.png')

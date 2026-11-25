@@ -21,12 +21,13 @@ jobs:
           sparse-checkout: |
             /ruff.toml
             /scripts/configurator/
-            /tests/configurator/
+            /scripts/totalmarker/
+            /tests/
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: '3.13'
-      - name: Check Configurator formatting and lint
+      - name: Check Configurator formatting and Python lint
         run: |
           python -m pip install --no-deps --only-binary=:all: --require-hashes -r scripts/configurator/requirements-lint.txt
           ruff format --config ruff.toml --check scripts/configurator tests/configurator
-          ruff check --config ruff.toml scripts/configurator tests/configurator
+          ruff check --config ruff.toml scripts/configurator scripts/totalmarker tests

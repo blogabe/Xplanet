@@ -23,17 +23,21 @@ from .log_view import view as view_log
 def internal_diagnostic(error):
     """Retain a support location without exception messages, locals or host paths."""
     kind=type(error).__name__ if type(error).__module__=='builtins' else 'Exception'
-    if not kind.isascii() or not kind.isidentifier() or len(kind)>80:kind='Exception'
+    if not kind.isascii() or not kind.isidentifier() or len(kind)>80:
+        kind='Exception'
     location='unavailable'
-    try:package=Path(os.path.abspath(__file__)).parent
-    except (OSError,ValueError):return 'Internal diagnostic: '+kind+' at '+location
+    try:
+        package=Path(os.path.abspath(__file__)).parent
+    except (OSError,ValueError):
+        return 'Internal diagnostic: '+kind+' at '+location
     trace=error.__traceback__
     while trace is not None:
         try:
             relative=Path(os.path.abspath(trace.tb_frame.f_code.co_filename)).relative_to(package).as_posix()
             if all(c.isascii() and (c.isalnum() or c in '/_.-') for c in relative):
                 location='totalmarker/'+relative+':'+str(trace.tb_lineno)
-        except (ValueError,OSError):pass
+        except (ValueError,OSError):
+            pass
         trace=trace.tb_next
     return 'Internal diagnostic: '+kind+' at '+location
 
@@ -128,7 +132,9 @@ def _main(argv=None):
         return 2
     except Exception as error:
         try:
-            if sys.stderr is not None:print(internal_diagnostic(error),file=sys.stderr)
-        except (OSError,ValueError):pass  # Diagnostics must not replace the JSON failure contract.
+            if sys.stderr is not None:
+                print(internal_diagnostic(error),file=sys.stderr)
+        except (OSError,ValueError):
+            pass  # Diagnostics must not replace the JSON failure contract.
         print(json.dumps({"outcome": "failed", "message": "Unexpected internal failure"}))
         return 2
