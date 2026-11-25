@@ -18,7 +18,7 @@ Saving, selection and desktop restart are separate actions.
 - **Planetary scenes:** [bodies and dates](planetary.md),
   [systems](systems.md), [orbital guides](orbits.md), [orbital camera](orbital-camera.md),
   [installed sky and planetary annotations](installed-annotations.md).
-- **Maintain and extend:** [architecture](architecture.md), [potential roadmap](roadmap.md),
-  [advanced astronomy prerequisites](advanced-astronomy-assessment.md).
+- **Maintain and extend:** [architecture](architecture.md),
+  [future scope](roadmap.md), [advanced astronomy limits](advanced-astronomy-assessment.md).
 
 For installation, schedules and desktop lifecycle, see [management](../management.md).

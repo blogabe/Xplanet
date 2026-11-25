@@ -24,6 +24,11 @@ Maps are bundled/installed imagery, not historical photographs at that instant.
 | Selective enlargement | `jupiter-europa-enlarged`, `saturn-titan-enlarged` | One moon enlarged; others inherit the stated scale. |
 | Orbit guides | `jupiter-orbit-guides`, `saturn-orbit-guides`, `pluto-charon-guides` | Sampled parent-relative guides, not spacecraft tracks or predicted events. |
 
+`earth-solar-dawn` uses an orthographic view at solar hour 6 and a geographic
+grid. `earth-september` pairs the September 2004 map with Earthlights 2002.
+`earth-from-moon` uses FOV framing. The Moon phase, Jupiter cloudtops and Saturn
+ring examples use a 15% shadow brightness; Saturn's observer latitude is 25°.
+
 ## Interpretation and limits
 
 Ordinary body-origin cameras use the origin body's **centre**. `earth-from-moon`
@@ -37,8 +42,9 @@ camera or astronomical measurement. Incidental bodies may appear; the engine
 has no general per-body Hide feature. Dates remain subject to the studio's
 conservative backend policy, including active Pluto/Charon before 2100.
 
-The previous 23 stock scenes were finite-rendered at 1920×1080 with the
-available Xplanet 1.3.1 build; this is not certification of every scene, build,
-texture orientation or future date. Uranus's acknowledged texture gap remains.
+Finite tests rendered the original 23 stock scenes at 1920×1080 with the
+available Xplanet 1.3.1 build, plus a separate check for the orbital Earthrise
+scene. This does not certify other builds, texture orientation or future dates.
+See [resource availability](../resources.md) for the Uranus texture gap.
 Use [configuration health and resource diagnostics](diagnostics.md)
 to distinguish missing resources, explicit build limitations and unknowns.
