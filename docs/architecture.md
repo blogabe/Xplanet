@@ -13,7 +13,7 @@ requested workflow:
 - `lib/xplanet/desktop-agent.zsh`: prepare and inspect the desktop LaunchAgent.
 - `lib/xplanet/lifecycle.zsh`: per-user native lock and lifecycle serialization.
 - `lib/xplanet/configurator.zsh`: shell handoff and result presentation for the studio.
-- `xp-setup.sh`: prepare personal configuration and launchd jobs without replacing existing files.
+- `xp-setup.sh`: prepare missing personal configuration and optional launchd jobs.
 - `lib/xplanet/volcano-setup.py`: inspect or render the fresh-install volcano source choice.
 - `lib/xplanet/management.zsh`: orchestrate the interactive management menu.
 - `lib/xplanet/management-dashboard.zsh` and `lib/xplanet/management-view.zsh`: collect and present dashboard status.
@@ -128,7 +128,7 @@ Setup validates on-disk plists with plutil and leaves registered labels alone.
 Loaded settings are explicitly unverified; presence is not configuration equality.
 Python remains behind run-totalmarker for data commands, not desktop lifecycle.
 Product-specific validation and setup do not use a provider plugin framework.
-Setup does not rewrite existing configuration. The separate
+Setup preserves personal settings unless the operator approves a specific change. The separate
 [configurator](configurator/architecture.md) uses Python and Textual for its UI;
 zsh owns the desktop lifecycle. Interpreter selection delegates provisioning
 to Homebrew/uv without owning package or machine migration; see
