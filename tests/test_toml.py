@@ -1,13 +1,14 @@
 import contextlib
 from dataclasses import replace
 import io
+from itertools import combinations
 import json
 import re
 import tomllib
 from unittest.mock import patch
 
 from totalmarker.cli import main
-from totalmarker.config import AuthSpec, TOML_DURATION_ALIASES, TOML_KEYS, load
+from totalmarker.config import AuthSpec, TOML_DURATION_UNITS, TOML_KEYS, TOML_LEGACY_DURATION_KEYS, load
 from totalmarker.errors import ConfigError, DownloadError
 from totalmarker.http import HTTPTransport
 from .support import PROJECT, Sandbox
@@ -196,21 +197,29 @@ hours = 72
         self.assertEqual(override.storm.journal, ".state/totalmarker/other-storm.json")
 
     def test_duration_aliases_preserve_effective_legacy_values(self):
-        for old, (new, scale) in TOML_DURATION_ALIASES.items():
-            section, _, old_key = old.partition(".")
-            new_key = new.partition(".")[2]
-            value = 14 if scale == 86400 else 1440
-            old_value = value * scale
-            with self.subTest(key=new):
-                self.assertEqual(self.toml(f"[{section}]\n{old_key}={old_value}\n"),
-                                 self.toml(f"[{section}]\n{new_key}={value}\n"))
-                for pair in (f"{old_key}={old_value}\n{new_key}={value}\n",
-                             f"{new_key}={value}\n{old_key}={old_value}\n"):
-                    with self.assertRaisesRegex(ConfigError, "more than one"):
-                        self.toml(f"[{section}]\n{pair}")
-                for invalid in ("true", "1.5", '"60"', "-1"):
-                    with self.assertRaises(ConfigError):
-                        self.toml(f"[{section}]\n{new_key}={invalid}\n")
+        scales = {"minutes": 60, "hours": 3600, "days": 86400}
+        duration = 14 * 86400
+        for dotted, units in TOML_DURATION_UNITS.items():
+            section, _, old_key = dotted.partition(".")
+            prefix = old_key.removesuffix("_seconds")
+            spellings = [f"{old_key}={duration}\n"]
+            expected = self.toml(f"[{section}]\n{spellings[0]}")
+            for unit in units:
+                key = f"{prefix}_{unit}"
+                assignment = f"{key}={duration // scales[unit]}\n"
+                spellings.append(assignment)
+                with self.subTest(key=key):
+                    self.assertEqual(self.toml(f"[{section}]\n{assignment}"), expected)
+                    for invalid in ("true", "1.5", '"60"', "-1"):
+                        with self.assertRaises(ConfigError):
+                            self.toml(f"[{section}]\n{key}={invalid}\n")
+            for first, second in combinations(spellings, 2):
+                for pair in (first + second, second + first):
+                    with self.subTest(section=section, pair=pair):
+                        with self.assertRaisesRegex(ConfigError, "more than one"):
+                            self.toml(f"[{section}]\n{pair}")
+        self.assertEqual(self.toml("[volcano]\ncheck_interval_minutes=1381\n").volcano.interval, 82860)
+        self.assertEqual(self.toml("[labels]\nwarning_norad_minutes=1441\n").norad.warning, 86460)
         self.assertEqual(self.toml("[quake]\ncheck_interval_seconds=1100\n").quake.interval, 1100)
         self.assertEqual(self.toml("[quake]\ncheck_interval_minutes=18\n").quake.interval, 1080)
         self.assertEqual(self.toml("[cloud]\ntimeout_seconds=7\n").timeout, 7)
@@ -269,7 +278,7 @@ hours = 72
         alternatives = {"cloud.url", "cloud.auth_mode", "cloud.local_image_name"}
         runtime_only = {key for key in TOML_KEYS if key.endswith(
             (".journal", ".max_bytes", ".group_max_bytes")
-        )} | {"paths.state", "paths.lock"} | set(TOML_DURATION_ALIASES)
+        )} | {"paths.state", "paths.lock"} | TOML_LEGACY_DURATION_KEYS
         self.assertFalse(runtime_only & documented)
         first_class = {key for key in TOML_KEYS if not (
             key.startswith("storm.") and key.rsplit(".", 1)[-1][:1].isupper()

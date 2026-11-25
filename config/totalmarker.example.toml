@@ -1,6 +1,6 @@
 # Example only. Keep personal config/totalmarker.toml separate; never overwrite it.
 # The selected .invalid custom source cannot be fetched; choose sources deliberately.
-# Check and warning intervals use whole minutes; network timeouts use seconds.
+# Timing fields use the whole unit named in their key; network timeouts use seconds.
 # Fetch intervals leave a margin below the example launchd periods for start jitter.
 
 [paths]
@@ -12,11 +12,11 @@ log = "logs/totalmarker/events.jsonl"
 [labels]
 # Product operations refresh existing rows and retain their coordinates/order.
 enabled = true
-warning_cloud_minutes = 360
-warning_quake_minutes = 180
-warning_volcano_minutes = 4320
-warning_storm_minutes = 180
-warning_norad_minutes = 1440
+warning_cloud_hours = 6
+warning_quake_hours = 3
+warning_volcano_days = 3
+warning_storm_hours = 3
+warning_norad_days = 1
 
 [labels.colors]
 ok = "Green"
@@ -80,7 +80,7 @@ detail_align = "Above"
 provider = "weekly_html"
 url = "https://volcano.si.edu/news/WeeklyVolcanoCAP.xml"
 output = "markers/volcano"
-check_interval_minutes = 1380
+check_interval_hours = 23
 timeout_seconds = 30
 circle_size_inner = 4
 circle_size_middle = 8
@@ -128,7 +128,7 @@ track_enabled = true
 enabled = false
 catalog_ids = "25544"
 output = "satellites/totalmarker"
-check_interval_minutes = 120
+check_interval_hours = 2
 timeout_seconds = 30
 max_age_days = 14
 color = "Yellow"
