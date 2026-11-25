@@ -102,11 +102,11 @@ image_transparent = ""
 track_enabled = true
 
 [volcano]
-# Weekly HTML and CAP are two formats of the same Smithsonian/USGS weekly report.
-# Weekly HTML uses the public report page; leave url blank.
-# For CAP, set provider = "cap" and use the commented URL instead of the blank one.
+# Auto tries the official CAP feed first and the Weekly Report HTML as fallback.
+# Pin "cap" or "weekly_html" to use just one source. A custom URL requires "cap".
 # Failed refreshes retain prior markers and the last successful refresh time.
-provider = "weekly_html"
+enabled = true
+provider = "auto"
 url = ""
 # url = "https://volcano.si.edu/news/WeeklyVolcanoCAP.xml"
 output = "markers/volcano"

@@ -292,22 +292,24 @@ not relocate an outstanding journal before recovery.
 
 ## Volcano sources
 
-The shipped personal-config example uses `provider = "weekly_html"` to retrieve
-the [official GVP Weekly Report](https://volcano.si.edu/reports_weekly.cfm),
-which needs no URL setting. CAP is a structured XML version of the same
-weekly report, not a live eruption feed. To use CAP, set `provider = "cap"`
-and explicitly use the official URL,
-`https://volcano.si.edu/news/WeeklyVolcanoCAP.xml`. The producer's fallback for
-older configurations without explicit settings is unchanged. Guided setup
-does not migrate existing configurations. Its skip choice, and the original
-unconfigured CAP placeholder, do not trigger provider requests.
-Access restrictions and stale weekly coverage remain failures; neither endpoint
-is guaranteed available. Do not bypass access controls or substitute download
-success for coverage validation. No configuration or provider is changed by
-reading these instructions. Historical reports through 2026-11-04 included CAP
-access with stale weekly coverage rejected, and HTTP 403 from the weekly HTML
-source. They do not establish today's access or reporting period; use an explicit
-live check for current evidence.
+The shipped example uses `provider = "auto"`: try the structured
+[CAP feed](https://volcano.si.edu/news/WeeklyVolcanoCAP.xml) first, then the
+[Weekly Report HTML](https://volcano.si.edu/reports_weekly.cfm) once if CAP is
+unavailable or fails validation. Both are versions of the same weekly report,
+not live eruption feeds. Auto uses only the official URLs. It does not fall back
+on an authentication or rate-limit response and does not retry either endpoint
+within the same refresh.
+
+HTTP validators belong only to the matching source. Auto rejects any report
+older than the last good publication. If no candidate is valid, existing
+markers and their last successful timestamp stay intact. Logs identify which
+source supplied the saved data or why each attempted source failed.
+
+Pin `cap` or `weekly_html` to use just one source; a custom HTTPS URL is
+supported with `cap` only. Guided setup does not migrate existing settings.
+An omitted provider in an existing configuration still means CAP. An explicit
+`enabled = false` and the original unconfigured CAP placeholder both skip
+provider requests. Neither official endpoint is guaranteed to be available.
 
 
 Unexpected TotalMarker failures retain the generic JSON error and exit status 2.

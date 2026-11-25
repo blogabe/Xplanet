@@ -569,46 +569,18 @@ class SetupTests(Sandbox):
         self.assertNotIn("local.xplanet.clouds.plist", calls.read_text())
         self.assertFalse((self.root / ".state/totalmarker/aurora/overlay.png").exists())
 
-    def test_fresh_interactive_volcano_source_choices(self):
+    def test_fresh_interactive_setup_uses_auto_without_a_source_menu(self):
         scripts, env, products, home, calls = self._volcano_automation_fixture()
         config = self.root / "config/totalmarker.toml"
-        source_template = (self.root / "config/totalmarker.example.toml").read_bytes()
-        for choice, provider in (("1", "cap"), ("2", "weekly_html"), ("", "weekly_html"),
-                                 ("3", "cap")):
-            with self.subTest(choice=choice):
-                config.unlink(missing_ok=True)
-                products.unlink(missing_ok=True)
-                calls.unlink(missing_ok=True)
-                for directory in (home / "Library/LaunchAgents", scripts / "launchd"):
-                    for file in directory.glob("*.plist"):
-                        file.unlink()
-                selected = choice != "3"
-                answers = f"y\n{choice}\n\nn\nn\n" + ("y\n" if selected else "") + "n\ny\n"
-                output = self._setup_tty(scripts, env, answers)
-                self.assertIn("Official CAP feed (https://volcano.si.edu/news/WeeklyVolcanoCAP.xml)", output)
-                self.assertIn("Weekly Report (HTML) [default]", output)
-                self.assertIn("Skip volcanoes for now", output)
-                current = config.read_bytes()
-                volcano = tomllib.loads(current.decode())["volcano"]
-                self.assertEqual(volcano["provider"], provider)
-                expected_url = {
-                    "1": "https://volcano.si.edu/news/WeeklyVolcanoCAP.xml",
-                    "2": "",
-                    "": "",
-                    "3": "https://volcano.example.invalid/WeeklyVolcanoCAP.xml",
-                }
-                self.assertEqual(volcano["url"], expected_url[choice])
-                if provider == "weekly_html":
-                    self.assertEqual(current, source_template)
-                self.assertEqual("Refresh volcano markers now?" in output, selected)
-                self.assertEqual(products.exists(), selected)
-                if selected:
-                    self.assertEqual(products.read_text().splitlines(), ["volcano"])
-                self.assertEqual("local.xplanet.volcano" in calls.read_text(), selected)
-                agent = home / "Library/LaunchAgents/local.xplanet.volcano.plist"
-                self.assertEqual(agent.is_symlink(), selected)
+        output = self._setup_tty(scripts, env, "y\n\nn\nn\ny\nn\ny\n")
+        self.assertNotIn("Volcano source [", output)
+        self.assertIn("Refresh volcano markers now?", output)
+        self.assertEqual(config.read_bytes(), (config.parent / "totalmarker.example.toml").read_bytes())
+        self.assertEqual(products.read_text().splitlines(), ["volcano"])
+        self.assertIn("local.xplanet.volcano", calls.read_text())
+        self.assertTrue((home / "Library/LaunchAgents/local.xplanet.volcano.plist").is_symlink())
 
-    def test_fresh_pipe_defaults_to_weekly_without_refresh_or_automation_consent(self):
+    def test_fresh_pipe_defaults_to_auto_without_refresh_or_automation_consent(self):
         scripts, env, products, home, calls = self._volcano_automation_fixture()
         config = self.root / "config/totalmarker.toml"
         outcome = self._inspect(scripts, env, input="y\n\nn\nn\nn\nn\nn\n")
@@ -616,13 +588,14 @@ class SetupTests(Sandbox):
         self.assertNotIn("Volcano source [", outcome.stdout)
         self.assertFalse(products.exists())
         self.assertFalse(calls.exists())
-        self.assertEqual(tomllib.loads(config.read_text())["volcano"]["provider"], "weekly_html")
+        self.assertEqual(tomllib.loads(config.read_text())["volcano"]["provider"], "auto")
         self.assertEqual(config.read_bytes(), (config.parent / "totalmarker.example.toml").read_bytes())
 
     def test_skipped_source_stays_skipped_and_preserves_existing_agent_on_pipe_rerun(self):
         scripts, env, products, home, calls = self._volcano_automation_fixture()
         config = self.root / "config/totalmarker.toml"
-        self._setup_tty(scripts, env, "y\n3\n\nn\nn\nn\ny\n")
+        config.write_bytes(b'[volcano]\nprovider = "auto"\nenabled = false\n')
+        self._setup_tty(scripts, env, "y\n\nn\nn\nn\ny\n")
         self.assertFalse(products.exists())
         self.assertNotIn("local.xplanet.volcano", calls.read_text())
         original = config.read_bytes()
@@ -645,6 +618,8 @@ class SetupTests(Sandbox):
         config = self.root / "config/totalmarker.toml"
         for content, ready in ((b'[volcano]\nurl = "https://custom.test/path"\n', True),
                                (b'[legacy]\nVolcanoProvider="weekly_html"\n', True),
+                               (b'[volcano]\nprovider = "auto"\nenabled = false\n', False),
+                               (b'[volcano]\nprovider = "auto"\n', True),
                                (b'[volcano]\nname_color = "Red"\n', False),
                                (b'[volcano]\nurl = "https://different.example.invalid/p"\n', False)):
             with self.subTest(content=content):

@@ -287,7 +287,7 @@ hours = 72
         self.assertEqual(settings.quake.minimum, 6)
         self.assertEqual((settings.quake.pixel_min, settings.quake.pixel_max),
                          (None, None))
-        self.assertEqual(settings.volcano.provider, "weekly_html")
+        self.assertEqual(settings.volcano.provider, "auto")
         self.assertTrue(settings.volcano.enabled)
         self.assertEqual(settings.volcano.circle_sizes, (4, 8, 12))
         self.assertEqual(settings.quake.warning, 10800)

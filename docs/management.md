@@ -34,8 +34,7 @@ are available for deployments such as unusually large cloud maps.
    into a new directory and run `./scripts/xplanet.sh` for guided management.
 2. Follow Guided setup: prepare personal files, choose data sources and review
    the proposed schedules. Keep unconfigured products disabled; cloud access
-   needs your source and credentials. For volcanoes, keep the Weekly Report
-   default, select CAP, or skip.
+   needs your source and credentials. Volcanoes use automatic source selection.
 3. Accept the optional start offer, or run `./scripts/xplanet.sh start` afterward.
    This asks launchd to run the configured renderer; it does not certify a frame.
 4. Expect the desktop image to update asynchronously. If it does not, inspect
@@ -67,21 +66,19 @@ other products unchanged unless you deliberately want to change them.
 
 ## Choose a volcano source
 
-When setup creates your first `config/totalmarker.toml`, it defaults to the
-Smithsonian GVP **Weekly Report (HTML)**. In an interactive terminal, press Enter
-to keep it, or choose **Official CAP feed** or **Skip volcanoes for now**.
-Without an interactive terminal, the fresh template uses the Weekly Report.
-Choosing a source does not contact it; setup asks separately before a live
-refresh and before installing automation.
+New configurations use `provider = "auto"` under `[volcano]`. TotalMarker
+checks the official CAP feed first and can fall back once to the official Weekly
+Report HTML. Both formats describe the same Smithsonian/USGS weekly report.
+Setup asks before a live refresh and before installing automation, but does not
+ask you to choose a format.
 
-If you skip, future setup runs do not offer a volcano refresh or register a new
-volcano job, and direct refresh and live health do not contact a placeholder.
-Existing personal settings and registered jobs are not migrated or removed.
-To enable volcanoes later, edit your personal `[volcano]` settings: choose
-`weekly_html` and clear the unused URL, or use `cap` with an explicit
-[CAP URL](technical-notes.md#volcano-sources). Run setup again. An eligible
-source can be scheduled with the automation bundle even if you decline the
-immediate refresh; eligibility is not proof of access.
+Keep Auto unless you need to diagnose one feed, avoid a known problematic
+endpoint or use a custom CAP URL. To pin a source, set `provider = "cap"`
+or `provider = "weekly_html"`; neither setting falls back. A custom HTTPS URL
+requires `cap`. Set `enabled = false` to disable refreshes and omit new volcano
+automation. Setup preserves existing personal settings and registered jobs.
+See [volcano sources](technical-notes.md#volcano-sources) for validation and
+cached-marker behavior.
 
 ## Optional ISS and solar-eclipse overlays
 

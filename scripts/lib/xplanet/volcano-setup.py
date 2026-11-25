@@ -1,6 +1,5 @@
-"""Inspect the volcano section or render an explicit choice in a fresh example."""
+"""Determine whether guided setup can offer volcano refresh and scheduling."""
 import os
-import re
 import stat
 import sys
 import tomllib
@@ -8,8 +7,6 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 CAP = "https://volcano.si.edu/news/WeeklyVolcanoCAP.xml"
-# Keep the skip sentinel aligned with VolcanoOptions.enabled.
-PLACEHOLDER = "https://volcano.example.invalid/WeeklyVolcanoCAP.xml"
 MAX_CONFIG = 1024 * 1024
 
 
@@ -46,11 +43,16 @@ def source(data):
             raise ValueError
         return values[0] if values else default
 
+    enabled = setting("enabled", True)
+    if enabled is not True and not (isinstance(enabled, str) and enabled.lower() == "on"):
+        return "unconfigured"
     provider = setting("provider", "cap")
     raw = setting("url")
     if not isinstance(provider, str) or raw is not None and not isinstance(raw, str):
         return "unconfigured"
     provider = provider.lower()
+    if provider == "auto":
+        return "ready" if raw in (None, "", CAP) else "unconfigured"
     if not raw:
         return "ready" if provider == "weekly_html" else "unconfigured"
     if any(ord(c) <= 32 or ord(c) == 127 for c in raw):
@@ -69,52 +71,11 @@ def source(data):
     return "unconfigured"
 
 
-def template_region(data):
-    # Offer guided choices only for the shipped source, not a customized example.
-    if source(data) != "ready":
-        raise ValueError
-    start = re.search(r"(?m)^\[volcano\][ \t]*\r?$", data).end()
-    end = re.search(r"(?m)^\[", data[start:])
-    stop = start + end.start() if end else len(data)
-    part = data[start:stop]
-    provider = re.findall(r'(?m)^provider = "weekly_html"\r?$', part)
-    # Accept the previous stock template too. Never replace the commented URL.
-    url_lines = re.findall(rf'(?m)^(url = "(?:{re.escape(CAP)})?")\r?$', part)
-    if len(provider) != 1 or len(url_lines) != 1:
-        raise ValueError
-    return start, stop, url_lines[0]
-
-
-def choose(data, choice):
-    start, stop, url_line = template_region(data)
-    if choice == "weekly_html":
-        return data
-
-    def replace_setting(section, old, new):
-        return re.sub(rf"(?m)^{re.escape(old)}(?=\r?$)", new, section, count=1)
-
-    part = replace_setting(data[start:stop], 'provider = "weekly_html"', 'provider = "cap"')
-    if choice not in {"cap", "skip"}:
-        raise ValueError
-    url = CAP if choice == "cap" else PLACEHOLDER
-    part = replace_setting(part, url_line, f'url = "{url}"')
-    result = data[:start] + part + data[stop:]
-    if source(result) != ("unconfigured" if choice == "skip" else "ready"):
-        raise ValueError
-    return result
-
-
 def main():
-    mode, filename, *args = sys.argv[1:]
-    data = read_config(filename)
-    if mode == "status" and not args:
-        print(source(data))
-    elif mode == "selectable" and not args:
-        template_region(data)
-    elif mode == "render" and len(args) == 1:
-        sys.stdout.buffer.write(choose(data, args[0]).encode("utf-8"))
-    else:
+    mode, filename = sys.argv[1:]
+    if mode != "status":
         raise ValueError
+    print(source(read_config(filename)))
 
 
 if __name__ == "__main__":
