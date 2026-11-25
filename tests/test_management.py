@@ -2,7 +2,6 @@
 import os
 import re
 import fcntl
-import pty
 import select
 import signal
 import shlex
@@ -16,8 +15,9 @@ from pathlib import Path
 
 from .build_options_support import INSTALL_BREW_FIXTURE
 from .support import PROJECT, Sandbox, copy_launcher
+from .support_terminal import open_terminal
 
-DASHBOARD='snapshot\t2026-11-04 12:00Z\n'+'\n'.join('unknown\t'+title+'\tsource-detail; freshness not assessed' for title in ('Clouds','Earthquakes','Storms','Volcanoes','Satellites','Eclipses','Santa'))
+DASHBOARD='snapshot\t2026-11-04 12:00Z\n'+'\n'.join('unknown\t'+title+'\tsource-detail; freshness not assessed' for title in ('Clouds','Earthquakes','Storms','Volcanoes','Satellites','Eclipses'))
 
 
 class ManagementTests(Sandbox):
@@ -72,10 +72,8 @@ class ManagementTests(Sandbox):
                 for p in self.root.rglob('*') if p.is_file()}
 
     def terminal(self, answers=None, interrupt=False, eof=False, termination=None, pause_signal=None, pause_key=None, after_pause=None, menu_steps=(), resize=None, key_marker=None, startup_interrupt=False, confirm_interrupt=False):
-        master, slave = pty.openpty()
-        fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH',
-                    int(self.env.get('TEST_ROWS', 30)), int(self.env.get('TEST_COLS', 100)), 0, 0))
-        terminal_before = termios.tcgetattr(slave)
+        master, slave, terminal_before = open_terminal(
+            rows=int(self.env.get('TEST_ROWS', 30)), columns=int(self.env.get('TEST_COLS', 100)))
         proc = subprocess.Popen([str(self.entry)], stdin=slave, stdout=slave,
                                 stderr=slave, env=self.env, start_new_session=True,
                                 preexec_fn=lambda: fcntl.ioctl(0, termios.TIOCSCTTY, 0))
@@ -1188,21 +1186,39 @@ class ManagementTests(Sandbox):
         self.assertEqual(output.count('\x1b[?1049h'),1)
         self.assertEqual(output.count('\x1b[?1049l'),1)
 
+    def test_dashboard_rejects_missing_and_duplicate_product_rows(self):
+        cfg = self.root / 'config'
+        cfg.mkdir()
+        (cfg / 'totalmarker.toml').write_text('')
+        rows = DASHBOARD.splitlines()
+        for malformed in (rows[:-1], rows[:-1] + [rows[1]]):
+            raw = "\n".join(malformed)
+            self.write_script(self.scripts / 'run-totalmarker',
+                              "cat <<'DASHBOARD'\n" + raw + "\nDASHBOARD\n")
+            code, output = self.terminal('q\n')
+            self.assertEqual(code, 0, output)
+            self.assertIn('Inspection failed; no verified snapshot', output)
+
     def test_actual_saved_health_cli_records_populate_shell_dashboard(self):
         config=self.root/'config';config.mkdir()
-        (config/'totalmarker.toml').write_bytes((PROJECT/'config/totalmarker.example.toml').read_bytes())
+        example=(PROJECT/'config/totalmarker.example.toml').read_bytes()
+        working=config/'totalmarker.toml'
         self.env['PYTHONPATH']=str(PROJECT/'scripts')
         self.env['PYTHONDONTWRITEBYTECODE']='1'
         self.write_script(self.scripts/'run-totalmarker',
-                          'exec '+shlex.quote(sys.executable)+' -B -m totalmarker --root '+shlex.quote(str(self.root))+' "$@"\n')
-        raw=subprocess.run([str(self.scripts/'run-totalmarker'),'health','--dashboard'],env=self.env,text=True,capture_output=True,timeout=5)
-        self.assertIn(raw.returncode,(0,1),raw.stdout+raw.stderr)
-        rows=raw.stdout.splitlines();self.assertTrue(rows[0].startswith('snapshot\t'))
-        products=[line.split('\t') for line in rows[1:] if not line.startswith('note\t')]
-        self.assertEqual(len(products),7)
-        code,output=self.terminal('q\n')
-        self.assertEqual(code,0,output)
-        badges={'good':'[+]','warning':'[!]','error':'[x]','disabled':'[-]','unknown':'[?]'}
-        for kind,title,*_ in products:
-            with self.subTest(product=title):self.assertIn(badges[kind]+' '+title,output)
-        self.assertNotIn('Inspection failed; no verified snapshot',output)
+                          'exec '+shlex.quote(sys.executable)+' -B -m totalmarker --root '+shlex.quote(str(self.root))+
+                          ' --config config/totalmarker.toml "$@"\n')
+        standard={'Clouds', 'Earthquakes', 'Storms', 'Volcanoes', 'Satellites', 'Eclipses'}
+        for content,expected in ((b'',standard),(example,standard|{'Aurora'})):
+            working.write_bytes(content)
+            raw=subprocess.run([str(self.scripts/'run-totalmarker'),'health','--dashboard'],env=self.env,text=True,capture_output=True,timeout=5)
+            self.assertIn(raw.returncode,(0,1),raw.stdout+raw.stderr)
+            rows=raw.stdout.splitlines();self.assertTrue(rows[0].startswith('snapshot\t'))
+            products=[line.split('\t') for line in rows[1:] if not line.startswith('note\t')]
+            self.assertEqual({entry[1] for entry in products}, expected)
+            code,output=self.terminal('q\n')
+            self.assertEqual(code,0,output)
+            badges={'good':'[+]','warning':'[!]','error':'[x]','disabled':'[-]','unknown':'[?]'}
+            for kind,title,*_ in products:
+                with self.subTest(product=title):self.assertIn(badges[kind]+' '+title,output)
+            self.assertNotIn('Inspection failed; no verified snapshot',output)

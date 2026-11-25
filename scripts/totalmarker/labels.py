@@ -8,6 +8,18 @@ from .aurora_status import MAX_FEED, OVERLAY, read_record
 from .diagnostics import success_at
 from .errors import StorageError
 
+LABEL_LIMIT = 2 * 1024 * 1024
+
+
+def read_labels(fs, path):
+    """Read display labels, treating absence as empty and preserving valid bytes."""
+    raw = fs.read(path, LABEL_LIMIT)
+    try:
+        return raw.decode("utf-8") if raw is not None else ""
+    except UnicodeError:
+        raise StorageError("Existing labels are not valid UTF-8") from None
+
+
 PREFIX = "Cloud Map Last Updated"
 VOLCANO_PREFIX = "Volcano Information Last Updated"
 QUAKE_PREFIX = "Earthquake Information Last Updated"

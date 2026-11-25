@@ -36,7 +36,7 @@ def _sources(settings):
         'norad': [norad.CELESTRAK.format(id=number) for number in settings.norad.catalog_ids]
                  + [norad.CELESTRAK_GROUP.format(source=group.source)
                     for group in settings.norad.groups if group.enabled],
-        'eclipse': [settings.eclipse.path_url or eclipse.INDEX_URL], 'santa': [],
+        'eclipse': [settings.eclipse.path_url or eclipse.INDEX_URL],
     }
     if settings.aurora.enabled or settings.aurora.base_night_map:
         sources['aurora'] = [aurora.URL]
@@ -205,10 +205,8 @@ class _ProbeFetcher:
 
 def _probe_settings(settings):
     options = {}
-    for name in ('quake', 'storm', 'volcano', 'norad', 'eclipse', 'santa'):
-        changes = {'journal': f'.state/totalmarker/{name}-pending.json'}
-        if name != 'santa':
-            changes['interval'] = 0
+    for name in ('quake', 'storm', 'volcano', 'norad', 'eclipse'):
+        changes = {'journal': f'.state/totalmarker/{name}-pending.json', 'interval': 0}
         if name == 'norad':
             changes['satellite'] = 'satellites/norad'
         else:
@@ -299,7 +297,7 @@ def check(fs, settings, *, live=False, now=None, fetcher_factory=Fetcher):
             if errors.get(product) and isinstance(errors[product]['at'], (int, float)) and errors[product]['at'] > (record.get('fetched_at') or 0):
                 record['last_outcome'] = 'failed'
         facts = observation(record)
-        enabled = product not in {'volcano', 'norad', 'eclipse', 'santa', 'aurora'} or getattr(settings, product).enabled
+        enabled = product not in {'volcano', 'norad', 'eclipse', 'aurora'} or getattr(settings, product).enabled
         row = {'product': product, 'sources': sources, 'status': 'unknown' if enabled else 'disabled',
                'access': 'not_checked', 'content': 'unknown', 'freshness': 'unknown',
                'last_check_at': facts['checked_at'], 'last_attempt_at': facts['attempted_at'],
@@ -329,9 +327,7 @@ def check(fs, settings, *, live=False, now=None, fetcher_factory=Fetcher):
             if row['freshness'] == 'stale':
                 row['status'] = 'stale'
                 row['output']['retained'] = row['output']['present']
-            if product == 'santa':
-                row.update(status='unsupported', message='Santa has no live provider')
-            elif live:
+            if live:
                 try:
                     _live(fs, settings, product, row, record, now, fetcher_factory)
                 except TotalMarkerError as error:
@@ -366,7 +362,7 @@ def exit_status(report):
 
 _TITLES = {'clouds': 'Clouds', 'quake': 'Earthquakes', 'storm': 'Storms',
            'volcano': 'Volcanoes', 'norad': 'Satellites', 'eclipse': 'Eclipses',
-           'santa': 'Santa', 'aurora': 'Aurora'}
+           'aurora': 'Aurora'}
 
 
 def _stamp(value):

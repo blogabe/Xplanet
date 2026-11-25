@@ -208,11 +208,6 @@ class HealthTests(Sandbox):
         self.assertIn('interval', report['norad']['message'])
         self.assertEqual(report['eclipse']['status'], 'disabled')
 
-    def test_santa_without_provider_is_unsupported(self):
-        self.settings = replace(self.settings, santa=replace(self.settings.santa, enabled=True))
-        report = health.check(self.fs, self.settings, now=NOW)
-        self.assertEqual(rows(report)['santa']['status'], 'unsupported')
-
     def test_cli_human_json_exit_codes_and_invalid_state_do_not_write(self):
         def invoke(*extra):
             output = io.StringIO()
@@ -273,7 +268,7 @@ class HealthTests(Sandbox):
             report = health.check(self.fs, self.settings, live=live, now=NOW,
                                   fetcher_factory=lambda: Fetcher(ScriptedTransport(Response(403, {}))))
             products = rows(report)
-            self.assertEqual(len(products), 7)
+            self.assertEqual(set(products), {"clouds", "quake", "storm", "volcano", "norad", "eclipse"})
             self.assertEqual(products['clouds']['status'], 'error')
             self.assertTrue(products['clouds']['output']['present'])
             self.assertFalse(products['clouds']['output']['verified'])
@@ -293,7 +288,7 @@ class HealthTests(Sandbox):
         before = snapshot(self.root)
         with patch.object(self.fs, 'read', side_effect=read):
             report = health.check(self.fs, self.settings, now=NOW)
-        self.assertEqual(len(report['products']), 7)
+        self.assertEqual(set(rows(report)), {"clouds", "quake", "storm", "volcano", "norad", "eclipse"})
         self.assertEqual(rows(report)['norad']['status'], 'error')
         self.assertEqual(rows(report)['quake']['status'], 'unknown')
         self.assertIn('Satellites: saved output unreadable', health.format_report(report))
@@ -344,7 +339,7 @@ class HealthTests(Sandbox):
                                   fetcher_factory=lambda: Fetcher(ScriptedTransport(Response(403, {}))))
         self.assertEqual(rows(report)['quake']['status'], 'error')
         self.assertEqual(rows(report)['clouds']['status'], 'access_failed')
-        self.assertEqual(len(report['products']), 7)
+        self.assertEqual(set(rows(report)), {"clouds", "quake", "storm", "volcano", "norad", "eclipse"})
         self.assertEqual(snapshot(self.root), before)
 
 

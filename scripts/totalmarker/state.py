@@ -47,46 +47,57 @@ def read_json(fs, path, limit=2 * 1024 * 1024):
         raise StorageError("State or publication journal is invalid; preserve it for recovery") from None
 
 
-def validate_state(value):
-    if not isinstance(value, dict) or value.get("schema") != 1 or not isinstance(
-            value.get("products"), dict):
-        raise StorageError("Unsupported or invalid persistent state")
-    for product in PRODUCTS:
-        record = value["products"].get(product, {})
-        if not isinstance(record, dict):
-            raise StorageError("Invalid product state")
-        validate_diagnostics(record)
-    record = value["products"].get("clouds", {})
+def _validate_product_timestamps(record, keys, message):
+    for key in keys:
+        number = record.get(key)
+        if number is not None and (isinstance(number, bool)
+                or not isinstance(number, (int, float)) or not 0 <= number <= 32503680000
+                or not math.isfinite(number)):
+            raise StorageError(message)
+
+
+def _validate_product_digests(record, keys, message):
+    for key in keys:
+        digest = record.get(key)
+        if digest is not None and (not isinstance(digest, str)
+                or not re.fullmatch("[0-9a-f]{64}", digest)):
+            raise StorageError(message)
+
+
+def _validate_product_count(record, maximum, message):
+    count = record.get("count")
+    if count is not None and (isinstance(count, bool) or not isinstance(count, int)
+                              or not 0 <= count <= maximum):
+        raise StorageError(message)
+
+
+def _validate_cloud_state(record):
     if not isinstance(record, dict):
         raise StorageError("Invalid cloud state")
-    for key in ["installed_at", "checked_at", "fetched_at",
-                "source_created_at", "source_modified_at", "legacy_label_at"]:
-        number = record.get(key)
-        if number is not None and (isinstance(number, bool) or not isinstance(number, (int, float))
-                                   or not 0 <= number <= 32503680000 or not math.isfinite(number)):
-            raise StorageError("Invalid state timestamp")
-    for key in ["image_sha256", "source_key", "fetch_source_key",
-                "source_image_sha256"]:
-        digest = record.get(key)
-        if digest is not None and (not isinstance(digest, str) or not re.fullmatch("[0-9a-f]{64}", digest)):
-            raise StorageError("Invalid state digest")
-    volcano = value["products"].get("volcano", {})
+    _validate_product_timestamps(
+        record, ('installed_at', 'checked_at', 'fetched_at', 'source_created_at',
+        'source_modified_at', 'legacy_label_at'),
+        'Invalid state timestamp',
+    )
+    _validate_product_digests(
+        record, ('image_sha256', 'source_key', 'fetch_source_key', 'source_image_sha256'),
+        'Invalid state digest',
+    )
+
+
+def _validate_volcano_state(volcano):
     if not isinstance(volcano, dict):
         raise StorageError("Invalid volcano state")
-    for key in ["installed_at", "successful_at", "checked_at", "fetched_at", "source_report_at",
-                "source_modified_at", "legacy_label_at", "coverage_end_at"]:
-        number = volcano.get(key)
-        if number is not None and (isinstance(number, bool) or not isinstance(number, (int, float))
-                                   or not 0 <= number <= 32503680000 or not math.isfinite(number)):
-            raise StorageError("Invalid volcano state timestamp")
-    for key in ["marker_sha256", "body_sha256", "source_key"]:
-        digest = volcano.get(key)
-        if digest is not None and (not isinstance(digest, str) or not re.fullmatch("[0-9a-f]{64}", digest)):
-            raise StorageError("Invalid volcano state digest")
-    count = volcano.get("count")
-    if count is not None and (isinstance(count, bool) or not isinstance(count, int)
-                              or not 0 <= count <= 1_000_000):
-        raise StorageError("Invalid volcano event count")
+    _validate_product_timestamps(
+        volcano, ('installed_at', 'successful_at', 'checked_at', 'fetched_at',
+        'source_report_at', 'source_modified_at', 'legacy_label_at', 'coverage_end_at'),
+        'Invalid volcano state timestamp',
+    )
+    _validate_product_digests(
+        volcano, ('marker_sha256', 'body_sha256', 'source_key'),
+        'Invalid volcano state digest',
+    )
+    _validate_product_count(volcano, 1_000_000, 'Invalid volcano event count')
     provider = volcano.get("provider")
     if provider is not None and provider not in {"cap", "weekly_html"}:
         raise StorageError("Invalid volcano provider state")
@@ -106,61 +117,52 @@ def validate_state(value):
                                   timezone.utc).timestamp()
         if (end - start).days != 6 or volcano.get("coverage_end_at") != cutoff:
             raise StorageError("Invalid volcano reporting period length or cutoff")
-    quake = value["products"].get("quake", {})
+
+
+def _validate_quake_state(quake):
     if not isinstance(quake, dict):
         raise StorageError("Invalid quake state")
-    for key in ["installed_at", "successful_at", "checked_at", "fetched_at", "feed_generated_at",
-                "latest_origin_at", "latest_revision_at", "source_modified_at",
-                "legacy_label_at"]:
-        number = quake.get(key)
-        if number is not None and (isinstance(number, bool) or not isinstance(number, (int, float))
-                                   or not 0 <= number <= 32503680000 or not math.isfinite(number)):
-            raise StorageError("Invalid quake state timestamp")
-    for key in ["marker_sha256", "body_sha256", "source_key"]:
-        digest = quake.get(key)
-        if digest is not None and (not isinstance(digest, str) or not re.fullmatch("[0-9a-f]{64}", digest)):
-            raise StorageError("Invalid quake state digest")
-    count = quake.get("count")
-    if count is not None and (isinstance(count, bool) or not isinstance(count, int)
-                              or not 0 <= count <= 1_000_000):
-        raise StorageError("Invalid quake event count")
-    storm = value["products"].get("storm", {})
+    _validate_product_timestamps(
+        quake, ('installed_at', 'successful_at', 'checked_at', 'fetched_at',
+        'feed_generated_at', 'latest_origin_at', 'latest_revision_at', 'source_modified_at',
+        'legacy_label_at'),
+        'Invalid quake state timestamp',
+    )
+    _validate_product_digests(
+        quake, ('marker_sha256', 'body_sha256', 'source_key'),
+        'Invalid quake state digest',
+    )
+    _validate_product_count(quake, 1_000_000, 'Invalid quake event count')
+
+
+def _validate_storm_state(storm):
     if not isinstance(storm, dict):
         raise StorageError("Invalid storm state")
-    for key in ["installed_at", "successful_at", "checked_at", "fetched_at", "source_at",
-                "source_valid_until_at", "legacy_label_at"]:
-        number = storm.get(key)
-        if number is not None and (isinstance(number, bool) or not isinstance(number, (int, float))
-                                   or not 0 <= number <= 32503680000 or not math.isfinite(number)):
-            raise StorageError("Invalid storm state timestamp")
-    for key in ["marker_sha256", "arc_sha256", "body_sha256", "source_key"]:
-        digest = storm.get(key)
-        if digest is not None and (not isinstance(digest, str) or not re.fullmatch("[0-9a-f]{64}", digest)):
-            raise StorageError("Invalid storm state digest")
-    count = storm.get("count")
-    if count is not None and (isinstance(count, bool) or not isinstance(count, int)
-                              or not 0 <= count <= 1_000_000):
-        raise StorageError("Invalid storm count")
-    norad = value["products"].get("norad", {})
+    _validate_product_timestamps(
+        storm, ('installed_at', 'successful_at', 'checked_at', 'fetched_at', 'source_at',
+        'source_valid_until_at', 'legacy_label_at'),
+        'Invalid storm state timestamp',
+    )
+    _validate_product_digests(
+        storm, ('marker_sha256', 'arc_sha256', 'body_sha256', 'source_key'),
+        'Invalid storm state digest',
+    )
+    _validate_product_count(storm, 1_000_000, 'Invalid storm count')
+
+
+def _validate_norad_state(norad):
     if not isinstance(norad, dict):
         raise StorageError("Invalid NORAD state")
-    for key in ("installed_at", "successful_at", "checked_at", "fetched_at",
-                "attempted_at",
-                "oldest_epoch_at"):
-        number = norad.get(key)
-        if number is not None and (isinstance(number, bool)
-                or not isinstance(number, (int, float)) or not 0 <= number <= 32503680000
-                or not math.isfinite(number)):
-            raise StorageError("Invalid NORAD state timestamp")
-    for key in ("satellite_sha256", "tle_sha256", "body_sha256", "source_key"):
-        digest = norad.get(key)
-        if digest is not None and (not isinstance(digest, str)
-                or not re.fullmatch("[0-9a-f]{64}", digest)):
-            raise StorageError("Invalid NORAD state digest")
-    count = norad.get("count")
-    if count is not None and (isinstance(count, bool) or not isinstance(count, int)
-                              or not 0 <= count <= 16):
-        raise StorageError("Invalid NORAD object count")
+    _validate_product_timestamps(
+        norad, ('installed_at', 'successful_at', 'checked_at', 'fetched_at', 'attempted_at',
+        'oldest_epoch_at'),
+        'Invalid NORAD state timestamp',
+    )
+    _validate_product_digests(
+        norad, ('satellite_sha256', 'tle_sha256', 'body_sha256', 'source_key'),
+        'Invalid NORAD state digest',
+    )
+    _validate_product_count(norad, 16, 'Invalid NORAD object count')
     selected_ids = norad.get("selected_ids")
     if selected_ids is not None and (
             not isinstance(selected_ids, list) or not 0 <= len(selected_ids) <= 16
@@ -181,21 +183,20 @@ def validate_state(value):
                                  r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}\.(?:png|gif|jpg|jpeg)",
                                  icon, re.IGNORECASE) for icon in icons)):
         raise StorageError("Invalid NORAD icon list")
-    eclipse = value["products"].get("eclipse", {})
+
+
+def _validate_eclipse_state(eclipse):
     if not isinstance(eclipse, dict):
         raise StorageError("Invalid eclipse state")
-    for key in ("installed_at", "successful_at", "checked_at", "fetched_at",
-                "start_at", "end_at"):
-        number = eclipse.get(key)
-        if number is not None and (isinstance(number, bool)
-                or not isinstance(number, (int, float)) or not 0 <= number <= 32503680000
-                or not math.isfinite(number)):
-            raise StorageError("Invalid eclipse state timestamp")
-    for key in ("marker_sha256", "arc_sha256", "body_sha256", "source_key"):
-        digest = eclipse.get(key)
-        if digest is not None and (not isinstance(digest, str)
-                or not re.fullmatch("[0-9a-f]{64}", digest)):
-            raise StorageError("Invalid eclipse state digest")
+    _validate_product_timestamps(
+        eclipse, ('installed_at', 'successful_at', 'checked_at', 'fetched_at', 'start_at',
+        'end_at'),
+        'Invalid eclipse state timestamp',
+    )
+    _validate_product_digests(
+        eclipse, ('marker_sha256', 'arc_sha256', 'body_sha256', 'source_key'),
+        'Invalid eclipse state digest',
+    )
     if eclipse.get("kind") is not None and eclipse["kind"] not in {"Total", "Annular", "Hybrid"}:
         raise StorageError("Invalid eclipse kind")
     event_date = eclipse.get("event_date")
@@ -209,10 +210,24 @@ def validate_state(value):
             raise StorageError("Invalid eclipse event date") from None
     if eclipse.get("active") is not None and not isinstance(eclipse["active"], bool):
         raise StorageError("Invalid eclipse activation state")
-    count = eclipse.get("count")
-    if count is not None and (isinstance(count, bool) or not isinstance(count, int)
-                              or not 0 <= count <= 1000):
-        raise StorageError("Invalid eclipse path count")
+    _validate_product_count(eclipse, 1000, 'Invalid eclipse path count')
+
+
+def validate_state(value):
+    if not isinstance(value, dict) or value.get("schema") != 1 or not isinstance(
+            value.get("products"), dict):
+        raise StorageError("Unsupported or invalid persistent state")
+    for product in PRODUCTS:
+        record = value["products"].get(product, {})
+        if not isinstance(record, dict):
+            raise StorageError("Invalid product state")
+        validate_diagnostics(record)
+    _validate_cloud_state(value["products"].get("clouds", {}))
+    _validate_volcano_state(value["products"].get("volcano", {}))
+    _validate_quake_state(value["products"].get("quake", {}))
+    _validate_storm_state(value["products"].get("storm", {}))
+    _validate_norad_state(value["products"].get("norad", {}))
+    _validate_eclipse_state(value["products"].get("eclipse", {}))
     santa = value["products"].get("santa", {})
     if not isinstance(santa, dict):
         raise StorageError("Invalid Santa state")

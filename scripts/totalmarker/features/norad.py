@@ -8,11 +8,11 @@ import re
 import subprocess
 import time
 
-from ..diagnostics import Attempt, finish
+from ..diagnostics import Attempt, append_event, finish
 from ..errors import DownloadError, FeedError, StorageError
 from ..config import NoradStyle
 from ..http import Fetcher
-from ..labels import refresh_all
+from ..labels import read_labels, refresh_all
 from ..state import PairPublisher, json_bytes, load_state, recover_pending, validate_state
 from .norad_omm import ALPHA5_MAX, catalog_field, checksum, omm_to_tle
 from ..renderer_discovery import discover
@@ -289,11 +289,7 @@ def run(fs, settings, *, fetcher=None, now=None):
         publisher = _publisher(fs, settings)
         state = load_state(fs, settings.state)
         record = state["products"].setdefault("norad", {})
-        raw_label = fs.read(settings.labels, 2 * 1024 * 1024)
-        try:
-            old_label = raw_label.decode("utf-8") if raw_label is not None else ""
-        except UnicodeError:
-            raise StorageError("Existing labels are not valid UTF-8") from None
+        old_label = read_labels(fs, settings.labels)
         record["checked_at"] = now
         attempt = Attempt(fetcher if fetcher is not None else Fetcher())
         existing_sat = fs.read(options.satellite, PairPublisher.LIMIT)
@@ -429,9 +425,7 @@ def run(fs, settings, *, fetcher=None, now=None):
                      "successful_at": record.get("successful_at"),
                      "oldest_epoch_at": record.get("oldest_epoch_at"),
                      "count": record.get("count")}
-            try:
-                fs.append(settings.log, (json.dumps(event) + "\n").encode())
-            except StorageError:
+            if not append_event(fs, settings.log, event):
                 message += "; diagnostic log unavailable"
         return Result(outcome, message, record.get("installed_at"),
                       record.get("successful_at"), record.get("oldest_epoch_at"),

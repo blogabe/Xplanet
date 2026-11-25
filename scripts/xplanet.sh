@@ -102,9 +102,6 @@ Housekeeping and development
   log-trim     Trim recognized logs older than 30 days; --dry-run, --days N
   test         Run the offline Python regression suite
 
-Unavailable
-  santa        STUB: invocation-time Santa on/off is pending
-
 Detailed help: install --help, update --help, config --help, config --guide,
                setup --help, health --help, diagnostics --help,
                log-view --help, log-trim --help
@@ -268,11 +265,6 @@ case "$switch" in
     aurora)
         shift
         "$script_dir/run-totalmarker" aurora "$@"
-        ;;
-    santa)
-        # Stub only: Santa is intended as an on/off choice when Xplanet starts.
-        # Invocation-time integration and a verified live provider are pending.
-        "$script_dir/run-totalmarker" santa
         ;;
     setup)
         shift

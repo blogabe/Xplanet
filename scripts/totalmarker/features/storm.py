@@ -7,10 +7,10 @@ import json
 import re
 import time
 
-from ..diagnostics import Attempt, finish
+from ..diagnostics import Attempt, append_event, finish
 from ..errors import DownloadError, FeedError, StorageError
 from ..http import Fetcher
-from ..labels import refresh_all, storm_timestamp
+from ..labels import read_labels, refresh_all, storm_timestamp
 from ..state import load_state, recover_pending, StormPublisher
 from ..storm_model import render_arc, render_bodies, render_marker
 from ..storm_sources import collect_snapshot, REQUIRED_GROUPS, NHC_INDEX, NHC_ATCF, JTWC_RSS
@@ -128,11 +128,7 @@ def run(fs, settings, *, fetcher=None, now=None):
         publisher = StormPublisher(fs, settings)
         state = load_state(fs, settings.state)
         record = state["products"].setdefault("storm", {})
-        raw_label = fs.read(settings.labels, 2 * 1024 * 1024)
-        try:
-            old_label = raw_label.decode("utf-8") if raw_label is not None else ""
-        except UnicodeError:
-            raise StorageError("Existing labels are not valid UTF-8") from None
+        old_label = read_labels(fs, settings.labels)
         if record.get("installed_at") is None and record.get("legacy_label_at") is None:
             legacy = storm_timestamp(old_label)
             if legacy is not None:
@@ -196,9 +192,7 @@ def run(fs, settings, *, fetcher=None, now=None):
                      "message": message, "installed_at": record.get("installed_at"),
                      "successful_at": record.get("successful_at"),
                      "source_at": record.get("source_at"), "count": record.get("count")}
-            try:
-                fs.append(settings.log, (json.dumps(event) + "\n").encode())
-            except StorageError:
+            if not append_event(fs, settings.log, event):
                 message += "; diagnostic log unavailable"
         return Result(outcome, message, record.get("installed_at"),
                       record.get("successful_at"),

@@ -21,7 +21,7 @@ from urllib.request import (build_opener, HTTPRedirectHandler, HTTPSHandler,
                             ProxyHandler, Request)
 
 from .config import https_url
-from .errors import ConfigError, DownloadError
+from .errors import ConfigError, DownloadError, StorageError
 
 
 @dataclass
@@ -278,6 +278,31 @@ def origin(url):
 def safe_header(value):
     return isinstance(value, str) and len(value) <= 1024 and not any(
         ord(c) < 32 or ord(c) == 127 for c in value)
+
+
+def conditional_validators(record):
+    """Create request validators only for the caller's matched saved response."""
+    validators = {}
+    for key, header in (("etag", "If-None-Match"),
+                        ("last_modified", "If-Modified-Since")):
+        value = record.get(key)
+        if value is not None:
+            if not safe_header(value):
+                raise StorageError("Invalid stored HTTP validator")
+            validators[header] = value
+    return validators
+
+
+def store_validators(record, response, *, invalid_message="Source returned an invalid HTTP validator"):
+    """Update saved validators after validation; 304 may omit either field."""
+    for key, header in (("etag", "etag"), ("last_modified", "last-modified")):
+        value = response.headers.get(header)
+        if value is not None:
+            if not safe_header(value):
+                raise DownloadError(invalid_message)
+            record[key] = value
+        elif response.status == 200:
+            record.pop(key, None)
 
 
 class Fetcher:

@@ -12,7 +12,6 @@ from totalmarker.features.clouds import Result as CloudResult
 from totalmarker.features.eclipse import Result as EclipseResult
 from totalmarker.features.norad import Result as NoradResult
 from totalmarker.features.quake import Result as QuakeResult
-from totalmarker.features.santa import Result as SantaResult
 from totalmarker.features.storm import Result as StormResult
 from totalmarker.features.volcano import Result as VolcanoResult
 
@@ -51,11 +50,6 @@ CASES = (
                                               2.0, 3.0, 4.0, 6),
      {"outcome": "changed", "message": "eclipse ready", "installed_at": 1.0,
       "successful_at": 2.0, "start_at": 3.0, "end_at": 4.0, "count": 6}),
-    ("santa", "run_santa", SantaResult("disabled", "santa disabled", None,
-                                        None, None, 0, False),
-     {"outcome": "disabled", "message": "santa disabled",
-      "installed_at": None, "successful_at": None, "source_at": None,
-      "count": 0, "stale": False}),
 )
 
 
@@ -97,7 +91,7 @@ class CliContractTests(Sandbox):
 
     def test_disabled_optional_products_still_return_complete_result(self):
         for command, runner, example, fields in CASES:
-            if command not in {"norad", "eclipse", "santa"}:
+            if command not in {"norad", "eclipse"}:
                 continue
             with self.subTest(command=command):
                 status, actual = self.invoke(
