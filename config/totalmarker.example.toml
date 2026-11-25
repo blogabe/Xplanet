@@ -1,7 +1,10 @@
 # Example only. Keep personal config/totalmarker.toml separate; never overwrite it.
 # The selected .invalid custom source cannot be fetched; choose sources deliberately.
 # Timing fields use the whole unit named in their key; network timeouts use seconds.
-# Fetch intervals leave a margin below the example launchd periods for start jitter.
+# The scheduler (such as a launchd plist) decides when TotalMarker runs.
+# check_interval_* is the minimum time between fetches when saved data can
+# still be reused. It does not change the scheduler. The example intervals
+# allow some launchd start jitter.
 
 [paths]
 # Relative paths resolve against --root, not this file or the current directory.
