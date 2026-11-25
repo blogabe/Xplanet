@@ -238,6 +238,7 @@ hours = 72
     def test_segmented_project_example_applies_quake_volcano_and_storm(self):
         raw = (PROJECT / "config/totalmarker.example.toml").read_bytes()
         document = tomllib.loads(raw.decode("utf-8"))
+        self.assertEqual(document["volcano"]["url"], "")
         self.assertEqual(list(document), ["paths", "labels", "cloud", "quake",
                                           "volcano", "storm", "norad", "eclipse", "aurora"])
         self.assertIn("track_real_color", document["storm"])

@@ -278,8 +278,10 @@ that does not mean an HTTP request failed. Saved health remains network-free.
 ## Volcano sources
 
 The shipped personal-config example uses `provider = "weekly_html"` to retrieve
-the [official GVP Weekly Report](https://volcano.si.edu/reports_weekly.cfm).
-To use CAP instead, set `provider = "cap"` and explicitly use the official URL,
+the [official GVP Weekly Report](https://volcano.si.edu/reports_weekly.cfm),
+which needs no URL setting. CAP is a structured XML version of the same
+weekly report, not a live eruption feed. To use CAP, set `provider = "cap"`
+and explicitly use the official URL,
 `https://volcano.si.edu/news/WeeklyVolcanoCAP.xml`. The producer's fallback for
 older configurations without explicit settings is unchanged. Guided setup
 does not migrate existing configurations. Its skip choice, and the original
