@@ -7,7 +7,7 @@ import tomllib
 from unittest.mock import patch
 
 from totalmarker.cli import main
-from totalmarker.config import AuthSpec, TOML_KEYS, load
+from totalmarker.config import AuthSpec, TOML_DURATION_ALIASES, TOML_KEYS, load
 from totalmarker.errors import ConfigError, DownloadError
 from totalmarker.http import HTTPTransport
 from .support import PROJECT, Sandbox
@@ -195,6 +195,36 @@ hours = 72
         self.assertEqual(override.journal, ".state/totalmarker/custom.json")
         self.assertEqual(override.storm.journal, ".state/totalmarker/other-storm.json")
 
+    def test_duration_aliases_preserve_effective_legacy_values(self):
+        for old, (new, scale) in TOML_DURATION_ALIASES.items():
+            section, _, old_key = old.partition(".")
+            new_key = new.partition(".")[2]
+            value = 14 if scale == 86400 else 1440
+            old_value = value * scale
+            with self.subTest(key=new):
+                self.assertEqual(self.toml(f"[{section}]\n{old_key}={old_value}\n"),
+                                 self.toml(f"[{section}]\n{new_key}={value}\n"))
+                for pair in (f"{old_key}={old_value}\n{new_key}={value}\n",
+                             f"{new_key}={value}\n{old_key}={old_value}\n"):
+                    with self.assertRaisesRegex(ConfigError, "more than one"):
+                        self.toml(f"[{section}]\n{pair}")
+                for invalid in ("true", "1.5", '"60"', "-1"):
+                    with self.assertRaises(ConfigError):
+                        self.toml(f"[{section}]\n{new_key}={invalid}\n")
+        self.assertEqual(self.toml("[quake]\ncheck_interval_seconds=1100\n").quake.interval, 1100)
+        self.assertEqual(self.toml("[quake]\ncheck_interval_minutes=18\n").quake.interval, 1080)
+        self.assertEqual(self.toml("[cloud]\ntimeout_seconds=7\n").timeout, 7)
+
+    def test_omitted_download_limits_keep_defaults_and_accept_overrides(self):
+        settings = self.toml((PROJECT / "config/totalmarker.example.toml").read_text())
+        self.assertEqual((settings.max_bytes, settings.quake.max_bytes,
+                          settings.storm.max_bytes, settings.volcano.max_bytes),
+                         (32 << 20, 32 << 20, 16 << 20, 8 << 20))
+        self.assertEqual((settings.norad.max_bytes, settings.norad.group_max_bytes,
+                          settings.eclipse.max_bytes), (64 << 10, 1 << 20, 2 << 20))
+        override = self.toml("[cloud]\nmax_bytes=67108864\n[norad]\ngroup_max_bytes=2048\n")
+        self.assertEqual((override.max_bytes, override.norad.group_max_bytes), (64 << 20, 2048))
+
     def test_segmented_project_example_applies_quake_volcano_and_storm(self):
         raw = (PROJECT / "config/totalmarker.example.toml").read_bytes()
         document = tomllib.loads(raw.decode("utf-8"))
@@ -236,7 +266,9 @@ hours = 72
             elif match := re.match(r"([a-z][a-z0-9_]*)\s*=", line):
                 documented.add(f"{section}.{match[1]}")
         alternatives = {"cloud.url", "cloud.auth_mode", "cloud.local_image_name"}
-        runtime_only = {key for key in TOML_KEYS if key.endswith(".journal")} | {"paths.state", "paths.lock"}
+        runtime_only = {key for key in TOML_KEYS if key.endswith(
+            (".journal", ".max_bytes", ".group_max_bytes")
+        )} | {"paths.state", "paths.lock"} | set(TOML_DURATION_ALIASES)
         self.assertFalse(runtime_only & documented)
         first_class = {key for key in TOML_KEYS if not (
             key.startswith("storm.") and key.rsplit(".", 1)[-1][:1].isupper()

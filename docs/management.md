@@ -3,6 +3,22 @@
 Use this guide for macOS setup, desktop control and troubleshooting. For Linux or
 data-only use, see [standalone TotalMarker](totalmarker-standalone.md).
 
+## TotalMarker timing units
+
+In `config/totalmarker.toml`, use whole minutes for
+`check_interval_minutes` and `warning_*_minutes`, seconds for
+`timeout_seconds`, days for NORAD `max_age_days`, and hours for eclipse
+`notify_hours`. The check interval limits how often an invocation can
+fetch data; it does not change its launchd, cron, or systemd schedule.
+For example, the volcano check interval is 1,380 minutes (23 hours),
+with a separate daily launchd schedule. The sample quake interval is
+18 minutes; its launchd schedule still runs every 20 minutes.
+
+Existing seconds-based keys and INI settings remain supported without
+rounding. Use either the old or new key for a setting, never both.
+Response byte limits still apply by default; existing override keys
+remain supported for deployments such as unusually large cloud maps.
+
 ## Quick start
 
 1. Install through the [README one-liner](../README.md#install-on-macos), or clone
