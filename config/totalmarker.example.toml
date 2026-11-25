@@ -1,6 +1,6 @@
 # Example only. Keep personal config/totalmarker.toml separate; never overwrite it.
 # The selected .invalid custom source cannot be fetched; choose sources deliberately.
-# All check and warning intervals are seconds; max_bytes limits response size.
+# Check and warning intervals use whole minutes; network timeouts use seconds.
 # Fetch intervals leave a margin below the example launchd periods for start jitter.
 
 [paths]
@@ -12,11 +12,11 @@ log = "logs/totalmarker/events.jsonl"
 [labels]
 # Product operations refresh existing rows and retain their coordinates/order.
 enabled = true
-warning_cloud_seconds = 21600
-warning_quake_seconds = 10800
-warning_volcano_seconds = 259200
-warning_storm_seconds = 10800
-warning_norad_seconds = 86400
+warning_cloud_minutes = 360
+warning_quake_minutes = 180
+warning_volcano_minutes = 4320
+warning_storm_minutes = 180
+warning_norad_minutes = 1440
 
 [labels.colors]
 ok = "Green"
@@ -29,9 +29,8 @@ error = "Red"
 provider = "custom"
 resolution = 4096
 local_image_name_template = "clouds-{resolution}.jpg"
-check_interval_seconds = 3300
+check_interval_minutes = 55
 timeout_seconds = 30
-max_bytes = 33554432
 
 [cloud.xeric]
 # Inactive while custom is selected. Use credentials or environment references
@@ -58,9 +57,8 @@ reporting_duration = "Week"
 reporting_size = "All"
 minimum_magnitude = 6.0
 output = "markers/quake"
-check_interval_seconds = 1100
+check_interval_minutes = 18
 timeout_seconds = 30
-max_bytes = 33554432
 circle_color = "Multi"
 pixel_max = ""
 pixel_min = ""
@@ -82,9 +80,8 @@ detail_align = "Above"
 provider = "weekly_html"
 url = "https://volcano.si.edu/news/WeeklyVolcanoCAP.xml"
 output = "markers/volcano"
-check_interval_seconds = 82800
+check_interval_minutes = 1380
 timeout_seconds = 30
-max_bytes = 8388608
 circle_size_inner = 4
 circle_size_middle = 8
 circle_size_outer = 12
@@ -105,9 +102,8 @@ detail_color = "Brown"
 # the last good marker/arc pair.
 output = "markers/storm"
 arc_output = "arcs/storm"
-check_interval_seconds = 1800
+check_interval_minutes = 30
 timeout_seconds = 30
-max_bytes = 16777216
 track_real_color = "Blue"
 track_forecast_color = "SkyBlue"
 name_enabled = true
@@ -132,11 +128,9 @@ track_enabled = true
 enabled = false
 catalog_ids = "25544"
 output = "satellites/totalmarker"
-check_interval_seconds = 7200
+check_interval_minutes = 120
 timeout_seconds = 30
-max_bytes = 65536
-group_max_bytes = 1048576
-max_age_seconds = 1209600
+max_age_days = 14
 color = "Yellow"
 
 [[norad.groups]]
@@ -168,9 +162,8 @@ enabled = false
 path_url = ""
 marker_output = "markers/eclipse"
 arc_output = "arcs/eclipse"
-check_interval_seconds = 86400
+check_interval_minutes = 1440
 timeout_seconds = 30
-max_bytes = 2097152
 notify_hours = 48
 notice_enabled = true
 edge_color = "Grey"

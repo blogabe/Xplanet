@@ -382,6 +382,21 @@ TOML_KEYS = {
     "santa.journal": "SantaJournalFile",
     "santa.freshness_seconds": "SantaFreshnessSeconds",
 }
+# Only the TOML spelling changes. Normalize aliases to the same legacy
+# canonical keys so ranges, INI readers and duplicate detection stay shared.
+TOML_DURATION_ALIASES = {
+    key: (key.removesuffix("_seconds") + "_minutes", 60)
+    for key in TOML_KEYS
+    if key.endswith(".check_interval_seconds")
+    or (key.startswith("labels.warning_") and key.endswith("_seconds"))
+}
+TOML_DURATION_ALIASES["norad.max_age_seconds"] = ("norad.max_age_days", 86400)
+TOML_DURATION_SCALES = {
+    new: scale for _, (new, scale) in TOML_DURATION_ALIASES.items()
+}
+for _old_duration, (_new_duration, _scale) in TOML_DURATION_ALIASES.items():
+    TOML_KEYS[_new_duration] = TOML_KEYS[_old_duration]
+
 for _storm_key in ("StormColorTrackReal", "StormColorTrackPrediction",
                    "StormNameOnOff", "StormColorName", "StormAlignName",
                    "StormAlignDetail", "StormDetailList", "StormColorDetail",
@@ -460,7 +475,8 @@ def _toml_values(raw):
                     valid_type = isinstance(value, str)
                 if not valid_type:
                     raise ConfigError("Native TOML setting " + dotted + " has the wrong type")
-                add(canonical, value, dotted)
+                add(canonical, value * TOML_DURATION_SCALES[dotted]
+                    if dotted in TOML_DURATION_SCALES else value, dotted)
             elif prefix == "legacy":
                 # Preserve every old setting; only current supported keys are applied.
                 if isinstance(value, (str, int, float, bool)):
