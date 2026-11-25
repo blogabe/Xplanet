@@ -1,7 +1,7 @@
 """Review-only handoff interaction and preservation tests; no activation."""
 
 from tests.configurator.ui.support_handoff import HandoffUIFixture, prepare_handoff
-from tests.configurator.ui.terminal_support import open_terminal
+from tests.support_terminal import open_terminal
 from pathlib import Path
 import errno, sys, unittest, asyncio, threading
 from unittest.mock import patch

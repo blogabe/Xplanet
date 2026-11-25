@@ -3,17 +3,16 @@ import copy
 import fcntl
 import json
 import os
-import pty
 import select
 import shlex
 import shutil
-import struct
 import subprocess
 import sys
 import termios
 import time
 
 from .support import PROJECT, Sandbox
+from .support_terminal import open_terminal
 
 
 FORMULA_INFO = {"formulae": [{
@@ -418,9 +417,7 @@ exit 97
     def terminal(self, keys, *, installed=False, ansi=False, mode=None, options=()):
         """Send one key/line per rendered prompt, with an owned controlling TTY."""
         mode = mode or ("update" if installed else "install")
-        master, slave = pty.openpty()
-        fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 30, 100, 0, 0))
-        before = termios.tcgetattr(slave)
+        master, slave, before = open_terminal(rows=30, columns=100)
         process = subprocess.Popen(
             ["/bin/zsh", "-f", str(self.harness), "choose", mode,
              str(self.receipt) if installed else "", *options], stdin=slave, stdout=slave, stderr=slave,

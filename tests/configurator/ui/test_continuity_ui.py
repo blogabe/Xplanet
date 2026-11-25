@@ -1,6 +1,6 @@
 """Saving continues a draft without overwriting or discarding earlier history."""
 
-from tests.configurator.ui.terminal_support import open_terminal
+from tests.support_terminal import open_terminal
 import io, unittest
 from contextlib import redirect_stdout
 from textual.widgets import Button, Input, Static

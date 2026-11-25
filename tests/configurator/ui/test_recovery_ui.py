@@ -1,6 +1,6 @@
 """Recovery and interruption use disposable editor roots and owned children only."""
 
-from tests.configurator.ui.terminal_support import open_terminal
+from tests.support_terminal import open_terminal
 import asyncio, os, signal, sys, unittest
 from pathlib import Path
 from textual.widgets import Input, Button, Static, Checkbox

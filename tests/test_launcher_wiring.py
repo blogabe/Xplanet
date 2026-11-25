@@ -1,11 +1,10 @@
 """Offline checks for launcher delegation before other providers exist."""
 import os
-import pty
 import re
-import select
 import subprocess
 
 from .support import copy_launcher, PROJECT, Sandbox
+from .support_terminal import run_with_terminal_stdout
 
 
 PRODUCTS = ("clouds", "quake", "storm", "volcano")
@@ -61,16 +60,8 @@ class LauncherWiringTests(Sandbox):
                        "TM_TEST_EXIT": "0",
                        "TM_TEST_OUTPUT": '{"outcome":"unchanged"}',
                        "TM_TEST_STDERR": ""}
-        master, slave = pty.openpty()
-        try:
-            result = subprocess.run([str(self.launcher), "quake"],
-                                    cwd=self.base, env=environment, stdout=slave,
-                                    stderr=subprocess.PIPE, text=True, timeout=5)
-            ready, _, _ = select.select([master], [], [], 1)
-            output = os.read(master, 4096).decode() if ready else ""
-        finally:
-            os.close(slave)
-            os.close(master)
+        result, output = run_with_terminal_stdout(
+            [str(self.launcher), "quake"], cwd=self.base, env=environment)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("Fetching live USGS earthquake data", output)
         self.assertIn('{"outcome":"unchanged"}', output)

@@ -1,7 +1,7 @@
 """Headless interaction tests run in the separately prepared Textual environment."""
 
 from tests.configurator.ui.support_native import NativeValueUIFixture
-from tests.configurator.ui.terminal_support import open_terminal
+from tests.support_terminal import open_terminal
 import asyncio
 import os
 import select
