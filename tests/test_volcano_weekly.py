@@ -64,13 +64,28 @@ class WeeklyVolcanoTests(Sandbox):
 
     def test_static_catalogue_provenance_and_coordinate_order(self):
         catalogue = load_coordinate_catalogue()
-        self.assertEqual(len(catalogue), 1440)
+        self.assertEqual(len(catalogue), 1441)
         self.assertEqual(catalogue[282080], (31.5772, 130.6589))
         self.assertEqual(catalogue[262000], (-6.1009, 105.4233))
         source = json.loads((Path(__file__).parents[1] /
                              'scripts/totalmarker/data/gdacs_volcano_coordinates_20261019.json').read_bytes())
         self.assertIn('coordinate-only', source['source'])
         self.assertEqual(source['source_date'], '2026-10-19')
+
+    def test_official_pelorus_reef_id_missing_from_gdacs_joins_and_publishes(self):
+        # Synthetic parser fixture with the ID and name from the official November report.
+        page = (weekly_html(extra_id=243018)
+                .replace(b"Missing Coordinate", b"Pelorus Reef")
+                .replace(b"Nowhere", b"Tonga"))
+        events = join_coordinates(parse_weekly_html(page), load_coordinate_catalogue())
+        reef = events[-1]
+        self.assertEqual((reef.name, reef.location, reef.lat, reef.lon),
+                         ("Pelorus Reef", "Tonga", -22.846, -176.43))
+        settings = self.config("VolcanoProvider=weekly_html\n")
+        response = Response(200, {"content-type": "text/html"}, page)
+        result = run(self.fs, settings, fetcher=Fetcher(ScriptedTransport(response)), now=NOW)
+        self.assertEqual((result.outcome, result.count), ("changed", 5))
+        self.assertIn(b'"Pelorus Reef"', self.fs.read(settings.volcano.marker))
 
     def test_all_categories_names_period_and_unknown_publication_time(self):
         page = parse_weekly_html(weekly_html())
