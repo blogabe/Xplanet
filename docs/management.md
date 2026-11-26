@@ -93,8 +93,11 @@ write data; the native Earth configuration tells Xplanet what to draw.
 
 In `[norad]`, set `enabled = true` and keep `catalog_ids = "25544"` for the
 International Space Station. The shipped ISS profile supplies the caption and
-style; an [imported icon](installed-satellite-icons.md) is optional. Run from
-your checkout:
+style; an [imported icon](installed-satellite-icons.md) is optional. For other
+satellites, IDs 100000–339999 need a renderer that reports Alpha-5 in
+`xplanet -version`. The project tap has supported this since Homebrew revision 2.
+
+Run from your checkout:
 
 ```sh
 ./scripts/xplanet.sh norad
@@ -530,6 +533,8 @@ Xplanet uses Finder to update the desktop. If macOS asks to allow that control,
 choose **Allow** for desktop updates. If already authorized, no action is needed.
 A `macOS error -1743` warning in `logs/xplanet-error.log` means the Apple event
 was not permitted; a rendered image alone does not prove a desktop update.
+Homebrew revision 3 also logs “Finder Automation access was denied” and links
+to these recovery steps.
 
 First open **System Settings > Privacy & Security > Automation** and enable
 **Finder** for the sender associated with your Xplanet run. Restart through your
