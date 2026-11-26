@@ -112,6 +112,7 @@ load_render_config() {
     XPLANET_BIN=''
     XPLANET_HOME=''
     XPLANET_CONFIG=''
+    XPLANET_WALLPAPER_BACKEND=''
     XPLANET_PROJECTION=''
     XPLANET_LONGITUDE=''
     XPLANET_LATITUDE=''
@@ -167,7 +168,19 @@ render_frame() (
 desktop_command() {
     XPLANET_SCENE_DIRECTORY=''
     XPLANET_SCENE_TMPDIR=''
-    selected_scene_command && return 0
+    if selected_scene_command; then
+        # Keep scene-selected renderer and arguments separate from desktop policy.
+        local backend
+        backend=$(
+            XPLANET_WALLPAPER_BACKEND=''
+            if [[ -f "$project_root/config/xp.def" ]]; then
+                source "$project_root/config/xp.def" >/dev/null || exit 2
+            fi
+            print -r -- "$XPLANET_WALLPAPER_BACKEND"
+        ) || fail "cannot read the wallpaper backend from xp.def"
+        append_wallpaper_backend "$backend"
+        return 0
+    fi
     load_render_config
     # Resolve configured symlinks once; execute the real binary rather than
     # introducing an arbitrary alias into the OS process name.
@@ -181,6 +194,23 @@ desktop_command() {
     if [[ -n "$XPLANET_GEOMETRY" ]]; then
         desktop_args+=("-geometry=$XPLANET_GEOMETRY")
     fi
+    append_wallpaper_backend "$XPLANET_WALLPAPER_BACKEND"
+}
+
+append_wallpaper_backend() {
+    case "$1" in
+        ''|auto) ;;
+        finder)
+            local capabilities
+            capabilities=$(LC_ALL=C "$XPLANET_BIN" -version 2>/dev/null) ||
+                fail "could not check the renderer for Finder rollback support"
+            if [[ "$capabilities" == *$'\n\tWallpaper backends: appkit, finder'$'\n'* ]]; then
+                desktop_args+=(-wallpaper_backend finder)
+            fi
+            # Older macOS builds already use Finder and do not accept the flag.
+            ;;
+        *) fail "xp.def XPLANET_WALLPAPER_BACKEND must be auto or finder" ;;
+    esac
 }
 
 # One foreground desktop service per GUI user. The existing login trigger

@@ -492,6 +492,7 @@ python_bin=$("$script_dir/run-totalmarker" --python-path) || {
 shared_python=$(unset TOTALMARKER_PYTHON; "$script_dir/run-totalmarker" --python-path) ||
     fail "Shared TotalMarker interpreter is unavailable; use Advanced Python to record a choice. A temporary TOTALMARKER_PYTHON override is not saved."
 XPLANET_BIN=''
+XPLANET_WALLPAPER_BACKEND=''
 XPLANET_HOME=''
 XPLANET_CONFIG=''
 source "$definition"
@@ -775,8 +776,14 @@ if ask "Step 3) Install and register Xplanet automation?"; then
         print -ru2 -- "Resolve the reported launchd preparation error. If editing a personal plist, preserve its schedule and update the source template, if you maintain one; then retry: ${(q)launcher} setup"
         failures+=("launchd preparation: selected automation batch not registered; see the plist error above")
     else
-        print -- "If macOS asks to let Xplanet control Finder, choose Allow for desktop updates."
-        print -- "If already authorized, no action is needed."
+        renderer_capabilities=$(LC_ALL=C "$XPLANET_BIN" -version 2>/dev/null) || renderer_capabilities=''
+        if [[ -z "$XPLANET_WALLPAPER_BACKEND" || "$XPLANET_WALLPAPER_BACKEND" == auto ]] &&
+           [[ "$renderer_capabilities" == *$'\n\tWallpaper backends: appkit, finder'$'\n'* ]]; then
+            print -- "The renderer uses AppKit for desktop updates; no Finder approval is needed."
+        else
+            print -- "If macOS asks to let Xplanet control Finder, choose Allow for desktop updates."
+            print -- "If already authorized, no action is needed."
+        fi
         for job in "${jobs[@]}"; do
             agent="$HOME/Library/LaunchAgents/local.xplanet.$job.plist"
             label="local.xplanet.$job"

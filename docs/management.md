@@ -536,9 +536,15 @@ history is less useful for development and historical comparisons.
 
 ### Finder Automation permission
 
-Xplanet uses Finder to update the desktop. If macOS asks to allow that control,
-choose **Allow** for desktop updates. If already authorized, no action is needed.
-A `macOS error -1743` warning in `logs/xplanet-error.log` means the Apple event
+Xplanet 1.6 defaults to AppKit on macOS. The tested setup is Apple silicon.
+AppKit does not ask for Finder Automation permission. To explicitly roll back, set
+`XPLANET_WALLPAPER_BACKEND=finder` in `config/xp.def` and restart. Remove the
+setting (or set it to `auto`) and restart to return to the renderer default.
+The desktop LaunchAgent does not need to be reinstalled for this change.
+
+Older renderers and Finder rollback still need Automation permission. If macOS
+asks, choose **Allow**. If already authorized, no action is needed.
+A `Finder error -1743` (or `macOS error -1743` on older builds) warning in `logs/xplanet-error.log` means the Apple event
 was not permitted; a rendered image alone does not prove a desktop update.
 Homebrew revision 3 also logs “Finder Automation access was denied” and links
 to these recovery steps.

@@ -312,6 +312,31 @@ class LauncherRenderTests(Sandbox):
                                 capture_output=True, text=True, check=False)
         self.assertEqual(failed.returncode, 0, failed.stderr)  # launchd accepted the request
 
+    def test_finder_rollback_passes_the_flag_only_to_capable_renderers(self):
+        config = self.root / "config/xp.def"
+        config.write_text(config.read_text() + "XPLANET_WALLPAPER_BACKEND=finder\n")
+        mock = self.mock.read_text()
+        for version, expected in (
+            ("Xplanet 1.3.1.225", []),
+            ("Xplanet 1.6.0\n\tWallpaper backends: appkit, finder\n\tPNG",
+             ["-wallpaper_backend", "finder"]),
+        ):
+            with self.subTest(version=version):
+                self.mock.write_text(mock.replace("with open(", (
+                    "if sys.argv[1:] == ['-version']:\n"
+                    f"    print({version!r})\n"
+                    "    sys.exit(0)\n"
+                    "with open("
+                ), 1))
+                capture = self.base / "finder-capture.json"
+                capture.unlink(missing_ok=True)
+                result = self.invoke("start", {"MOCK_CAPTURE": str(capture)})
+                self.assertEqual(result.returncode, 0, result.stderr)
+                args = json.loads(capture.read_text())["args"]
+                self.assertEqual(args[args.index("-wallpaper_backend"):]
+                                 if "-wallpaper_backend" in args else [], expected)
+                self.assertEqual(self.invoke("stop").returncode, 0)
+
     def test_start_catches_up_monthly_map_even_when_display_already_running(self):
         env, table, trace, capture = self.lifecycle_env()
         (self.root / "images").mkdir()
