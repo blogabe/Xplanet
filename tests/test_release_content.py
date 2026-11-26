@@ -35,6 +35,7 @@ class ReleaseContentTests(unittest.TestCase):
                                     for mode, name in entries})
         names = [name for _, name in entries]
         self.assertIn("scripts/xplanet.sh", names)
+        self.assertIn(release.MANAGED_DESKTOP_TEMPLATE, names)
         self.assertIn("config/totalmarker.example.toml", names)
         self.assertIn("config/xp.conf.example", names)
         self.assertIn("config/xp.def.example", names)
@@ -59,6 +60,7 @@ class ReleaseContentTests(unittest.TestCase):
             "tests/module.pyo", "tests/module.pyd",
             "output/preview/earth-render.png", "output/exports/copy/export.json",
             "output/future-private-file.txt", "examples/custom.example.toml",
+            "scripts/launchd/local.xplanet.desktop.plist", "scripts/launchd/other.plist.template",
         )
         for name in unsafe:
             with self.subTest(name=name), self.assertRaisesRegex(RuntimeError, "unsafe source entry"):
@@ -68,6 +70,7 @@ class ReleaseContentTests(unittest.TestCase):
             "tests/fixtures/example.toml", "tests/fixtures/example.json",
             "tests/fixtures/cache/response.json", "tests/test_log_trim.py",
             "scripts/launchd/local.xplanet.start.plist.example", ".gitignore",
+            "scripts/launchd/README.md", release.MANAGED_DESKTOP_TEMPLATE,
             ".gitattributes", ".github/workflows/offline-tests.yml",
         )
         for name in safe:

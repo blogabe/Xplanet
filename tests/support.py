@@ -27,13 +27,14 @@ def cloud_template(provider="custom"):
     return cloud_only.replace("provider = \"custom\"", f"provider = \"{provider}\"", 1)
 
 
-def copy_launcher(destination):
+def copy_launcher(destination, *, desktop=False):
     """Copy the checkout CLI and its private macOS workflows into a sandbox."""
     shutil.copy2(PROJECT / "scripts/xplanet.sh", destination)
     shutil.copytree(PROJECT / "scripts/lib", destination.parent / "lib", dirs_exist_ok=True)
-    template = PROJECT / "scripts/launchd/local.xplanet.desktop.plist.template"
-    (destination.parent / "launchd").mkdir(exist_ok=True)
-    shutil.copy2(template, destination.parent / "launchd" / template.name)
+    if desktop:
+        template = PROJECT / "scripts/launchd/local.xplanet.desktop.plist.template"
+        (destination.parent / "launchd").mkdir(exist_ok=True)
+        shutil.copy2(template, destination.parent / "launchd" / template.name)
 
 
 def wait_for_prompt(process, phrase, timeout=5):
