@@ -111,6 +111,7 @@ docs/configurator/stock-scenes.md.
 NORAD and eclipse need opt-in and separate Earth display settings. Setup does
 not refresh or schedule them. See Optional ISS and solar-eclipse overlays in
 docs/management.md.
+For Finder Automation errors, see the recovery steps in that guide.
 
 Workflow notes (macOS)
   Install may request macOS security approvals. Setup installs no packages

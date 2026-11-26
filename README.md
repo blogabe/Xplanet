@@ -176,7 +176,7 @@ current access. Known limits include:
   fallback. See [volcano sources](docs/technical-notes.md#volcano-sources).
 - Storm refreshes fail closed on incomplete coverage or unsupported provider-format
   changes, retaining the last-good marker/track pair.
-- NORAD supports up to 16 catalog IDs. IDs 100000–339999 require the renderer from the Homebrew tap at revision 2 or a renderer that reports Alpha-5 support with `xplanet -version`. Older renderers still use five-digit IDs.
+- Six-digit NORAD catalog IDs require an Alpha-5 renderer. See [satellite setup](docs/management.md#show-the-iss).
 - An intermittent missing-desktop-job restart was reported; later restarts were
   reported working, without a reproduced cause. See [troubleshooting](docs/management.md#troubleshooting).
 
