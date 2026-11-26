@@ -197,6 +197,11 @@ _start_xplanet() {
     command -v launchctl >/dev/null || fail "launchctl is required for the desktop"
     desktop_agent_preflight "${1:-}"
     if job_info=$(launchctl print "$desktop_domain/$desktop_label" 2>/dev/null); then
+        if [[ ! -e "$desktop_plist" && ! -L "$desktop_plist" &&
+              "$job_info" == *"path = $desktop_plist"$'\n'* ]]; then
+            desktop_agent_recover_missing "$job_info" ||
+                fail "desktop plist is missing and the loaded job is unverified; review it before starting"
+        fi
         desktop_job_owned "$job_info" && [[ "$REPLY" == "$project_root" ]] ||
             fail "desktop job belongs to another or unverified checkout; review it before using explicit restart"
         [[ "$desktop_job_path" == "$desktop_plist" ]] ||
@@ -333,6 +338,11 @@ _restart_xplanet() {
     desktop_agent_preflight restart
     local job_info
     if job_info=$(launchctl print "$desktop_domain/$desktop_label" 2>/dev/null); then
+        if [[ ! -e "$desktop_plist" && ! -L "$desktop_plist" &&
+              "$job_info" == *"path = $desktop_plist"$'\n'* ]]; then
+            desktop_agent_recover_missing "$job_info" ||
+                fail "desktop plist is missing and the loaded job is unverified; refusing restart before stop"
+        fi
         desktop_job_owned "$job_info" || fail "desktop job is foreign or unverified; refusing restart before stop"
     fi
     _stop_xplanet quiet || return $?

@@ -328,7 +328,9 @@ catches up a configured monthly map; selected scenes retain their reviewed map.
 Start asks launchd to run one foreground desktop, without
 `RunAtLoad`, `KeepAlive` or automatic respawn after stop. It registers the regular
 `~/Library/LaunchAgents/local.xplanet.desktop.plist` file if needed, then explicitly
-kickstarts it. No logout or login is required. Repeated start leaves the running
+kickstarts it. The launcher generates that file from the
+[tracked template](../scripts/launchd/README.md); do not copy, link or edit it.
+No logout or login is required. Repeated start leaves the running
 renderer in place; stop unloads it and a later start registers it again. Python runs TotalMarker and the
 isolated configurator; lifecycle remains zsh.
 
@@ -337,6 +339,11 @@ requires explicit `restart` to migrate to the standard LaunchAgents pathname.
 Plain `start` leaves it running and reports that instruction. Restart validates
 configuration and destination before stopping; a foreign, linked or edited
 same-name plist or unverified loaded job is refused rather than overwritten.
+If the generated plist goes missing while the job is still registered, run
+`start` to recreate it without replacing a running renderer. `restart` can
+also recover it before restarting. If the loaded job cannot be verified,
+neither command takes it over. Leave other LaunchAgents alone.
+
 The previous `.state` plist is retained unchanged. Existing file/directory
 permissions are preserved, not repaired.
 
