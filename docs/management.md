@@ -540,6 +540,8 @@ Xplanet 1.6 defaults to AppKit on macOS. The tested setup is Apple silicon.
 AppKit does not ask for Finder Automation permission. To explicitly roll back, set
 `XPLANET_WALLPAPER_BACKEND=finder` in `config/xp.def` and restart. Remove the
 setting (or set it to `auto`) and restart to return to the renderer default.
+Use a standalone literal assignment, not a shell expression. A selected
+Configurator scene reads only this setting; it does not run `xp.def`.
 The desktop LaunchAgent does not need to be reinstalled for this change.
 
 Older renderers and Finder rollback still need Automation permission. If macOS

@@ -169,16 +169,8 @@ desktop_command() {
     XPLANET_SCENE_DIRECTORY=''
     XPLANET_SCENE_TMPDIR=''
     if selected_scene_command; then
-        # Keep scene-selected renderer and arguments separate from desktop policy.
-        local backend
-        backend=$(
-            XPLANET_WALLPAPER_BACKEND=''
-            if [[ -f "$project_root/config/xp.def" ]]; then
-                source "$project_root/config/xp.def" >/dev/null || exit 2
-            fi
-            print -r -- "$XPLANET_WALLPAPER_BACKEND"
-        ) || fail "cannot read the wallpaper backend from xp.def"
-        append_wallpaper_backend "$backend"
+        selected_scene_wallpaper_backend
+        append_wallpaper_backend "$REPLY"
         return 0
     fi
     load_render_config
@@ -197,6 +189,29 @@ desktop_command() {
     append_wallpaper_backend "$XPLANET_WALLPAPER_BACKEND"
 }
 
+# A selected scene must not execute the legacy shell definition. Read only
+# its optional wallpaper policy assignment as literal data.
+selected_scene_wallpaper_backend() {
+    local config="$project_root/config/xp.def" line value
+    local key='^[[:blank:]]*(export[[:blank:]]+)?XPLANET_WALLPAPER_BACKEND='
+    local suffix='([[:blank:]]+#[^[:cntrl:]]*)?[[:blank:]]*$'
+    local bare="^(auto|finder)?$suffix"
+    local double='^"(auto|finder)?"'"$suffix"
+    local single="^'(auto|finder)?'$suffix"
+    REPLY=''
+    [[ -f "$config" ]] || return 0
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        [[ "$line" =~ "$key" ]] || continue
+        value="${line#*=}"
+        if [[ "$value" =~ "$bare" || "$value" =~ "$double" || "$value" =~ "$single" ]]; then
+            REPLY="${match[1]:-}"
+        else
+            fail "xp.def XPLANET_WALLPAPER_BACKEND must be a literal auto or finder"
+        fi
+    done < "$config" || fail "cannot read the wallpaper backend from xp.def"
+    return 0
+}
+
 append_wallpaper_backend() {
     case "$1" in
         ''|auto) ;;
@@ -204,7 +219,7 @@ append_wallpaper_backend() {
             local capabilities
             capabilities=$(LC_ALL=C "$XPLANET_BIN" -version 2>/dev/null) ||
                 fail "could not check the renderer for Finder rollback support"
-            if [[ "$capabilities" == *$'\n\tWallpaper backends: appkit, finder'$'\n'* ]]; then
+            if [[ $'\n'"$capabilities"$'\n' == *$'\n\tWallpaper backends: appkit, finder\n'* ]]; then
                 desktop_args+=(-wallpaper_backend finder)
             fi
             # Older macOS builds already use Finder and do not accept the flag.
