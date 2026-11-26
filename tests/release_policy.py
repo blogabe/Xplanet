@@ -6,6 +6,8 @@ CLUTTER = {".DS_Store", "Thumbs.db", "desktop.ini", "__MACOSX",
 PRIVATE_SUFFIXES = {".ini", ".toml", ".plist", ".log", ".key", ".pem"}
 SOURCE_PRIVATE_SUFFIXES = {".ini", ".log", ".key", ".pem", ".pyc", ".pyo", ".pyd"}
 SOURCE_PRIVATE_COMPONENTS = {name.casefold() for name in CLUTTER} | {".tmp", ".cache"}
+MANAGED_DESKTOP_TEMPLATE = "scripts/launchd/local.xplanet.desktop.plist.template"
+LAUNCHD_SOURCE = {"scripts/launchd/README.md", MANAGED_DESKTOP_TEMPLATE}
 
 
 def private_source_path(name):
@@ -35,7 +37,7 @@ def check_source_paths(entries):
                 (name.startswith("config/") and name not in allowed_config) or
                 name.startswith("dev/") or
                 (name.startswith("scripts/launchd/") and
-                 not name.endswith(".plist.example"))):
+                 not name.endswith(".plist.example") and name not in LAUNCHD_SOURCE)):
             raise RuntimeError(f"unsafe source entry: {name}")
 
 
@@ -62,7 +64,7 @@ def index_text(root):
             raise RuntimeError('Unmerged index entry: '+name)
         rows[name]=metadata.decode()
         path=PurePosixPath(name)
-        if path.suffix.lower() in TEXT_SUFFIXES or path.name in {'LICENSE','.gitignore','.gitattributes','run-totalmarker','run-configurator','import-satellite-icons'}:
+        if name == MANAGED_DESKTOP_TEMPLATE or path.suffix.lower() in TEXT_SUFFIXES or path.name in {'LICENSE','.gitignore','.gitattributes','run-totalmarker','run-configurator','import-satellite-icons'}:
             text.append((name,identity))
         elif not name.startswith(('maps/','assets/')):
             binary.append((name,identity))

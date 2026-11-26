@@ -27,10 +27,14 @@ def cloud_template(provider="custom"):
     return cloud_only.replace("provider = \"custom\"", f"provider = \"{provider}\"", 1)
 
 
-def copy_launcher(destination):
+def copy_launcher(destination, *, desktop=False):
     """Copy the checkout CLI and its private macOS workflows into a sandbox."""
     shutil.copy2(PROJECT / "scripts/xplanet.sh", destination)
     shutil.copytree(PROJECT / "scripts/lib", destination.parent / "lib", dirs_exist_ok=True)
+    if desktop:
+        template = PROJECT / "scripts/launchd/local.xplanet.desktop.plist.template"
+        (destination.parent / "launchd").mkdir(exist_ok=True)
+        shutil.copy2(template, destination.parent / "launchd" / template.name)
 
 
 def wait_for_prompt(process, phrase, timeout=5):
@@ -153,11 +157,20 @@ if os.environ.get('MOCK_LAUNCHCTL_TRACE'):
     with open(os.environ['MOCK_LAUNCHCTL_TRACE'],'a') as stream: stream.write(' '.join(args)+'\n')
 if args[0] in ('list','print'):
     if doc and args[0]=='print':
-        print('path = '+doc['_path'])
-        print('program = '+doc['ProgramArguments'][0])
-        print('working directory = '+doc['WorkingDirectory'])
-        print('arguments = {')
-        print('\n'.join(doc['ProgramArguments']))
+        print(args[1]+' = {')
+        print('\tpath = '+doc['_path'])
+        print('\ttype = LaunchAgent')
+        print('\tstate = '+('running' if doc.get('_running') else 'not running'))
+        print('\tprogram = '+doc['ProgramArguments'][0])
+        print('\tworking directory = '+doc['WorkingDirectory'])
+        print('\targuments = {')
+        print('\n'.join('\t\t'+item for item in doc['ProgramArguments']))
+        print('\t}')
+        print('\tstdout path = '+doc['StandardOutPath'])
+        print('\tstderr path = '+doc['StandardErrorPath'])
+        print('\tproperties = '+doc.get('_properties', 'inferred program'))
+        if doc.get('_extra_print'):
+            print(doc['_extra_print'])
         print('}')
     raise SystemExit(0 if doc else 113)
 if args[0]=='bootstrap':

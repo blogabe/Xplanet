@@ -31,6 +31,8 @@
 !/scripts/lib/xplanet/volcano-setup.py
 !/scripts/launchd/
 !/scripts/launchd/*.plist.example
+!/scripts/launchd/README.md
+!/scripts/launchd/local.xplanet.desktop.plist.template
 /scripts/launchd/*.plist
 !/tests/
 !/tests/**

@@ -17,7 +17,7 @@ class LauncherUpdateTests(Sandbox):
         self.publisher = self.base / "publisher"
         self.launcher = self.root / "scripts/xplanet.sh"
         self.launcher.parent.mkdir()
-        copy_launcher(self.launcher)
+        copy_launcher(self.launcher, desktop=True)
         (self.root / ".gitignore").write_text("cache/\n")
         (self.root / "tracked.txt").write_text("original\n")
         self.environment = {

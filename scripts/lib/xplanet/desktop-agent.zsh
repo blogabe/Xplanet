@@ -88,6 +88,81 @@ desktop_job_owned() {
     REPLY="$working"
 }
 
+# With the plist gone there is no on-disk proof of ownership. Only repair the
+# current checkout's standard registration when launchd reports the exact
+# managed command, paths and job properties and no extra configuration blocks.
+# Unknown top-level fields fail closed because launchctl print is not a stable API.
+desktop_job_matches_missing_plist() {
+    XP_DESKTOP_PLIST="$desktop_plist" XP_DESKTOP_ROOT="$project_root" \
+        XP_DESKTOP_TARGET="$desktop_domain/$desktop_label" /usr/bin/awk '
+    BEGIN {
+        p = ENVIRON["XP_DESKTOP_PLIST"]
+        root = ENVIRON["XP_DESKTOP_ROOT"]
+        target = ENVIRON["XP_DESKTOP_TARGET"]
+    }
+    NR == 1 { if ($0 != target " = {") exit 1; next }
+    closed { exit 1 }
+    $0 == "}" { closed = 1; next }
+    /^$/ { next }
+    /^\t\t/ { if (!block) exit 1; next }
+    /^\t}$/ { if (!block) exit 1; block = 0; next }
+    block { exit 1 }
+    !/^\t[^\t]/ || !/ = / { exit 1 }
+    {
+        split_at = index($0, " = ")
+        key = substr($0, 2, split_at - 2)
+        value = substr($0, split_at + 3)
+        if (seen[key]++) exit 1
+        if (key == "path") { if (value != p) exit 1 }
+        else if (key == "type") { if (value != "LaunchAgent") exit 1 }
+        else if (key == "program") { if (value != "/bin/zsh") exit 1 }
+        else if (key == "working directory") { if (value != root) exit 1 }
+        else if (key == "stdout path") { if (value != root "/logs/xplanet.log") exit 1 }
+        else if (key == "stderr path") { if (value != root "/logs/xplanet-error.log") exit 1 }
+        else if (key == "properties") { if (value != "inferred program") exit 1 }
+        else if (key == "arguments") {
+            if (value != "{" || getline <= 0 || $0 != "\t\t/bin/zsh" ||
+                getline <= 0 || $0 != "\t\t" root "/scripts/lib/xplanet/desktop.zsh" ||
+                getline <= 0 || $0 != "\t}") exit 1
+        }
+        else if (key == "environment") {
+            if (value != "{") exit 1
+            while ((getline) > 0 && $0 != "\t}") {
+                if ($0 == "\t\tXPC_SERVICE_NAME => " substr(target, index(target, "/local.") + 1))
+                    continue
+                if ($0 ~ /^\t\tOSLogRateLimit => [0-9]+$/) continue
+                exit 1
+            }
+            if ($0 != "\t}") exit 1
+        }
+        else if (key ~ /^(inherited environment|default environment|pid-local endpoints|resource coalition|jetsam coalition)$/) {
+            if (value != "{") exit 1
+            block = 1
+        }
+        else if (value == "{" ||
+            key !~ /^(active count|state|domain|asid|minimum runtime|exit timeout|runs|pid|immediate reason|forks|execs|initialized|trampolined|started suspended|proxy started suspended|checked allocations|checked allocations reason|checked allocations flags|last exit code|spawn type|jetsam priority|jetsam memory limit \(active\)|jetsam memory limit \(inactive\)|jetsamproperties category|jetsam thread limit|cpumon|job state|sanitizer flags)$/) exit 1
+    }
+    END {
+        if (!closed || !seen["path"] || !seen["type"] || !seen["program"] ||
+            !seen["arguments"] || !seen["working directory"] || !seen["stdout path"] ||
+            !seen["stderr path"] || !seen["properties"]) exit 1
+    }' <<< "$1"
+}
+
+desktop_agent_recover_missing() {
+    local info
+    [[ ! -e "$desktop_plist" && ! -L "$desktop_plist" ]] || return 0
+    desktop_job_matches_missing_plist "$1" || return 1
+    info=$(launchctl print "$desktop_domain/$desktop_label" 2>/dev/null) || return 1
+    desktop_job_matches_missing_plist "$info" || return 1
+    # Use the normal atomic, no-clobber publication path; never copy a legacy
+    # plist or stop a job to make recovery possible.
+    desktop_agent_prepare recover || return 1
+    info=$(launchctl print "$desktop_domain/$desktop_label" 2>/dev/null) || return 1
+    desktop_job_matches_missing_plist "$info" || return 1
+    desktop_job_owned "$info" && [[ "$REPLY" == "$project_root" ]]
+}
+
 # Check without mutation for restart preflight. A managed file from a different
 # checkout can be replaced only by the explicit restart's serialized handover.
 desktop_agent_preflight() {
@@ -115,6 +190,7 @@ desktop_agent_prepare() (
     desktop_agent_preflight "${1:-}"
     local temporary before='' after mode=600 directory
     if [[ -e "$desktop_plist" ]]; then
+        [[ "${1:-}" != recover ]] || fail "desktop plist appeared during recovery"
         local reuse=false
         [[ "$REPLY" != "$project_root" ]] || reuse=true
         before=$(/usr/bin/stat -f '%d:%i:%u:%p:%z:%m:%c:%l' "$desktop_plist") || fail "cannot inspect desktop plist"
@@ -132,14 +208,14 @@ desktop_agent_prepare() (
     trap 'exit 130' INT
     trap 'exit 143' TERM
     trap 'exit 129' HUP
-    /usr/bin/plutil -create xml1 "$temporary" &&
-    /usr/bin/plutil -insert Label -string "$desktop_label" "$temporary" &&
-    /usr/bin/plutil -insert ProgramArguments -xml '<array/>' "$temporary" &&
-    /usr/bin/plutil -insert ProgramArguments.0 -string /bin/zsh "$temporary" &&
+    local template="$script_dir/launchd/local.xplanet.desktop.plist.template"
+    [[ -f "$template" && ! -L "$template" ]] || fail "managed desktop plist template is missing or linked"
+    cat -- "$template" > "$temporary" &&
+    /usr/bin/plutil -remove ProgramArguments.1 "$temporary" &&
     /usr/bin/plutil -insert ProgramArguments.1 -string "$script_dir/lib/xplanet/desktop.zsh" "$temporary" &&
-    /usr/bin/plutil -insert WorkingDirectory -string "$project_root" "$temporary" &&
-    /usr/bin/plutil -insert StandardOutPath -string "$project_root/logs/xplanet.log" "$temporary" &&
-    /usr/bin/plutil -insert StandardErrorPath -string "$project_root/logs/xplanet-error.log" "$temporary" &&
+    /usr/bin/plutil -replace WorkingDirectory -string "$project_root" "$temporary" &&
+    /usr/bin/plutil -replace StandardOutPath -string "$project_root/logs/xplanet.log" "$temporary" &&
+    /usr/bin/plutil -replace StandardErrorPath -string "$project_root/logs/xplanet-error.log" "$temporary" &&
     chmod "$mode" "$temporary" || fail "cannot write desktop plist"
     desktop_plist_owner "$temporary" && [[ "$REPLY" == "$project_root" ]] || fail "generated desktop plist did not validate"
     if [[ -n "$before" ]]; then
@@ -150,6 +226,12 @@ desktop_agent_prepare() (
         # immediately before replacing the recognized other-checkout file.
         mv -f -- "$temporary" "$desktop_plist" || fail "cannot replace managed desktop plist"
     else
+        if [[ "${1:-}" == recover ]]; then
+            local info
+            info=$(launchctl print "$desktop_domain/$desktop_label" 2>/dev/null) &&
+                desktop_job_matches_missing_plist "$info" ||
+                fail "loaded desktop job changed during recovery"
+        fi
         # Atomic no-clobber publication, even if an unrelated writer races us.
         /bin/link "$temporary" "$desktop_plist" || fail "desktop plist appeared during preparation; retry after reviewing it"
         [[ -f "$desktop_plist" && ! -L "$desktop_plist" && "$temporary" -ef "$desktop_plist" ]] ||

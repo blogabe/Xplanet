@@ -17,7 +17,7 @@ class LauncherRenderTests(Sandbox):
         scripts = self.root / "scripts"
         scripts.mkdir()
         self.wrapper = scripts / "xplanet.sh"
-        copy_launcher(self.wrapper)
+        copy_launcher(self.wrapper, desktop=True)
         self.desktop_bin = self.base / 'desktop-bin'
         self.desktop_bin.mkdir()
         stub_desktop_launchctl(scripts, self.desktop_bin)

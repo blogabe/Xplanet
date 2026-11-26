@@ -80,6 +80,58 @@ class DesktopAgentTests(unittest.TestCase):
         self.assertEqual(sum(line.startswith('bootstrap ') for line in self.calls()), 2)
         self.assertFalse((self.root / '.state/xplanet/desktop.plist').exists())
 
+    def test_start_repairs_missing_plist_without_replacing_running_job(self):
+        self.register(self.plist)
+        before = self.state.read_bytes()
+        self.success("start")
+        self.assertEqual(plistlib.loads(self.plist.read_bytes()), self.document())
+        self.assertEqual(self.state.read_bytes(), before)
+        self.assertFalse(self.renders.exists())
+        self.assertFalse(any(line.startswith(("bootstrap ", "bootout ")) for line in self.calls()))
+        self.success("stop")
+        self.assertFalse(self.state.exists())
+
+    def test_restart_repairs_missing_plist_then_restarts_once(self):
+        self.register(self.plist, _running=False)
+        self.success("restart")
+        self.assertEqual(plistlib.loads(self.plist.read_bytes()), self.document())
+        self.assertEqual(self.renders.read_text().splitlines(), ["render"])
+        self.assertEqual(sum(line.startswith("bootout ") for line in self.calls()), 1)
+        self.assertEqual(sum(line.startswith("bootstrap ") for line in self.calls()), 1)
+
+    def test_missing_plist_cannot_adopt_unverified_loaded_job(self):
+        for changed in (
+            {"ProgramArguments": ["/bin/zsh", "/other/desktop.zsh"]},
+            {"StandardOutPath": "/tmp/outside"},
+            {"StandardErrorPath": "/tmp/outside"},
+            {"WorkingDirectory": str(self.base)},
+            {"_properties": "inferred program | runatload"},
+            {"_extra_print": "\tevent triggers = {\n\t}"},
+            {"_extra_print": "\tpath = " + str(self.plist)},
+            {"_extra_print": "\tenvironment = {\n\t\tZDOTDIR => /outside\n\t}"},
+        ):
+            with self.subTest(changed=changed):
+                self.register(self.plist, **changed)
+                original = self.state.read_bytes()
+                for command in ("start", "restart"):
+                    result = self.invoke(command)
+                    self.assertEqual(result.returncode, 2, result.stderr)
+                    self.assertEqual(self.state.read_bytes(), original)
+                    self.assertFalse(self.plist.exists())
+                self.assert_not_started_or_stopped()
+
+    def test_missing_template_does_not_stop_loaded_job(self):
+        self.register(self.plist)
+        original = self.state.read_bytes()
+        template = self.root / "scripts/launchd/local.xplanet.desktop.plist.template"
+        template.unlink()
+        result = self.invoke("restart")
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn("template is missing", result.stderr)
+        self.assertEqual(self.state.read_bytes(), original)
+        self.assertFalse(self.plist.exists())
+        self.assert_not_started_or_stopped()
+
     def test_legacy_registration_start_preserves_and_restart_migrates(self):
         legacy = self.install(self.root / '.state/xplanet/desktop.plist')
         original = self.snapshot(legacy)

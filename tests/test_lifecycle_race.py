@@ -73,7 +73,7 @@ def save_job(job,path,actor='A'):
         scripts=root/'scripts'
         scripts.mkdir(parents=True)
         entry=scripts/'xplanet.sh'
-        copy_launcher(entry)
+        copy_launcher(entry, desktop=True)
         config=root/'config'
         config.mkdir()
         (config/'xp.conf').write_text('[earth]\n')
