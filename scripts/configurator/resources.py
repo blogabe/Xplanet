@@ -229,9 +229,7 @@ def capabilities(binary, stamp, stream, code, *, expected_hash=None):
             if rows and rows[-1] == "TLE catalog IDs: Alpha-5":
                 rows.pop()
             if all(
-                row.startswith("\t")
-                and len(row) <= 200
-                and all(c.isprintable() for c in row[1:])
+                row.startswith("\t") and len(row) <= 200 and all(c.isprintable() for c in row[1:])
                 for row in rows
             ):
                 features = tuple(
