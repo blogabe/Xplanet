@@ -492,7 +492,6 @@ python_bin=$("$script_dir/run-totalmarker" --python-path) || {
 shared_python=$(unset TOTALMARKER_PYTHON; "$script_dir/run-totalmarker" --python-path) ||
     fail "Shared TotalMarker interpreter is unavailable; use Advanced Python to record a choice. A temporary TOTALMARKER_PYTHON override is not saved."
 XPLANET_BIN=''
-XPLANET_WALLPAPER_BACKEND=''
 XPLANET_HOME=''
 XPLANET_CONFIG=''
 source "$definition"
@@ -745,16 +744,7 @@ automation_requested=false
 if ask "Step 3) Install and register Xplanet automation?"; then
     automation_requested=true
     source "$script_dir/lib/xplanet/wallpaper-backends.zsh" || fail "missing wallpaper backend helper"
-    typeset -a wallpaper_backends
-    wallpaper_probe_succeeded=false
-    probe_wallpaper_backends "$XPLANET_BIN" && wallpaper_probe_succeeded=true
-    if [[ "$XPLANET_WALLPAPER_BACKEND" == finder ]]; then
-        [[ "$wallpaper_probe_succeeded" == true ]] ||
-            fail "could not check the renderer for Finder rollback support; no automation was registered"
-        if [[ "$wallpaper_backends_advertised" == true ]] && ! has_wallpaper_backend finder; then
-            fail "the renderer does not advertise the Finder wallpaper backend; no automation was registered"
-        fi
-    fi
+    resolve_desktop_layer_helper "$XPLANET_BIN" || fail "$REPLY; no automation was registered"
     arguments=(--home "${HOME:-}")
     jobs=(start earth-map quake storm)
     if volcano_ready; then
@@ -787,14 +777,7 @@ if ask "Step 3) Install and register Xplanet automation?"; then
         print -ru2 -- "Resolve the reported launchd preparation error. If editing a personal plist, preserve its schedule and update the source template, if you maintain one; then retry: ${(q)launcher} setup"
         failures+=("launchd preparation: selected automation batch not registered; see the plist error above")
     else
-        if [[ -z "$XPLANET_WALLPAPER_BACKEND" || "$XPLANET_WALLPAPER_BACKEND" == auto ]] &&
-            has_wallpaper_backend appkit; then
-            print -- "The renderer uses AppKit for desktop updates; no Finder approval is needed."
-        elif [[ "$wallpaper_backends_advertised" == false || "$XPLANET_WALLPAPER_BACKEND" == finder ]] ||
-            has_wallpaper_backend finder; then
-            print -- "If macOS asks to let Xplanet control Finder, choose Allow for desktop updates."
-            print -- "If already authorized, no action is needed."
-        fi
+        print -- "The desktop uses the fileless layer. No Finder Automation approval is needed."
         for job in "${jobs[@]}"; do
             agent="$HOME/Library/LaunchAgents/local.xplanet.$job.plist"
             label="local.xplanet.$job"

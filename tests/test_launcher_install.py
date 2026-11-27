@@ -15,7 +15,7 @@ class LauncherInstallTests(Sandbox):
         self.prepare_real_setup()
         template = (PROJECT / "config/xp.def.example").read_bytes()
         self.definition.write_bytes(template)
-        result = self.run_install("n\ny\ny\nq\n")
+        result = self.run_install("y\ny\nq\n")
         self.assertEqual(result.returncode, 3, result.stderr)
         self.assert_definition_binary(self.prefix / "bin/xplanet")
         self.assertEqual((PROJECT / "config/xp.def.example").read_bytes(), template)
@@ -29,8 +29,6 @@ class LauncherInstallTests(Sandbox):
                                    env=self.environment, stdin=subprocess.PIPE,
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         try:
-            process.stdin.write(b"n\n")
-            process.stdin.flush()
             wait_for_prompt(process, b"No Python package or virtual environment")
             process.stdin.write(b"y\n")
             process.stdin.flush()
@@ -146,17 +144,11 @@ class LauncherInstallTests(Sandbox):
             "brew --prefix blogabe/xplanet/xplanet",
         ]
 
-    def test_success_runs_one_prompted_frame_then_setup(self):
-        result = self.run_install("y\n", TM_SETUP_EXIT="37")
+    def test_success_enters_setup_without_invoking_any_wallpaper_setter(self):
+        result = self.run_install(TM_SETUP_EXIT="37", TM_XPLANET_EXIT="53")
         self.assertEqual(result.returncode, 37, result.stderr)
-        self.assertEqual(
-            self.calls(), self.expected_brew_calls() + [
-                f"xplanet -searchdir={self.root} -num_times=1", "setup "])
-
-    def test_declining_optional_frame_still_enters_setup(self):
-        result = self.run_install("n\n")
-        self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.calls(), self.expected_brew_calls() + ["setup "])
+        self.assertNotIn("desktop background", result.stdout)
 
     def test_trust_failure_stops_before_install_and_setup(self):
         result = self.run_install(TM_FAIL="trust")
@@ -173,7 +165,7 @@ class LauncherInstallTests(Sandbox):
         self.prepare_real_setup()
         original = self.personal_definition("/my/current/xplanet")
         self.definition.write_text(original)
-        result = self.run_install("n\ny\nn\n")
+        result = self.run_install("y\nn\n")
         self.assertEqual(result.returncode, 2)
         self.assertIn("Kept config/xp.def unchanged", result.stderr)
         self.assertEqual(self.definition.read_text(), original)
@@ -181,7 +173,7 @@ class LauncherInstallTests(Sandbox):
 
         self.trace.unlink()
         (self.prefix / "INSTALL_RECEIPT.json").unlink(missing_ok=True)
-        result = self.run_install("n\ny\ny\nq\n")
+        result = self.run_install("y\ny\nq\n")
         self.assertEqual(result.returncode, 3, result.stderr)
         self.assert_definition_binary(self.prefix / "bin/xplanet")
         normalize = lambda text: re.sub(r'^XPLANET_BIN=.*$', 'XPLANET_BIN=<chosen>', text, flags=re.M)
@@ -218,13 +210,13 @@ class LauncherInstallTests(Sandbox):
                      'if [ "$1" = --python-path ]; then printf "%s\n" "$TM_PYTHON"; exit 0; fi\n'
                      'exit 42\n')
         self.environment["TM_PYTHON"] = sys.executable
-        declined = self.run_install("n\nn\n")
+        declined = self.run_install("n\n")
         self.assertEqual(declined.returncode, 3, declined.stderr)
         for name in ("xp.def", "xp.conf", "totalmarker.toml", "earth"):
             self.assertFalse((self.config / name).exists(), name)
         self.trace.unlink()
         (self.prefix / "INSTALL_RECEIPT.json").unlink(missing_ok=True)
-        accepted = self.run_install("n\ny\nq\n")
+        accepted = self.run_install("y\nq\n")
         self.assertEqual(accepted.returncode, 3, accepted.stderr)
         self.assert_definition_binary(self.prefix / "bin/xplanet")
         self.assertEqual((self.config / "xp.conf").read_bytes(),
@@ -266,7 +258,7 @@ class LauncherInstallTests(Sandbox):
         self.environment.update(PATH=str(self.bin),
                                 TM_BREW_PREFIX=str(brew_prefix), TM_PYTHON=sys.executable)
         self.environment.pop("TOTALMARKER_PYTHON", None)
-        installed = self.run_install("n\ny\nq\n")
+        installed = self.run_install("y\nq\n")
         self.assertEqual(installed.returncode, 3, installed.stderr)
         self.assertTrue(selected.is_symlink())
         self.assertIn(f"TotalMarker will use {selected}", installed.stdout)

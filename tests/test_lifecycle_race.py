@@ -77,7 +77,10 @@ def save_job(job,path,actor='A'):
         config=root/'config'
         config.mkdir()
         (config/'xp.conf').write_text('[earth]\n')
-        (config/'xp.def').write_text('XPLANET_BIN=/usr/bin/true\nXPLANET_HOME='+shlex.quote(str(root))+'\nXPLANET_CONFIG='+shlex.quote(str(config))+'\nXPLANET_PROJECTION=rectangular\nXPLANET_LONGITUDE=0\n')
+        renderer = scripts / 'fixture-renderer'
+        self.script(renderer, '[ "$1" != -version ] || echo "Frame pipe: 1"\n')
+        self.script(scripts / 'xplanet-desktop', 'exit 0\n')
+        (config/'xp.def').write_text('XPLANET_BIN='+shlex.quote(str(renderer))+'\nXPLANET_HOME='+shlex.quote(str(root))+'\nXPLANET_CONFIG='+shlex.quote(str(config))+'\nXPLANET_PROJECTION=rectangular\nXPLANET_LONGITUDE=0\n')
         return entry
     def invoke(self,entry,command,actor):return subprocess.Popen([str(entry),command],env={**self.env,'ACTOR':actor},stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
     def overlap(self,second_entry,second_command='restart'):
@@ -122,8 +125,9 @@ def save_job(job,path,actor='A'):
     def test_restart_invalid_command_preserves_existing_job_without_service_calls(self):
         definition=self.root/'config/xp.def'
         original_definition=definition.read_text()
-        self.assertEqual(original_definition.count('XPLANET_BIN=/usr/bin/true'),1)
-        definition.write_text(original_definition.replace('XPLANET_BIN=/usr/bin/true','XPLANET_BIN=/missing/renderer'))
+        installed = 'XPLANET_BIN=' + shlex.quote(str(self.root / 'scripts/fixture-renderer'))
+        self.assertEqual(original_definition.count(installed), 1)
+        definition.write_text(original_definition.replace(installed, 'XPLANET_BIN=/missing/renderer'))
         original=self.jobs.read_bytes()
         child=self.invoke(self.entry,'restart','A')
         out,err=child.communicate(timeout=10)

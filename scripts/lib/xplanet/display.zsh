@@ -113,7 +113,6 @@ load_render_config() {
     XPLANET_BIN=''
     XPLANET_HOME=''
     XPLANET_CONFIG=''
-    XPLANET_WALLPAPER_BACKEND=''
     XPLANET_PROJECTION=''
     XPLANET_LONGITUDE=''
     XPLANET_LATITUDE=''
@@ -169,11 +168,7 @@ render_frame() (
 desktop_command() {
     XPLANET_SCENE_DIRECTORY=''
     XPLANET_SCENE_TMPDIR=''
-    if selected_scene_command; then
-        selected_scene_wallpaper_backend
-        append_wallpaper_backend "$REPLY"
-        return 0
-    fi
+    selected_scene_command && return 0
     load_render_config
     # Resolve configured symlinks once; execute the real binary rather than
     # introducing an arbitrary alias into the OS process name.
@@ -187,49 +182,13 @@ desktop_command() {
     if [[ -n "$XPLANET_GEOMETRY" ]]; then
         desktop_args+=("-geometry=$XPLANET_GEOMETRY")
     fi
-    append_wallpaper_backend "$XPLANET_WALLPAPER_BACKEND"
 }
 
-# A selected scene must not execute the legacy shell definition. Read only
-# its optional wallpaper policy assignment as literal data.
-selected_scene_wallpaper_backend() {
-    local config="$project_root/config/xp.def" line value
-    local key='^[[:blank:]]*(export[[:blank:]]+)?XPLANET_WALLPAPER_BACKEND='
-    local suffix='([[:blank:]]+#[^[:cntrl:]]*)?[[:blank:]]*$'
-    local bare="^(auto|finder)?$suffix"
-    local double='^"(auto|finder)?"'"$suffix"
-    local single="^'(auto|finder)?'$suffix"
-    REPLY=''
-    [[ -f "$config" ]] || return 0
-    while IFS= read -r line || [[ -n "$line" ]]; do
-        [[ "$line" =~ "$key" ]] || continue
-        value="${line#*=}"
-        if [[ "$value" =~ "$bare" || "$value" =~ "$double" || "$value" =~ "$single" ]]; then
-            REPLY="${match[1]:-}"
-        else
-            fail "xp.def XPLANET_WALLPAPER_BACKEND must be a literal auto or finder"
-        fi
-    done < "$config" || fail "cannot read the wallpaper backend from xp.def"
-    return 0
-}
-
-append_wallpaper_backend() {
-    case "$1" in
-        ''|auto) ;;
-        finder)
-            local wallpaper_backends_advertised
-            local -a wallpaper_backends
-            probe_wallpaper_backends "$XPLANET_BIN" ||
-                fail "could not check the renderer for Finder rollback support"
-            if [[ "$wallpaper_backends_advertised" == true ]]; then
-                has_wallpaper_backend finder ||
-                    fail "the renderer does not advertise the Finder wallpaper backend; the desktop job was left unchanged"
-                desktop_args+=(-wallpaper_backend finder)
-            fi
-            # Older macOS builds already use Finder and do not accept the flag.
-            ;;
-        *) fail "xp.def XPLANET_WALLPAPER_BACKEND must be auto or finder" ;;
-    esac
+require_desktop_layer() {
+    resolve_desktop_layer_helper "$XPLANET_BIN" ||
+        fail "$REPLY; the desktop job was left unchanged"
+    XPLANET_BIN=${XPLANET_BIN:A}
+    XPLANET_DESKTOP_HELPER="$REPLY"
 }
 
 # One foreground desktop service per GUI user. The existing login trigger
@@ -243,6 +202,7 @@ _start_xplanet() {
     local -a desktop_args
     local map_note attempt job_info registered=false
     desktop_command
+    require_desktop_layer
     command -v launchctl >/dev/null || fail "launchctl is required for the desktop"
     desktop_agent_preflight "${1:-}"
     if job_info=$(launchctl print "$desktop_domain/$desktop_label" 2>/dev/null); then
@@ -287,9 +247,23 @@ _start_xplanet() {
     interactive_note "Xplanet desktop start requested; launchd accepted the request. Rendering is asynchronous."
 }
 
-# Reinstall only needs to know whether this user has Xplanet processes to replace.
+# An idle fileless helper has no Xplanet renderer child. The owned GUI job,
+# rather than searching for helper process names, supplies its running status.
 desktop_status() {
-    xplanet_pids
+    local listing job_info
+    listing=$(xplanet_pids) || return $?
+    if [[ -n "$listing" ]]; then
+        print -r -- "$listing"
+    elif [[ -f "${HOME:-}/Library/LaunchAgents/$desktop_label.plist" ]] &&
+        command -v launchctl >/dev/null; then
+        desktop_agent_paths read
+        if job_info=$(launchctl print "$desktop_domain/$desktop_label" 2>/dev/null) &&
+            desktop_job_reports_running "$job_info" && desktop_job_owned "$job_info" &&
+            [[ "$REPLY" == "$project_root" ]]; then
+            print -r -- "$desktop_label"
+        fi
+    fi
+    return 0
 }
 
 xplanet_pids() {
@@ -382,6 +356,7 @@ _restart_xplanet() {
     (
         local -a desktop_args
         desktop_command
+        require_desktop_layer
         [[ -z "${EARTH_MAP_PRE:-}" ]] || select_earth_map --check >/dev/null
     ) || return $?
     desktop_agent_preflight restart

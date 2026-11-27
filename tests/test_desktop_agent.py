@@ -23,7 +23,7 @@ class DesktopAgentTests(unittest.TestCase):
                                         MOCK_LAUNCHCTL_TRACE=str(self.trace),
                                         MOCK_RENDER_TRACE=str(self.renders))
         # The renderer and every process-control command are fixture-only.
-        self.fixture.mock.write_text('#!/bin/sh\nprintf "render\\n" >> "$MOCK_RENDER_TRACE"\n')
+        self.fixture.mock.write_text('#!/bin/sh\nif [ "$1" = -version ]; then echo "Frame pipe: 1"; exit 0; fi\nprintf "render\\n" >> "$MOCK_RENDER_TRACE"\n')
         kill = self.bin / 'kill'
         kill.write_text('#!/bin/sh\nexit 99\n')
         kill.chmod(0o700)

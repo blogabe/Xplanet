@@ -109,7 +109,10 @@ class SetupTests(Sandbox):
         config = self.root / "config"
         config.mkdir()
         xplanet = self.root / "mock-xplanet"
-        xplanet.write_text("#!/bin/sh\nexit 0\n")
+        xplanet.write_text("#!/bin/sh\nprintf '%s\\n' 'Frame pipe: 1'\n")
+        helper = self.root / "xplanet-desktop"
+        helper.write_text("#!/bin/sh\nexit 99\n")
+        helper.chmod(0o700)
         xplanet.chmod(0o700)
         (config / "xp.conf").write_bytes(b"marker_file=markers/quake\n")
         (config / "xp.def").write_text(
@@ -632,32 +635,28 @@ class SetupTests(Sandbox):
                 self.assertEqual(products.exists(), ready)
                 self.assertEqual(config.read_bytes(), content)
 
-    def test_setup_wallpaper_notice_uses_advertised_backend_tokens_and_policy(self):
+    def test_setup_fileless_requires_a_packaged_pair_and_never_mentions_finder_approval(self):
         scripts, env, _, _, calls = self._volcano_automation_fixture()
         renderer = self.root / "mock-xplanet"
-        definition = self.root / "config/xp.def"
-        original = definition.read_text()
+        renderer.write_text("#!/bin/sh\nprintf '%s\\n' 'Frame pipe: 1'\n")
+        helper = renderer.with_name("xplanet-desktop")
+        helper.unlink()
         command = [str(scripts / "xplanet.sh"), "setup"]
         answers = "y\n\nn\nn\nn\nn\ny\n"
-        for policy, advertised, message, expected_status in (
-            ("auto", "finder, future, appkit", "no Finder approval is needed", 0),
-            ("finder", "appkit, future, finder", "choose Allow", 0),
-            ("finder", "appkit, finder-next", "does not advertise the Finder wallpaper backend", 2),
-        ):
-            with self.subTest(policy=policy, advertised=advertised):
-                definition.write_text(original + f"XPLANET_WALLPAPER_BACKEND={policy}\n")
-                renderer.write_text("#!/bin/sh\nprintf '%s\\n' " + shlex.quote(
-                    f"Xplanet 1.6.0\n\tWallpaper backends: {advertised}") + "\n")
-                calls.unlink(missing_ok=True)
-                done = subprocess.run(command, cwd=PROJECT, env=env, input=answers,
-                                      capture_output=True, text=True, check=False)
-                self.assertEqual(done.returncode, expected_status, done.stdout + done.stderr)
-                self.assertIn(message, done.stdout if expected_status == 0 else done.stderr)
-                self.assertEqual(calls.exists(), expected_status == 0)
-                if policy == "auto":
-                    self.assertNotIn("choose Allow", done.stdout)
-                else:
-                    self.assertNotIn("no Finder approval is needed", done.stdout)
+        missing = subprocess.run(command, cwd=PROJECT, env=env, input=answers,
+                                 capture_output=True, text=True, check=False)
+        self.assertEqual(missing.returncode, 2, missing.stdout + missing.stderr)
+        self.assertIn("requires the packaged xplanet-desktop", missing.stderr)
+        self.assertFalse(calls.exists())
+        helper = renderer.with_name("xplanet-desktop")
+        helper.write_text("#!/bin/sh\nexit 1\n")  # setup must not start the helper itself
+        helper.chmod(0o700)
+        paired = subprocess.run(command, cwd=PROJECT, env=env, input=answers,
+                                capture_output=True, text=True, check=False)
+        self.assertEqual(paired.returncode, 0, paired.stdout + paired.stderr)
+        self.assertIn("The desktop uses the fileless layer", paired.stdout)
+        self.assertNotIn("choose Allow", paired.stdout)
+        self.assertTrue(calls.exists())
 
     def test_interactive_automation_uses_stub_only(self):
         scripts, env, products = self._shell_fixture()
@@ -680,12 +679,12 @@ class SetupTests(Sandbox):
                               text=True, check=False)
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertIn("Setup complete.", done.stdout)
-        self.assertIn("If macOS asks to let Xplanet control Finder, choose Allow", done.stdout)
+        self.assertIn("No Finder Automation approval is needed", done.stdout)
         self.assertIn("Allow a few minutes for the first desktop update", done.stdout)
-        notice = "If macOS asks to let Xplanet control Finder"
+        notice = "No Finder Automation approval is needed"
         self.assertEqual(done.stdout.count(notice), 1)
         self.assertLess(done.stdout.index(notice), done.stdout.index("MOCK: loading job"))
-        self.assertIn("If already authorized, no action is needed.", done.stdout)
+        self.assertNotIn("If already authorized, no action is needed.", done.stdout)
         self.assertEqual(products.read_text().splitlines(),
                          ["quake", "storm", "volcano", "clouds"])
         jobs = ("start", "earth-map", "quake", "storm", "volcano", "clouds")
@@ -710,7 +709,7 @@ class SetupTests(Sandbox):
                                text=True, check=False)
         self.assertEqual(again.returncode, 0, again.stderr)
         self.assertNotIn("MOCK: loading job", again.stdout)
-        self.assertIn("If already authorized, no action is needed.", again.stdout)
+        self.assertNotIn("If already authorized, no action is needed.", again.stdout)
         self.assertEqual(calls.read_text().splitlines(), [f"print gui/{os.geteuid()}/local.xplanet.{job}" for job in jobs])
         self.assertEqual(again.stdout.count("left unchanged"), len(jobs))
         # A same-label loaded definition is not parsed or reverified;
@@ -849,7 +848,7 @@ class SetupTests(Sandbox):
         self.assertIn("volcano: Mock source unavailable", done.stderr)
         self._assert_retry(done, scripts, "volcano")
         self.assertIn("Setup complete with refresh warnings.", done.stdout)
-        self.assertIn("If macOS asks to let Xplanet control Finder, choose Allow", done.stdout)
+        self.assertIn("No Finder Automation approval is needed", done.stdout)
 
     def test_volcano_http_403_warns_without_blocking_cloud_or_erasing_marker(self):
         scripts, env, products = self._shell_fixture()
@@ -1054,7 +1053,7 @@ class SetupTests(Sandbox):
         self.assertIn("did not confirm registration of storm", done.stderr)
         self.assertIn("Setup finished with 1 failed core step(s):", done.stderr)
         self.assertNotIn("Setup complete", done.stdout)
-        self.assertIn("If macOS asks to let Xplanet control Finder", done.stdout)
+        self.assertIn("No Finder Automation approval is needed", done.stdout)
         self.assertEqual(sum(line.startswith("load -w ") for line in calls.read_text().splitlines()), 5)
 
     def test_declined_refreshes_and_direct_product_status(self):
@@ -1064,7 +1063,7 @@ class SetupTests(Sandbox):
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertFalse(products.exists())
         self.assertIn("Setup complete.", done.stdout)
-        self.assertNotIn("If macOS asks to let Xplanet control Finder", done.stdout)
+        self.assertNotIn("No Finder Automation approval is needed", done.stdout)
         self.assertNotIn("refresh warning", done.stdout + done.stderr)
         direct = subprocess.run([str(scripts / "xplanet.sh"), "storm"], cwd=PROJECT,
                                 env=env, capture_output=True, text=True, check=False)
@@ -1094,7 +1093,7 @@ class SetupTests(Sandbox):
         self.assertEqual(done.returncode, 1, done.stderr)
         self.assertIn("did not confirm registration of volcano", done.stderr)
         self.assertNotIn("Setup complete.", done.stdout)
-        self.assertIn("If macOS asks to let Xplanet control Finder", done.stdout)
+        self.assertIn("No Finder Automation approval is needed", done.stdout)
         self.assertEqual(sum(line.startswith("load -w ") for line in calls.read_text().splitlines()), 5)
         self.assertFalse(products.exists())
 

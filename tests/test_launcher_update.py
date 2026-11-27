@@ -109,8 +109,12 @@ else:
         self.events = self.base / "renderer-events.txt"
         self.mock_renderer = self.base / "mock-xplanet"
         self.mock_renderer.write_text(
-            '#!/bin/sh\nprintf "start\n" >> "$TM_EVENT_TRACE"\n')
+            '#!/bin/sh\nif [ "$1" = -version ]; then echo "Frame pipe: 1"; exit 0; fi\n'
+            'printf "start\\n" >> "$TM_EVENT_TRACE"\n')
         self.mock_renderer.chmod(0o700)
+        helper = self.mock_renderer.with_name("xplanet-desktop")
+        helper.write_text('#!/bin/sh\nrenderer="$1"; shift 6; exec "$renderer" "$@"\n')
+        helper.chmod(0o700)
         config = self.root / "config"
         config.mkdir()
         (config / "xp.conf").write_text("# fixture\n")

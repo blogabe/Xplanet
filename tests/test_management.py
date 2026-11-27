@@ -52,7 +52,7 @@ class ManagementTests(Sandbox):
         self.write_script(self.bin / 'launchctl',
                           '[ "$1" = print ] || exit 9\n'
                           '[ "$JOB_RESULT" = 0 ] || exit "$JOB_RESULT"\n'
-                          'case "$JOB_TABLE" in *local.xplanet.desktop*) exit 0;; *) exit 113;; esac\n')
+                          'case "$JOB_TABLE" in *local.xplanet.desktop*) printf \'%s\\n\' "$JOB_TABLE";; *) exit 113;; esac\n')
         self.write_script(self.bin / 'brew',
                           'case "$1" in --prefix) exit 1;; esac\n'
                           'echo "brew $*" >> "$TRACE"\n')
@@ -428,15 +428,16 @@ class ManagementTests(Sandbox):
                           ' setaf) printf "\\033[3%sm" "$2";;\n'
                           'esac\n')
 
-    def test_status_distinguishes_process_detection_from_registration(self):
+    def test_status_uses_the_managed_job_between_renderer_frames(self):
         for process, jobs, result, expected_process, expected_job in [
-            ('0', 'PID Status Label', '0', 'running', 'not registered'),
-            ('1', '- 0 local.xplanet.desktop', '0', 'not detected', 'registered'),
+            ('0', 'PID Status Label', '0', 'not running', 'not registered'),
+            ('1', 'local.xplanet.desktop', '0', 'not running', 'registered'),
+            ('1', 'local.xplanet.desktop\n\tstate = running', '0', 'running', 'registered (running)'),
             ('2', '', '3', 'unknown', 'unknown'),
         ]:
             self.env.update(PROCESS_RESULT=process, JOB_TABLE=jobs, JOB_RESULT=result)
             _, output = self.terminal('q\n')
-            self.assertIn('xplanet: ' + expected_process, output)
+            self.assertIn('Desktop layer: ' + expected_process, output)
             self.assertIn('Job: ' + expected_job, output)
             self.assertIn('Health needs configuration; choose Guided setup (1)', output)
         self.assertEqual(self.calls(), [])
@@ -702,7 +703,7 @@ class ManagementTests(Sandbox):
         code, output = self.terminal('8\x1b[A\x1b[B2\nq')
         self.assertEqual(code, 0)
         self.assertEqual(output.count('Xplanet management'), 2)
-        self.assertEqual(probes.read_text().splitlines(), ['process', 'jobs'] * 2)
+        self.assertEqual(probes.read_text().splitlines(), ['jobs'] * 2)
         self.assertIn('\x1b7\x1b8\x1b[16A\r\x1b[K', output)
         self.assertIn('Configurator cancelled; desktop settings unchanged.', output)
         # Relative row offsets stay correct with a longer header/result above.
@@ -722,7 +723,7 @@ class ManagementTests(Sandbox):
         self.write_script(self.bin / 'launchctl', 'echo jobs >> "$PROBES"; exit 0\n')
         code, output = self.terminal('q\n')
         self.assertEqual(code, 0)
-        self.assertEqual(probes.read_text().splitlines(), ['process', 'jobs'])
+        self.assertEqual(probes.read_text().splitlines(), ['jobs'])
         self.assertEqual(output.count('Xplanet management'), 1)
         self.assertIn('Compact terminal: numbered input',output)
         self.assertRegex(output,r'Running scene +\[\?\] Not identified')

@@ -3,6 +3,7 @@
 import asyncio, io, sys, tempfile, unittest
 from pathlib import Path
 from dataclasses import replace
+from unittest.mock import patch
 from configurator.model import View, parse_saved_view
 from configurator.resources import (
     BoundedLog,
@@ -13,6 +14,9 @@ from configurator.resources import (
 )
 from configurator.workspace import Workspace
 from configurator.geometry import geometry
+
+
+VERSION_REPORTS = Path(__file__).with_name("fixtures")
 
 
 class GeometryTests(unittest.TestCase):
@@ -98,6 +102,51 @@ class EvidenceTests(unittest.TestCase):
             )
         self.assertIn("CSPICE_N0067", good.features)
 
+    def test_real_tap_and_candidate_reports_separate_features_from_metadata(self):
+        for version in ("1.3.1.225", "1.4.0", "1.6.0", "1.6.0-layer"):
+            with self.subTest(version=version):
+                raw = (VERSION_REPORTS / f"xplanet-version-{version}.txt").read_bytes()
+                report = self.report(raw)
+                self.assertEqual(report.status, "reported")
+                self.assertTrue({"Mac OS X", "JPEG", "PNG", "TIFF"} <= set(report.features))
+                self.assertFalse(any(":" in feature for feature in report.features))
+                self.assertEqual(report.raw.encode(), raw)
+                self.assertFalse(
+                    any(
+                        i.severity == "blocking"
+                        for i in capability_issues(report, View(), self.binary)
+                    )
+                )
+
+    def test_malformed_reports_are_not_confused_with_missing_features(self):
+        raw = (VERSION_REPORTS / "xplanet-version-1.6.0.txt").read_bytes()
+        for malformed in (
+            raw.replace(b"\tPNG", b" PNG"),
+            raw.replace(b"\tPNG", b"\t\x1b[31mPNG"),
+            raw.replace(b"TLE catalog IDs: Alpha-5", b"incomplete feature report"),
+            raw + b"\tPNG\n",
+            raw + b"Frame pipe: 999\n",
+            raw + b"Frame pipe: 1\nFrame pipe: 1\n",
+        ):
+            with self.subTest(malformed=malformed):
+                report = self.report(malformed)
+                self.assertEqual(report.status, "unknown")
+                self.assertEqual(report.features, ())
+
+    def test_image_format_requirements_still_apply_with_metadata(self):
+        raw = (VERSION_REPORTS / "xplanet-version-1.6.0-layer.txt").read_bytes()
+        for feature in ("PNG", "JPEG", "TIFF"):
+            with self.subTest(feature=feature):
+                limited = raw.replace(f"\t{feature}\n".encode(), b"")
+                report = self.report(limited)
+                self.assertEqual(report.status, "reported")
+                with patch.object(View, "resource_paths", return_value=[Path("map.tiff")]):
+                    issues = capability_issues(report, View(), self.binary)
+                self.assertEqual(
+                    len([i for i in issues if i.severity == "blocking" and feature in i.message]),
+                    1,
+                )
+
     def test_changed_binary_invalidates_evidence_without_claiming_missing_features(self):
         report = self.report(b"Xplanet 1.3.1\nCompiled with support for:\n\tJPEG\n")
         self.binary.write_bytes(b"new binary")
@@ -142,7 +191,10 @@ class DiagnosticProcessTests(unittest.IsolatedAsyncioTestCase):
         self.addCleanup(self.workspace.close)
         self.trace = self.root / "trace"
 
-    def renderer(self, version="PNG\\n\\tJPEG", version_code=0, render_extra=""):
+    def renderer(self, version="PNG\n\tJPEG", version_code=0, render_extra="", *, report=None):
+        if report is None:
+            report = f"Xplanet 1.3.1\nCompiled with support for:\n\t{version}\n"
+        version_command = f" sys.stdout.write({report!r});sys.exit({version_code})\n"
         path = self.root / "renderer"
         path.write_text(
             "#!"
@@ -151,7 +203,7 @@ class DiagnosticProcessTests(unittest.IsolatedAsyncioTestCase):
             + f"trace=pathlib.Path({str(self.trace)!r})\n"
             + 'with trace.open("a") as f:f.write("version\\n" if "-version" in a else "render\\n")\n'
             + 'if "-version" in a:\n'
-            + f' print("Xplanet 1.3.1\\nCompiled with support for:\\n\\t{version}");sys.exit({version_code})\n'
+            + version_command
             + render_extra
             + "\n"
             + 'w,h=map(int,a[a.index("-geometry")+1].split("x"))\n'
@@ -178,7 +230,8 @@ class DiagnosticProcessTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(original.exists())
 
     async def test_missing_reported_png_blocks_render_but_unknown_probe_does_not(self):
-        binary = self.renderer("JPEG")
+        report = (VERSION_REPORTS / "xplanet-version-1.6.0.txt").read_text()
+        binary = self.renderer(report=report.replace("\tPNG\n", ""))
         with self.assertRaisesRegex(ValueError, "PNG"):
             await self.workspace.preview(View(), binary, diagnostic=True)
         self.assertEqual(self.trace.read_text().splitlines(), ["version"])

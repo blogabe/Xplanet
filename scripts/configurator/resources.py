@@ -222,15 +222,22 @@ def capabilities(binary, stamp, stream, code, *, expected_hash=None):
         except ValueError:
             pass
         else:
-            rows = lines[index + 1 :]
+            rows = [row for row in lines[index + 1 :] if row]
+            # These exact, unindented footer lines are metadata, not codecs.
+            # Only strip recognized trailing records, once each; a malformed
+            # or unknown line must still leave the report untrusted.
+            footer = {"TLE catalog IDs: Alpha-5", "Frame pipe: 1"}
+            while rows and rows[-1] in footer:
+                footer.remove(rows.pop())
             if all(
-                not row
-                or row.startswith("\t")
-                and len(row) <= 200
-                and all(c.isprintable() for c in row[1:])
+                row.startswith("\t") and len(row) <= 200 and all(c.isprintable() for c in row[1:])
                 for row in rows
             ):
-                features = tuple(row.strip() for row in rows if row.strip())
+                features = tuple(
+                    row.strip()
+                    for row in rows
+                    if row.strip() and not row.startswith("\tWallpaper backends:")
+                )
                 status = "reported"
     if code != 0:
         status = "runtime/probe failure (support unknown)"

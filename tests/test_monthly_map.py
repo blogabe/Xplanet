@@ -202,7 +202,13 @@ class MonthlyMapTests(Sandbox):
         self.link.unlink()
         self.link.symlink_to('../maps/world/' + self.filename)
         definition = self.definition.read_text()
-        self.definition.write_text(definition + 'XPLANET_BIN=/usr/bin/true\n' +
+        renderer = self.bin / 'xplanet'
+        renderer.write_text('#!/bin/sh\necho "Frame pipe: 1"\n')
+        renderer.chmod(0o700)
+        helper = self.bin / 'xplanet-desktop'
+        helper.write_text('#!/bin/sh\nexit 99\n')
+        helper.chmod(0o700)
+        self.definition.write_text(definition + 'XPLANET_BIN=' + shlex.quote(str(renderer)) + '\n' +
             'XPLANET_CONFIG=' + shlex.quote(str(self.root / 'config')) +
             '\nXPLANET_PROJECTION=rectangular\nXPLANET_LONGITUDE=0\n')
         (self.root / 'config/xp.conf').write_text('[earth]\n')

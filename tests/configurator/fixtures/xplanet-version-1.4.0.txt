@@ -1,0 +1,12 @@
+Xplanet 1.4.0
+Original Xplanet copyright (C) 2012 Hari Nair <hari@alumni.caltech.edu>
+Original project: https://xplanet.sourceforge.net
+Compiled with support for:
+	Mac OS X
+	GIF
+	JPEG
+	PNG
+	TIFF
+	FreeType (version 2.15.0)
+	CSPICE_N0067
+TLE catalog IDs: Alpha-5

@@ -8,6 +8,7 @@ fail() { print -u2 -- "xplanet desktop: $1"; exit 2; }
 source "$script_dir/lib/xplanet/display.zsh" || exit 2
 local -a desktop_args
 desktop_command
+require_desktop_layer
 if [[ -n "${EARTH_MAP_PRE:-}" ]]; then
     select_earth_map || exit $?
 fi
@@ -22,4 +23,6 @@ if [[ -n "${XPLANET_SCENE_DIRECTORY:-}" ]]; then
     desktop_args+=(-tmpdir "$XPLANET_SCENE_TMPDIR")
 fi
 renderer_numeric_locale
-exec "$XPLANET_BIN" "${desktop_args[@]}"
+# The helper owns pacing, per-frame rendering and the pipe protocol.
+exec "$XPLANET_DESKTOP_HELPER" "$XPLANET_BIN" "${XPLANET_SCENE_DIRECTORY:-$project_root}" \
+    300 120 0 -- "${desktop_args[@]}"

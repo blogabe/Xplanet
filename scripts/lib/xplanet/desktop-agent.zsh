@@ -51,6 +51,11 @@ desktop_plist_owner() {
     REPLY="$root"
 }
 
+# Do not infer an active job merely from an installed or registered plist.
+desktop_job_reports_running() {
+    [[ $'\n'"$1"$'\n' == *$'\n\tstate = running\n'* ]]
+}
+
 # launchctl print is a text interface. Fail closed on missing/duplicate identity
 # fields, and require the loaded pathname, not just a file newly moved on disk.
 # REPLY is the owning checkout; desktop_job_path identifies old registrations.
