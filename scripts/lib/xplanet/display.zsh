@@ -13,6 +13,7 @@ renderer_numeric_locale() {
 # Scene helpers contain literal data handling only; legacy mode stays the default.
 source "$script_dir/lib/xplanet/scene.zsh" || return 2
 source "$script_dir/lib/xplanet/lifecycle.zsh" || return 2
+source "$script_dir/lib/xplanet/wallpaper-backends.zsh" || return 2
 
 select_earth_map() (
     local checking=false
@@ -112,6 +113,7 @@ load_render_config() {
     XPLANET_BIN=''
     XPLANET_HOME=''
     XPLANET_CONFIG=''
+    XPLANET_WALLPAPER_BACKEND=''
     XPLANET_PROJECTION=''
     XPLANET_LONGITUDE=''
     XPLANET_LATITUDE=''
@@ -167,7 +169,11 @@ render_frame() (
 desktop_command() {
     XPLANET_SCENE_DIRECTORY=''
     XPLANET_SCENE_TMPDIR=''
-    selected_scene_command && return 0
+    if selected_scene_command; then
+        selected_scene_wallpaper_backend
+        append_wallpaper_backend "$REPLY"
+        return 0
+    fi
     load_render_config
     # Resolve configured symlinks once; execute the real binary rather than
     # introducing an arbitrary alias into the OS process name.
@@ -181,6 +187,49 @@ desktop_command() {
     if [[ -n "$XPLANET_GEOMETRY" ]]; then
         desktop_args+=("-geometry=$XPLANET_GEOMETRY")
     fi
+    append_wallpaper_backend "$XPLANET_WALLPAPER_BACKEND"
+}
+
+# A selected scene must not execute the legacy shell definition. Read only
+# its optional wallpaper policy assignment as literal data.
+selected_scene_wallpaper_backend() {
+    local config="$project_root/config/xp.def" line value
+    local key='^[[:blank:]]*(export[[:blank:]]+)?XPLANET_WALLPAPER_BACKEND='
+    local suffix='([[:blank:]]+#[^[:cntrl:]]*)?[[:blank:]]*$'
+    local bare="^(auto|finder)?$suffix"
+    local double='^"(auto|finder)?"'"$suffix"
+    local single="^'(auto|finder)?'$suffix"
+    REPLY=''
+    [[ -f "$config" ]] || return 0
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        [[ "$line" =~ "$key" ]] || continue
+        value="${line#*=}"
+        if [[ "$value" =~ "$bare" || "$value" =~ "$double" || "$value" =~ "$single" ]]; then
+            REPLY="${match[1]:-}"
+        else
+            fail "xp.def XPLANET_WALLPAPER_BACKEND must be a literal auto or finder"
+        fi
+    done < "$config" || fail "cannot read the wallpaper backend from xp.def"
+    return 0
+}
+
+append_wallpaper_backend() {
+    case "$1" in
+        ''|auto) ;;
+        finder)
+            local wallpaper_backends_advertised
+            local -a wallpaper_backends
+            probe_wallpaper_backends "$XPLANET_BIN" ||
+                fail "could not check the renderer for Finder rollback support"
+            if [[ "$wallpaper_backends_advertised" == true ]]; then
+                has_wallpaper_backend finder ||
+                    fail "the renderer does not advertise the Finder wallpaper backend; the desktop job was left unchanged"
+                desktop_args+=(-wallpaper_backend finder)
+            fi
+            # Older macOS builds already use Finder and do not accept the flag.
+            ;;
+        *) fail "xp.def XPLANET_WALLPAPER_BACKEND must be auto or finder" ;;
+    esac
 }
 
 # One foreground desktop service per GUI user. The existing login trigger
