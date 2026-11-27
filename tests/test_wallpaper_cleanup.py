@@ -149,8 +149,17 @@ class WallpaperCleanupTests(unittest.TestCase):
         self.assertIn("PNG cache: unavailable", output.getvalue())
         self.assertIn("BMP cache: 1 file(s)", output.getvalue())
 
+    def test_double_separator_uses_raw_hash_and_canonical_active_path(self):
+        raw = self.runtime.as_uri() + "//" + self.old.name
+        row = plistlib.dumps({"originalURL": {"relative": raw}}, fmt=plistlib.FMT_BINARY)
+        self.gallery.write_bytes(plistlib.dumps({"ChoiceRequests.ImageFiles": [row]}))
+        old = self.bmp(cleanup.path_value(raw))
+        self.assertEqual([record[1] for record in self.inventory()["candidates"]], [old.name])
+        self.write_index(self.old)
+        self.assertEqual(self.inventory()["candidates"], [])
+
     def test_path_traversal_and_remote_urls_are_rejected(self):
-        for value in ("file://remote/root/test", "file:///tmp/%2e%2e/test", "/tmp//test"):
+        for value in ("file://remote/root/test", "file:///tmp/%2e%2e/test", "//tmp/test", "/tmp/./test", "/tmp/test/"):
             self.assertIsNone(cleanup.path_value(value))
 
 

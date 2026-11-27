@@ -77,8 +77,11 @@ def path_value(value):
         value = unquote(url.path, errors="strict")
     if not value.startswith("/") or any(ord(ch) < 32 for ch in value):
         return None
-    if str(Path(value)) != value or ".." in Path(value).parts:
+    if value.startswith("//") or value.endswith("/") or {".", ".."}.intersection(value.split("/")):
         return None
+    # Xplanet has emitted a doubled internal separator after some tmp roots.
+    # Preserve the spelling Apple recorded for the BMP hash; use Path/realpath
+    # separately for containment and live-reference protection.
     return value
 
 
@@ -86,7 +89,7 @@ def relative_url(value):
     return path_value(value.get("relative") if isinstance(value, dict) else value)
 
 
-def gallery_rows(gallery):
+def gallery_records(gallery):
     records = gallery.get("ChoiceRequests.ImageFiles")
     if records is None:
         records = gallery.get("ChoiceRequests", {}).get("ImageFiles", [])
@@ -94,7 +97,11 @@ def gallery_rows(gallery):
         records = list(records.values())
     if not isinstance(records, list):
         raise ValueError("unrecognized wallpaper gallery")
-    for record in records:
+    return records
+
+
+def gallery_rows(gallery):
+    for record in gallery_records(gallery):
         if isinstance(record, bytes):
             record = plistlib.loads(record)
         if not isinstance(record, dict):
@@ -252,7 +259,7 @@ def wallpaper_health(home):
 
     def gallery_count():
         gallery, _ = read_plist(home, GALLERY)
-        return f"{len(list(gallery_rows(gallery)))} custom entry/entries"
+        return f"{len(gallery_records(gallery))} custom entry/entries"
 
     available = False
     for name, inspect in (
