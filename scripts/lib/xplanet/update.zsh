@@ -118,7 +118,7 @@ update_tap_formula() {
        -z "$("$git_bin" -C "$tap_root" status --porcelain=v1 -- "$current_rel")" ]] ||
         fail "the tap formula changed during review; run update again"
     running_before=$(desktop_status) ||
-        fail "could not inspect this user's Xplanet processes before reinstall"
+        fail "could not inspect this user's Xplanet desktop before reinstall"
     print -- "Xplanet tap formula changed; rebuilding from source with installed options."
     HOMEBREW_NO_AUTO_UPDATE=1 "$brew_bin" reinstall --formula --build-from-source \
         blogabe/xplanet/xplanet "${build_options[@]}" ||

@@ -169,6 +169,7 @@ render_frame() (
 desktop_command() {
     XPLANET_SCENE_DIRECTORY=''
     XPLANET_SCENE_TMPDIR=''
+    XPLANET_DESKTOP_HELPER=''
     if selected_scene_command; then
         selected_scene_wallpaper_backend
         append_wallpaper_backend "$REPLY"
@@ -196,9 +197,9 @@ selected_scene_wallpaper_backend() {
     local config="$project_root/config/xp.def" line value
     local key='^[[:blank:]]*(export[[:blank:]]+)?XPLANET_WALLPAPER_BACKEND='
     local suffix='([[:blank:]]+#[^[:cntrl:]]*)?[[:blank:]]*$'
-    local bare="^(auto|finder)?$suffix"
-    local double='^"(auto|finder)?"'"$suffix"
-    local single="^'(auto|finder)?'$suffix"
+    local bare="^(auto|finder|desktop-layer)?$suffix"
+    local double='^"(auto|finder|desktop-layer)?"'"$suffix"
+    local single="^'(auto|finder|desktop-layer)?'$suffix"
     REPLY=''
     [[ -f "$config" ]] || return 0
     while IFS= read -r line || [[ -n "$line" ]]; do
@@ -207,7 +208,7 @@ selected_scene_wallpaper_backend() {
         if [[ "$value" =~ "$bare" || "$value" =~ "$double" || "$value" =~ "$single" ]]; then
             REPLY="${match[1]:-}"
         else
-            fail "xp.def XPLANET_WALLPAPER_BACKEND must be a literal auto or finder"
+            fail "xp.def XPLANET_WALLPAPER_BACKEND must be a literal auto, finder, or desktop-layer"
         fi
     done < "$config" || fail "cannot read the wallpaper backend from xp.def"
     return 0
@@ -217,7 +218,7 @@ append_wallpaper_backend() {
     case "$1" in
         ''|auto) ;;
         finder)
-            local wallpaper_backends_advertised
+            local wallpaper_backends_advertised desktop_frame_pipe_available
             local -a wallpaper_backends
             probe_wallpaper_backends "$XPLANET_BIN" ||
                 fail "could not check the renderer for Finder rollback support"
@@ -228,7 +229,12 @@ append_wallpaper_backend() {
             fi
             # Older macOS builds already use Finder and do not accept the flag.
             ;;
-        *) fail "xp.def XPLANET_WALLPAPER_BACKEND must be auto or finder" ;;
+        desktop-layer)
+            resolve_desktop_layer_helper "$XPLANET_BIN" || fail "$REPLY; the desktop job was left unchanged"
+            XPLANET_BIN=${XPLANET_BIN:A}
+            XPLANET_DESKTOP_HELPER="$REPLY"
+            ;;
+        *) fail "xp.def XPLANET_WALLPAPER_BACKEND must be auto, finder, or desktop-layer" ;;
     esac
 }
 
@@ -287,9 +293,23 @@ _start_xplanet() {
     interactive_note "Xplanet desktop start requested; launchd accepted the request. Rendering is asynchronous."
 }
 
-# Reinstall only needs to know whether this user has Xplanet processes to replace.
+# An idle fileless helper has no Xplanet renderer child. The owned GUI job,
+# rather than searching for helper process names, supplies its running status.
 desktop_status() {
-    xplanet_pids
+    local listing job_info
+    listing=$(xplanet_pids) || return $?
+    if [[ -n "$listing" ]]; then
+        print -r -- "$listing"
+    elif [[ -f "${HOME:-}/Library/LaunchAgents/$desktop_label.plist" ]] &&
+        command -v launchctl >/dev/null; then
+        desktop_agent_paths read
+        if job_info=$(launchctl print "$desktop_domain/$desktop_label" 2>/dev/null) &&
+            desktop_job_reports_running "$job_info" && desktop_job_owned "$job_info" &&
+            [[ "$REPLY" == "$project_root" ]]; then
+            print -r -- "$desktop_label"
+        fi
+    fi
+    return 0
 }
 
 xplanet_pids() {

@@ -211,7 +211,51 @@ class SceneDesktopTests(unittest.TestCase):
         definition.write_bytes(original + b"XPLANET_WALLPAPER_BACKEND=$(touch forbidden)")
         result = self.shell("desktop_command")
         self.assertEqual(result.returncode, 2, result.stderr)
-        self.assertIn(b"must be a literal auto or finder", result.stderr)
+        self.assertIn(b"must be a literal auto, finder, or desktop-layer", result.stderr)
+        self.assertFalse((self.root / "forbidden").exists())
+
+    def test_fileless_selected_scene_preserves_geometry_cwd_and_literal_policy(self):
+        from configurator.handoff import create_plan, stage_plan
+
+        binary = self.root / "fixture renderer"
+        binary.write_text(
+            '#!/bin/sh\n[ "$1" = -version ] || exit 3\n'
+            "printf 'Xplanet 1.6.0\\nFrame pipe: 1\\n'\n"
+        )
+        binary.chmod(0o700)
+        helper = self.root / "xplanet-desktop"
+        helper.write_text('#!/bin/sh\nprintf "%s\\0" "$PWD" "$@"\n')
+        helper.chmod(0o700)
+        bundle = self.root / "fileless review"
+        stage_plan(create_plan(self.root, self.scene, binary, "1280x720"), bundle)
+        receipt = apply_bundle(self.root, bundle, inspect_selection(self.root))
+        revision = self.root / REVISIONS / receipt.after.revision
+        definition = self.root / "config/xp.def"
+        definition.write_bytes(
+            definition.read_bytes() + b"XPLANET_WALLPAPER_BACKEND='desktop-layer' # opt in\n"
+        )
+        result = self.shell('exec /bin/zsh "$script_dir/lib/xplanet/desktop.zsh"')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        args = result.stdout.split(b"\0")[:-1]
+        self.assertEqual(
+            args[:7],
+            [
+                os.fsencode(revision),
+                os.fsencode(binary),
+                os.fsencode(revision),
+                b"300",
+                b"120",
+                b"0",
+                b"--",
+            ],
+        )
+        self.assertEqual(args[args.index(b"-geometry") + 1], b"1280x720")
+        self.assertEqual(args[args.index(b"-config") + 1], os.fsencode(revision / "lunar.conf"))
+        self.assertEqual(
+            args[args.index(b"-tmpdir") + 1],
+            os.fsencode(self.root / ".state/xplanet/desktop-tmp"),
+        )
+        self.assertNotIn(b"-wallpaper_backend", args)
         self.assertFalse((self.root / "forbidden").exists())
 
     def test_selected_scratch_symlink_fails_without_writing_its_target(self):

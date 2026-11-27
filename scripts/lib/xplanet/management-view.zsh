@@ -77,7 +77,7 @@ management_screen_close() {
 }
 
 management_desktop_facts() {
-    local result listing pid last label
+    local result job_info
     management_process='unknown'
     management_job='unknown'
     if command -v pgrep >/dev/null; then
@@ -90,10 +90,14 @@ management_desktop_facts() {
     fi
     # Registration and process presence are separate facts in the GUI domain.
     if command -v launchctl >/dev/null; then
-        launchctl print "gui/$EUID/local.xplanet.desktop" >/dev/null 2>&1
+        job_info=$(launchctl print "gui/$EUID/local.xplanet.desktop" 2>/dev/null)
         result=$?
         case "$result" in
-            0) management_job=registered ;;
+            0) if [[ $'\n'"$job_info"$'\n' == *$'\n\tstate = running\n'* ]]; then
+                   management_job='registered (running)'
+               else
+                   management_job=registered
+               fi ;;
             113) management_job='not registered' ;;
         esac
     fi

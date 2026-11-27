@@ -365,6 +365,97 @@ class LauncherRenderTests(Sandbox):
                 self.assertEqual(json.loads(table.read_text()), {"101": "running"})
                 self.assertFalse(signals.exists())
 
+    def test_fileless_start_uses_paired_helper_and_managed_job_without_changing_auto(self):
+        alias = self.base / "linked renderer"
+        alias.symlink_to(self.mock)
+        config = self.root / "config/xp.def"
+        custom = config.read_text().replace(shlex.quote(str(self.mock)), shlex.quote(str(alias)))
+        config.write_text(custom + "XPLANET_WALLPAPER_BACKEND=desktop-layer\n")
+        self.mock.write_text(self.mock.read_text().replace("with open(", (
+            "if sys.argv[1:] == ['-version']:\n"
+            "    print('Xplanet 1.6.0\\nFrame pipe: 1')\n"
+            "    sys.exit(0)\n"
+            "with open("
+        ), 1))
+        helper = self.mock.with_name("xplanet-desktop")
+        helper.write_text(
+            "#!" + sys.executable + "\n"
+            "import json, os, sys\n"
+            "from pathlib import Path\n"
+            "Path(os.environ['MOCK_HELPER_CAPTURE']).write_text(json.dumps(sys.argv))\n"
+        )
+        helper.chmod(0o700)
+        capture = self.base / "helper-capture.json"
+        renderer_capture = self.base / "set-wallpaper-capture.json"
+        environment = {**self.environment, "MOCK_HELPER_CAPTURE": str(capture),
+                       "MOCK_CAPTURE": str(renderer_capture)}
+        result = self.invoke("start", environment)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        argv = json.loads(capture.read_text())
+        self.assertEqual(argv[:7], [str(helper), str(self.mock), str(self.root),
+                                   "300", "120", "0", "--"])
+        self.assertEqual(argv[7:], [
+            f"-searchdir={self.root}", f"-config={self.root}/config/xp.conf",
+            "-projection=lambert", "-longitude=-118.3989", "-labelpos=+10-45",
+            "-date_format=%D at %r", "-color=green2", "-geometry=1600x900",
+        ])
+        self.assertFalse(renderer_capture.exists())
+        status_command = (
+            'project_root="$1"; script_dir="$project_root/scripts"; '
+            'source "$script_dir/lib/xplanet/display.zsh"; desktop_status'
+        )
+        status = subprocess.run(
+            ["/bin/zsh", "-f", "-c", status_command, "desktop status", str(self.root)],
+            env=environment, capture_output=True, text=True, check=False,
+        )
+        self.assertEqual(status.stdout.strip(), "local.xplanet.desktop", status.stderr)
+        self.assertEqual(self.invoke("stop", environment).returncode, 0)
+        stopped = subprocess.run(
+            ["/bin/zsh", "-f", "-c", status_command, "desktop status", str(self.root)],
+            env=environment, capture_output=True, text=True, check=False,
+        )
+        self.assertEqual(stopped.returncode, 0, stopped.stderr)
+        self.assertEqual(stopped.stdout, "")
+
+        capture.unlink()
+        config.write_text(custom + "XPLANET_WALLPAPER_BACKEND=auto\n")
+        self.assertEqual(self.invoke("start", environment).returncode, 0)
+        self.assertTrue(renderer_capture.is_file())
+        self.assertFalse(capture.exists())
+
+        renderer_capture.unlink()
+        config.write_text(custom.replace("XPLANET_GEOMETRY=1600x900", "XPLANET_GEOMETRY=")
+                          + "XPLANET_WALLPAPER_BACKEND=desktop-layer\n")
+        restarted = self.invoke("restart", environment)
+        self.assertEqual(restarted.returncode, 0, restarted.stderr)
+        argv = json.loads(capture.read_text())
+        self.assertFalse(any(arg.startswith("-geometry") for arg in argv))
+        self.assertFalse(renderer_capture.exists())
+
+    def test_fileless_preflight_requires_exact_capability_and_adjacent_real_helper(self):
+        config = self.root / "config/xp.def"
+        config.write_text(config.read_text() + "XPLANET_WALLPAPER_BACKEND=desktop-layer\n")
+        helper = self.mock.with_name("xplanet-desktop")
+        elsewhere = self.base / "unrelated-helper"
+        elsewhere.write_text("#!/bin/sh\nexit 0\n")
+        elsewhere.chmod(0o700)
+        trace = self.base / "launchctl-trace.txt"
+        for capability, link, message in (
+            ("Frame pipe: 10", False, "requires a renderer that advertises"),
+            ("Frame pipe: 1", False, "requires the packaged xplanet-desktop"),
+            ("Frame pipe: 1", True, "requires the packaged xplanet-desktop"),
+        ):
+            with self.subTest(capability=capability, helper_link=link):
+                if link:
+                    helper.symlink_to(elsewhere)
+                report = f"Xplanet 1.6.0\n{capability}"
+                self.mock.write_text("#!/bin/sh\nprintf '%s\\n' " + shlex.quote(report) + "\n")
+                for action in ("start", "restart"):
+                    result = self.invoke(action, {"MOCK_LAUNCHCTL_TRACE": str(trace)})
+                    self.assertEqual(result.returncode, 2, result.stderr)
+                    self.assertIn(message, result.stderr)
+                    self.assertFalse(trace.exists())
+
     def test_start_catches_up_monthly_map_even_when_display_already_running(self):
         env, table, trace, capture = self.lifecycle_env()
         (self.root / "images").mkdir()

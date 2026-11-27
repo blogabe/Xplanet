@@ -659,6 +659,29 @@ class SetupTests(Sandbox):
                 else:
                     self.assertNotIn("no Finder approval is needed", done.stdout)
 
+    def test_setup_fileless_requires_a_packaged_pair_and_never_mentions_finder_approval(self):
+        scripts, env, _, _, calls = self._volcano_automation_fixture()
+        renderer = self.root / "mock-xplanet"
+        renderer.write_text("#!/bin/sh\nprintf '%s\\n' 'Frame pipe: 1'\n")
+        definition = self.root / "config/xp.def"
+        definition.write_text(definition.read_text() + "XPLANET_WALLPAPER_BACKEND=desktop-layer\n")
+        command = [str(scripts / "xplanet.sh"), "setup"]
+        answers = "y\n\nn\nn\nn\nn\ny\n"
+        missing = subprocess.run(command, cwd=PROJECT, env=env, input=answers,
+                                 capture_output=True, text=True, check=False)
+        self.assertEqual(missing.returncode, 2, missing.stdout + missing.stderr)
+        self.assertIn("requires the packaged xplanet-desktop", missing.stderr)
+        self.assertFalse(calls.exists())
+        helper = renderer.with_name("xplanet-desktop")
+        helper.write_text("#!/bin/sh\nexit 1\n")  # setup must not start the helper itself
+        helper.chmod(0o700)
+        paired = subprocess.run(command, cwd=PROJECT, env=env, input=answers,
+                                capture_output=True, text=True, check=False)
+        self.assertEqual(paired.returncode, 0, paired.stdout + paired.stderr)
+        self.assertIn("Desktop layer is enabled", paired.stdout)
+        self.assertNotIn("choose Allow", paired.stdout)
+        self.assertTrue(calls.exists())
+
     def test_interactive_automation_uses_stub_only(self):
         scripts, env, products = self._shell_fixture()
         examples = scripts / "launchd"

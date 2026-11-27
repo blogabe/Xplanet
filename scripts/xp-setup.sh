@@ -746,13 +746,17 @@ if ask "Step 3) Install and register Xplanet automation?"; then
     automation_requested=true
     source "$script_dir/lib/xplanet/wallpaper-backends.zsh" || fail "missing wallpaper backend helper"
     typeset -a wallpaper_backends
-    wallpaper_probe_succeeded=false
-    probe_wallpaper_backends "$XPLANET_BIN" && wallpaper_probe_succeeded=true
-    if [[ "$XPLANET_WALLPAPER_BACKEND" == finder ]]; then
-        [[ "$wallpaper_probe_succeeded" == true ]] ||
-            fail "could not check the renderer for Finder rollback support; no automation was registered"
-        if [[ "$wallpaper_backends_advertised" == true ]] && ! has_wallpaper_backend finder; then
-            fail "the renderer does not advertise the Finder wallpaper backend; no automation was registered"
+    if [[ "$XPLANET_WALLPAPER_BACKEND" == desktop-layer ]]; then
+        resolve_desktop_layer_helper "$XPLANET_BIN" || fail "$REPLY; no automation was registered"
+    else
+        wallpaper_probe_succeeded=false
+        probe_wallpaper_backends "$XPLANET_BIN" && wallpaper_probe_succeeded=true
+        if [[ "$XPLANET_WALLPAPER_BACKEND" == finder ]]; then
+            [[ "$wallpaper_probe_succeeded" == true ]] ||
+                fail "could not check the renderer for Finder rollback support; no automation was registered"
+            if [[ "$wallpaper_backends_advertised" == true ]] && ! has_wallpaper_backend finder; then
+                fail "the renderer does not advertise the Finder wallpaper backend; no automation was registered"
+            fi
         fi
     fi
     arguments=(--home "${HOME:-}")
@@ -787,7 +791,9 @@ if ask "Step 3) Install and register Xplanet automation?"; then
         print -ru2 -- "Resolve the reported launchd preparation error. If editing a personal plist, preserve its schedule and update the source template, if you maintain one; then retry: ${(q)launcher} setup"
         failures+=("launchd preparation: selected automation batch not registered; see the plist error above")
     else
-        if [[ -z "$XPLANET_WALLPAPER_BACKEND" || "$XPLANET_WALLPAPER_BACKEND" == auto ]] &&
+        if [[ "$XPLANET_WALLPAPER_BACKEND" == desktop-layer ]]; then
+            print -- "Desktop layer is enabled for the configured renderer; no Finder approval is needed."
+        elif [[ -z "$XPLANET_WALLPAPER_BACKEND" || "$XPLANET_WALLPAPER_BACKEND" == auto ]] &&
             has_wallpaper_backend appkit; then
             print -- "The renderer uses AppKit for desktop updates; no Finder approval is needed."
         elif [[ "$wallpaper_backends_advertised" == false || "$XPLANET_WALLPAPER_BACKEND" == finder ]] ||

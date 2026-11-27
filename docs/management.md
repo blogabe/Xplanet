@@ -358,6 +358,31 @@ launch resolves executable symlinks. Unmanaged renderers with names outside this
 set are not automatically discovered. Keep the normal `xplanet` executable name
 for manual launches; historical scene metadata does not add names to Stop's scope.
 
+### Experimental fileless desktop layer
+
+Set the literal assignment `XPLANET_WALLPAPER_BACKEND=desktop-layer` in
+`config/xp.def` and run `scripts/xplanet.sh restart` from the logged-in Mac
+desktop. This keeps the foreground desktop job and displays each frame in a
+desktop-level window without writing wallpaper images or changing the system
+wallpaper. The layer targets the main display; do not rely on it for independent
+frames on multiple displays, across Spaces or outside a logged-in desktop.
+Stop removes the layer and reveals the system wallpaper below it. Remove the
+assignment and restart to go back to the renderer default, or set it to
+`finder` for the explicit Finder rollback.
+
+This mode requires a renderer whose `-version` reports `Frame pipe: 1` and whose
+package installs `xplanet-desktop` beside the actual renderer executable. Setup
+and the desktop launcher fail clearly when the pair is unavailable; they never
+substitute a wallpaper setter. Skip the separate installation approval-frame
+prompt if you do not want to change the system wallpaper. An unsupported
+restart does not stop the running
+job. A configured frame still uses the custom or selected scene and its geometry.
+The helper renders each frame with a two-minute timeout on a five-minute cadence.
+Between frames there may be no `xplanet` process: check the desktop job in
+management and `logs/xplanet-error.log` for helper or frame errors.
+`health` checks data sources, not whether a frame is visible. Explicit
+`preview` and `render` exports are unchanged.
+
 ## Renderer troubleshooting
 
 For suspected build/support problems, use `scripts/xplanet.sh diagnostics` explicitly;
@@ -540,6 +565,7 @@ Xplanet 1.6 defaults to AppKit on macOS. The tested setup is Apple silicon.
 AppKit does not ask for Finder Automation permission. To explicitly roll back, set
 `XPLANET_WALLPAPER_BACKEND=finder` in `config/xp.def` and restart. Remove the
 setting (or set it to `auto`) and restart to return to the renderer default.
+The experimental `desktop-layer` opt-in is also independent of Finder.
 Use a standalone literal assignment, not a shell expression. A selected
 Configurator scene reads only this setting; it does not run `xp.def`.
 The desktop LaunchAgent does not need to be reinstalled for this change. If

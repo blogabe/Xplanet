@@ -22,4 +22,9 @@ if [[ -n "${XPLANET_SCENE_DIRECTORY:-}" ]]; then
     desktop_args+=(-tmpdir "$XPLANET_SCENE_TMPDIR")
 fi
 renderer_numeric_locale
+if [[ -n "$XPLANET_DESKTOP_HELPER" ]]; then
+    # The helper owns pacing, per-frame rendering and the pipe protocol.
+    exec "$XPLANET_DESKTOP_HELPER" "$XPLANET_BIN" "${XPLANET_SCENE_DIRECTORY:-$project_root}" \
+        300 120 0 -- "${desktop_args[@]}"
+fi
 exec "$XPLANET_BIN" "${desktop_args[@]}"
