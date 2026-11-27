@@ -684,7 +684,7 @@ class SetupTests(Sandbox):
         notice = "No Finder Automation approval is needed"
         self.assertEqual(done.stdout.count(notice), 1)
         self.assertLess(done.stdout.index(notice), done.stdout.index("MOCK: loading job"))
-        self.assertIn("If already authorized, no action is needed.", done.stdout)
+        self.assertNotIn("If already authorized, no action is needed.", done.stdout)
         self.assertEqual(products.read_text().splitlines(),
                          ["quake", "storm", "volcano", "clouds"])
         jobs = ("start", "earth-map", "quake", "storm", "volcano", "clouds")
@@ -709,7 +709,7 @@ class SetupTests(Sandbox):
                                text=True, check=False)
         self.assertEqual(again.returncode, 0, again.stderr)
         self.assertNotIn("MOCK: loading job", again.stdout)
-        self.assertIn("If already authorized, no action is needed.", again.stdout)
+        self.assertNotIn("If already authorized, no action is needed.", again.stdout)
         self.assertEqual(calls.read_text().splitlines(), [f"print gui/{os.geteuid()}/local.xplanet.{job}" for job in jobs])
         self.assertEqual(again.stdout.count("left unchanged"), len(jobs))
         # A same-label loaded definition is not parsed or reverified;
