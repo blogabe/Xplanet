@@ -168,6 +168,26 @@ def staged(path, roots):
     )
 
 
+def scene_stage_root(project):
+    """Only recognize the selected-scene scratch path of this checkout."""
+    if not project.is_absolute() or not (project / "scripts/xplanet.sh").is_file():
+        return None
+    # Do not accept a symlink, non-owned directory, or writable-by-others
+    # ancestor in the checkout's staging hierarchy.
+    if project.resolve(strict=True) != project:
+        return None
+    relative = Path(".state/xplanet/desktop-tmp")
+    for folder in (project, *(project / part for part in reversed(relative.parents) if part != Path(".")),
+                   project / relative):
+        try:
+            info = folder.lstat()
+        except FileNotFoundError:
+            break
+        if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o022:
+            return None
+    return project / relative
+
+
 def identity(info):
     return [info.st_dev, info.st_ino, info.st_uid, info.st_mode, info.st_size,
             info.st_mtime_ns, info.st_ctime_ns, info.st_nlink]
@@ -208,7 +228,10 @@ def inventory(home, roots, now):
                     continue
                 if store == "PNG" and name.casefold() not in png_names:
                     continue
-                info = os.stat(name, dir_fd=fd, follow_symlinks=False)
+                try:
+                    info = os.stat(name, dir_fd=fd, follow_symlinks=False)
+                except FileNotFoundError:
+                    continue
                 if owned_file(info) and max(info.st_mtime, info.st_ctime) <= now - MIN_AGE:
                     candidates.append([store, name, identity(info), info.st_blocks * 512])
             box = os.fstat(fd)
@@ -219,25 +242,40 @@ def inventory(home, roots, now):
 
 def apply(home, roots, plan):
     fresh = inventory(home, roots, time.time())
-    if fresh != plan:
-        raise ValueError("wallpaper state or candidates changed; run cleanup again")
-    removed = 0
+    if fresh["cache"] != plan["cache"]:
+        raise ValueError("wallpaper cache directory changed")
+    # The fresh inventory rechecks attribution and all live references. Do not
+    # add files that crossed the age threshold since the preview; only compare
+    # identities for files explicitly approved by the user.
+    eligible = {(store, name): expected for store, name, expected, _ in fresh["candidates"]}
+    removed = skipped = 0
     with directory(home, CACHE) as bmp_fd, directory(home, PNG_CACHE) as png_fd:
         fds = {"BMP": bmp_fd, "PNG": png_fd}
         for store, fd in fds.items():
             info = os.fstat(fd)
-            if [info.st_dev, info.st_ino] != plan["cache"][store]:
+            if [info.st_dev, info.st_ino] != fresh["cache"][store]:
                 raise ValueError("wallpaper cache directory changed")
+        if any(read_plist(home, location)[1] != fresh[key]
+               for location, key in ((INDEX, "index"), (GALLERY, "gallery"))):
+            raise ValueError("wallpaper metadata changed during cleanup; run cleanup again")
         for store, name, expected, _ in plan["candidates"]:
+            if eligible.get((store, name)) != expected:
+                skipped += 1
+                continue
             fd = fds[store]
             try:
                 if identity(os.stat(name, dir_fd=fd, follow_symlinks=False)) != expected:
-                    raise ValueError("cache file changed; stopping cleanup")
+                    skipped += 1
+                    continue
                 os.unlink(name, dir_fd=fd)
                 removed += 1
-            except (OSError, ValueError) as exc:
+            except FileNotFoundError:
+                skipped += 1
+            except OSError as exc:
                 raise ValueError(f"removed {removed} cache file(s) before cleanup stopped: {exc}") from exc
     print(f"Removed {removed} old Xplanet wallpaper cache file(s).", file=sys.stderr)
+    if skipped:
+        print(f"Skipped {skipped} previewed file(s) that changed, disappeared or are no longer eligible.", file=sys.stderr)
 
 
 def wallpaper_health(home):
@@ -294,6 +332,10 @@ def main():
     physical = runtime.resolve()
     roots = {runtime, physical, Path(str(physical).removeprefix("/private")),
              Path("/tmp"), Path("/private/tmp")}
+    project = Path(__file__).resolve().parents[3]
+    scene_root = scene_stage_root(project)
+    if scene_root is not None:
+        roots.add(scene_root)
     if args.mode != "preview" and not (sys.stdin.isatty() and sys.stderr.isatty()):
         parser.error("cleanup requires an interactive Terminal; use --dry-run for a report")
     if args.mode == "apply":

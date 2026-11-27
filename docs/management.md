@@ -508,8 +508,10 @@ the desktop and reports the failure. Alternatively, run `cleanup` from Terminal
 after `stop`, then run `start` yourself.
 
 The command only removes user-owned cache files at least 24 hours old. It matches
-BMPs to a known Xplanet temporary wallpaper path, and cached PNGs to the explicit
-copy URL macOS records for that original. It protects
+BMPs to a known Xplanet temporary wallpaper path (including the current checkout’s
+Configurator scene scratch directory), and cached PNGs to the explicit copy URL
+macOS records for that original. Files newly eligible after preview are not
+removed until a later confirmation. It protects
 wallpaper paths still referenced by the display and Space settings, and skips
 unknown or recently changed files. If it cannot verify the wallpaper metadata,
 it stops rather than guessing. It never clears Wallpaper → Your Photos or
@@ -545,9 +547,9 @@ denied, stop rather than using `sudo` or changing permissions.
 
 ```sh
 P="$HOME/Library/Containers/com.apple.wallpaper.extension.image/Data/Library/Preferences/com.apple.wallpaper.extension.image.plist"
-killall WallpaperImageExtension    # It may not be running.
+killall WallpaperImageExtension
 defaults delete "$P" ChoiceRequests.ImageFiles
-killall WallpaperAgent             # It may not be running.
+killall WallpaperAgent
 ```
 
 ## Restart preflight and renderer updates

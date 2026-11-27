@@ -95,14 +95,54 @@ class WallpaperCleanupTests(unittest.TestCase):
         for preserved in (held, other, missing, cached_png, link, self.index, self.gallery):
             self.assertTrue(preserved.exists())
 
-    def test_changed_live_reference_cancels_the_plan(self):
+    def test_changed_live_reference_is_preserved_without_cancelling_unrelated_cleanup(self):
         old = self.bmp(self.old)
+        second = self.runtime / "Xplanet.112233.png"
+        second_bmp = self.bmp(second)
+        self.write_gallery(self.old, self.current, second)
         plan = self.inventory()
         self.write_index(self.current, self.old)
         with patch.object(cleanup.time, "time", return_value=self.now):
-            with self.assertRaisesRegex(ValueError, "state or candidates changed"):
-                cleanup.apply(self.home, self.roots, plan)
+            cleanup.apply(self.home, self.roots, plan)
         self.assertTrue(old.exists())
+        self.assertFalse(second_bmp.exists())
+
+    def test_unrelated_new_gallery_row_and_newly_old_file_are_not_approved(self):
+        old = self.bmp(self.old)
+        plan = self.inventory()
+        second = self.runtime / "Xplanet.112233.png"
+        second_bmp = self.bmp(second)
+        self.write_gallery(self.old, self.current, second)
+        with patch.object(cleanup.time, "time", return_value=self.now):
+            cleanup.apply(self.home, self.roots, plan)
+        self.assertFalse(old.exists())
+        self.assertTrue(second_bmp.exists())
+
+    def test_file_replaced_since_preview_is_not_deleted(self):
+        old = self.bmp(self.old)
+        plan = self.inventory()
+        old.unlink()
+        old.write_bytes(b"different file")
+        with patch.object(cleanup.time, "time", return_value=self.now):
+            cleanup.apply(self.home, self.roots, plan)
+        self.assertEqual(old.read_bytes(), b"different file")
+
+    def test_scene_root_is_scoped_to_this_checkout_and_rejects_links(self):
+        project = self.home / "checkout"
+        (project / "scripts").mkdir(parents=True)
+        (project / "scripts/xplanet.sh").touch()
+        root = project / ".state/xplanet/desktop-tmp"
+        self.assertEqual(cleanup.scene_stage_root(project), root)
+        root.mkdir(parents=True)
+        scene = root / "Xplanet.A1B2C3" / "wallpaper.png"
+        self.write_gallery(self.old, self.current, scene)
+        old = self.bmp(scene)
+        self.assertEqual(self.inventory()["candidates"], [])
+        self.roots.add(cleanup.scene_stage_root(project))
+        self.assertEqual([record[1] for record in self.inventory()["candidates"]], [old.name])
+        root.rmdir()
+        root.symlink_to(self.runtime)
+        self.assertIsNone(cleanup.scene_stage_root(project))
 
     def test_unknown_provider_fails_closed(self):
         self.bmp(self.old)
