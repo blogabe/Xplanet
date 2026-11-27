@@ -103,7 +103,7 @@ class EvidenceTests(unittest.TestCase):
         self.assertIn("CSPICE_N0067", good.features)
 
     def test_real_tap_and_candidate_reports_separate_features_from_metadata(self):
-        for version in ("1.3.1.225", "1.4.0", "1.6.0"):
+        for version in ("1.3.1.225", "1.4.0", "1.6.0", "1.6.0-layer"):
             with self.subTest(version=version):
                 raw = (VERSION_REPORTS / f"xplanet-version-{version}.txt").read_bytes()
                 report = self.report(raw)
@@ -125,6 +125,8 @@ class EvidenceTests(unittest.TestCase):
             raw.replace(b"\tPNG", b"\t\x1b[31mPNG"),
             raw.replace(b"TLE catalog IDs: Alpha-5", b"incomplete feature report"),
             raw + b"\tPNG\n",
+            raw + b"Frame pipe: 999\n",
+            raw + b"Frame pipe: 1\nFrame pipe: 1\n",
         ):
             with self.subTest(malformed=malformed):
                 report = self.report(malformed)
@@ -132,7 +134,7 @@ class EvidenceTests(unittest.TestCase):
                 self.assertEqual(report.features, ())
 
     def test_image_format_requirements_still_apply_with_metadata(self):
-        raw = (VERSION_REPORTS / "xplanet-version-1.6.0.txt").read_bytes()
+        raw = (VERSION_REPORTS / "xplanet-version-1.6.0-layer.txt").read_bytes()
         for feature in ("PNG", "JPEG", "TIFF"):
             with self.subTest(feature=feature):
                 limited = raw.replace(f"\t{feature}\n".encode(), b"")

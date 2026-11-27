@@ -223,11 +223,12 @@ def capabilities(binary, stamp, stream, code, *, expected_hash=None):
             pass
         else:
             rows = [row for row in lines[index + 1 :] if row]
-            # Alpha-5 builds append catalog metadata after the feature block.
-            # Recognize the footer, but do not treat an arbitrary unindented
-            # line as the end of an otherwise malformed feature report.
-            if rows and rows[-1] == "TLE catalog IDs: Alpha-5":
-                rows.pop()
+            # These exact, unindented footer lines are metadata, not codecs.
+            # Only strip recognized trailing records, once each; a malformed
+            # or unknown line must still leave the report untrusted.
+            footer = {"TLE catalog IDs: Alpha-5", "Frame pipe: 1"}
+            while rows and rows[-1] in footer:
+                footer.remove(rows.pop())
             if all(
                 row.startswith("\t") and len(row) <= 200 and all(c.isprintable() for c in row[1:])
                 for row in rows

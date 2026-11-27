@@ -27,6 +27,9 @@ See the [documentation index](docs/README.md) and [TotalMarker configuration tem
 
 ## Install on macOS
 
+The managed desktop requires macOS 13 or newer and the matching Xplanet package.
+On macOS 11 or 12, keep your existing compatible launcher and renderer together.
+
 Requires [Homebrew](https://brew.sh/) with `trust` support, Git, curl and zsh.
 The bundled maps are large; allow several gigabytes for the checkout, history and
 private runtimes. A shallow manual clone is available; see [installation details](docs/management.md#checkout-size).

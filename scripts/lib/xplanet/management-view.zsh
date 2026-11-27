@@ -80,25 +80,20 @@ management_desktop_facts() {
     local result job_info
     management_process='unknown'
     management_job='unknown'
-    if command -v pgrep >/dev/null; then
-        pgrep -u "$EUID" -x xplanet >/dev/null 2>&1
-        result=$?
-        case "$result" in
-            0) management_process=running ;;
-            1) management_process='not detected' ;;
-        esac
-    fi
-    # Registration and process presence are separate facts in the GUI domain.
+    # The long-lived helper belongs to this launchd job. The renderer is
+    # expected to exit between frames; unrelated processes prove nothing.
     if command -v launchctl >/dev/null; then
         job_info=$(launchctl print "gui/$EUID/local.xplanet.desktop" 2>/dev/null)
         result=$?
         case "$result" in
             0) if [[ $'\n'"$job_info"$'\n' == *$'\n\tstate = running\n'* ]]; then
                    management_job='registered (running)'
+                   management_process=running
                else
                    management_job=registered
+                   management_process='not running'
                fi ;;
-            113) management_job='not registered' ;;
+            113) management_job='not registered'; management_process='not running' ;;
         esac
     fi
 }
@@ -214,7 +209,7 @@ management_draw() {
     done
     if (( ${#management_binary} + 19 > ${cols:-0} || ${#management_selection} + 19 > ${cols:-0} || health_width + 19 > ${cols:-0} || ${#management_last_result} + 40 > ${cols:-0} )); then management_partial=false; fi
     print -r -- "${management_heading}Xplanet management${management_reset}"
-    management_fact Desktop "$process_style$process_icon xplanet: $management_process$management_reset | Job: $management_job"
+    management_fact Desktop "$process_style$process_icon Desktop layer: $management_process$management_reset | Job: $management_job"
     # Keep the menu reachable in short terminals; roomy screens separate facts
     # by ownership: desktop, saved evidence, then setup and last action.
     (( ${rows:-0} >= 35 )) && print
