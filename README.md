@@ -53,8 +53,9 @@ into setup; `setup` reuses installed prerequisites. Fresh builds start with the 
 defaults, not a personal feature profile. See [build choices](docs/management.md#xplanet-build-choices)
 for customization and noninteractive installation. After setup, run `./scripts/xplanet.sh start` if you skipped
 its start offer, then `./scripts/xplanet.sh health` to inspect saved source status.
-Start acceptance is asynchronous; see the [first-run sequence](docs/management.md#quick-start)
-for what to expect and how to diagnose missing wallpaper.
+The live desktop needs a compatible Xplanet package. It does not replace your
+system wallpaper, so stopping it reveals your original one. See
+[desktop setup](docs/management.md#fileless-desktop).
 
 For TotalMarker-only use, including Linux, see
 [Running TotalMarker independently](docs/totalmarker-standalone.md).

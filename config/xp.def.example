@@ -2,10 +2,6 @@
 # Setup fills XPLANET_BIN in a new personal copy after confirmation.
 # If this file is copied manually, set an absolute installed executable path.
 XPLANET_BIN=
-# Leave this unset to use the renderer default (AppKit on macOS with
-# Xplanet 1.6 or later). Set finder to roll back, or desktop-layer to opt in to
-# the experimental fileless desktop with a compatible renderer, then restart.
-# XPLANET_WALLPAPER_BACKEND=finder
 XPLANET_HOME="$project_root"
 XPLANET_CONFIG="$project_root/config"
 XPLANET_PROJECTION=rectangular

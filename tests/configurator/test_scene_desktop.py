@@ -151,8 +151,14 @@ class SceneDesktopTests(unittest.TestCase):
         from configurator.handoff import create_plan, stage_plan
 
         binary = self.root / "fixture renderer"
-        binary.write_text('#!/bin/sh\nprintf "%s\\0" "$PWD" "$@"\n')
+        binary.write_text(
+            '#!/bin/sh\nif [ "$1" = -version ]; then echo "Frame pipe: 1"; exit 0; fi\n'
+            'printf "%s\\0" "$PWD" "$@"\n'
+        )
         binary.chmod(0o700)
+        helper = self.root / "xplanet-desktop"
+        helper.write_text('#!/bin/sh\nrenderer="$1"; shift 6; exec "$renderer" "$@"\n')
+        helper.chmod(0o700)
         bundle = self.root / "fixture renderer review"
         stage_plan(create_plan(self.root, self.scene, binary, "1280x720"), bundle)
         apply_bundle(self.root, bundle, inspect_selection(self.root))
@@ -184,37 +190,7 @@ class SceneDesktopTests(unittest.TestCase):
         self.assertFalse((self.root / "forbidden").exists())
         self.assertFalse((self.root / "images/earth.png").exists())
 
-    def test_selected_scene_reads_finder_rollback_without_sourcing_definition(self):
-        from configurator.handoff import create_plan, stage_plan
-
-        binary = self.root / "fixture renderer"
-        binary.write_text(
-            '#!/bin/sh\n[ "$1" = -version ] || exit 3\n'
-            "printf 'Xplanet 1.6.0\\n\\tWallpaper backends: appkit, finder\\n'\n"
-        )
-        binary.chmod(0o700)
-        bundle = self.root / "rollback review"
-        stage_plan(create_plan(self.root, self.scene, binary, "1280x720"), bundle)
-        apply_bundle(self.root, bundle, inspect_selection(self.root))
-        definition = self.root / "config/xp.def"
-        original = definition.read_bytes()
-        for value in (b"finder", b"'finder' # rollback", b'"finder"'):
-            with self.subTest(value=value):
-                definition.write_bytes(original + b"XPLANET_WALLPAPER_BACKEND=" + value)
-                result = self.shell('desktop_command; print -r -N -- "${desktop_args[@]}"')
-                self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertTrue(
-                    result.stdout.endswith(b"-wallpaper_backend\0finder\0"), result.stdout
-                )
-                self.assertFalse((self.root / "forbidden").exists())
-
-        definition.write_bytes(original + b"XPLANET_WALLPAPER_BACKEND=$(touch forbidden)")
-        result = self.shell("desktop_command")
-        self.assertEqual(result.returncode, 2, result.stderr)
-        self.assertIn(b"must be a literal auto, finder, or desktop-layer", result.stderr)
-        self.assertFalse((self.root / "forbidden").exists())
-
-    def test_fileless_selected_scene_preserves_geometry_cwd_and_literal_policy(self):
+    def test_fileless_selected_scene_preserves_geometry_and_never_sources_old_policy(self):
         from configurator.handoff import create_plan, stage_plan
 
         binary = self.root / "fixture renderer"
@@ -232,7 +208,7 @@ class SceneDesktopTests(unittest.TestCase):
         revision = self.root / REVISIONS / receipt.after.revision
         definition = self.root / "config/xp.def"
         definition.write_bytes(
-            definition.read_bytes() + b"XPLANET_WALLPAPER_BACKEND='desktop-layer' # opt in\n"
+            definition.read_bytes() + b"XPLANET_WALLPAPER_BACKEND=$(touch forbidden)\n"
         )
         result = self.shell('exec /bin/zsh "$script_dir/lib/xplanet/desktop.zsh"')
         self.assertEqual(result.returncode, 0, result.stderr)

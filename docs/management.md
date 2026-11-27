@@ -37,8 +37,8 @@ are available for deployments such as unusually large cloud maps.
    needs your source and credentials. Volcanoes use automatic source selection.
 3. Accept the optional start offer, or run `./scripts/xplanet.sh start` afterward.
    This asks launchd to run the configured renderer; it does not certify a frame.
-4. Expect the desktop image to update asynchronously. If it does not, inspect
-   `logs/xplanet-error.log` and [Finder Automation permission](#finder-automation-permission) before retrying.
+4. Expect the live desktop to update asynchronously. If it does not, inspect
+   `logs/xplanet-error.log` before retrying.
 5. Run `./scripts/xplanet.sh health` for saved data status. Only an explicit
    `health --live` checks provider access. Failed refreshes retain older output.
 6. To explore scenes independently, run `./scripts/xplanet.sh config --prepare`
@@ -225,8 +225,8 @@ clouds only when selected). It leaves registered jobs alone.
 Only after setup completes does management offer an explicit desktop start.
 Cancelling/stopping setup returns directly to the menu. After completed setup
 and the optional start offer, new/partial flows acknowledge the summary and exit; existing installations
-return to management. macOS may require approval for an installed renderer;
-review such prompts yourself.
+return to management. macOS may show a notice for the background job; it does
+not need permission to control Finder.
 
 `config` opens the separate [scene studio](configurator/user-guide.md). Prepare
 its isolated dependencies explicitly; missing prerequisites leave management usable.
@@ -358,30 +358,28 @@ launch resolves executable symlinks. Unmanaged renderers with names outside this
 set are not automatically discovered. Keep the normal `xplanet` executable name
 for manual launches; historical scene metadata does not add names to Stop's scope.
 
-### Experimental fileless desktop layer
+### Fileless desktop
 
-Set the literal assignment `XPLANET_WALLPAPER_BACKEND=desktop-layer` in
-`config/xp.def` and run `scripts/xplanet.sh restart` from the logged-in Mac
-desktop. This keeps the foreground desktop job and displays each frame in a
-desktop-level window without writing wallpaper images or changing the system
-wallpaper. The layer targets the main display; do not rely on it for independent
-frames on multiple displays, across Spaces or outside a logged-in desktop.
-Stop removes the layer and reveals the system wallpaper below it. Remove the
-assignment and restart to go back to the renderer default, or set it to
-`finder` for the explicit Finder rollback.
+`scripts/xplanet.sh start` displays the configured scene on the main display
+without writing wallpaper images or changing your macOS wallpaper. Stopping
+Xplanet reveals the wallpaper you already set. Use `preview`, `render`, or the
+renderer’s `-output` option when you want a file to keep.
 
-This mode requires a renderer whose `-version` reports `Frame pipe: 1` and whose
-package installs `xplanet-desktop` beside the actual renderer executable. Setup
-and the desktop launcher fail clearly when the pair is unavailable; they never
-substitute a wallpaper setter. Skip the separate installation approval-frame
-prompt if you do not want to change the system wallpaper. An unsupported
-restart does not stop the running
-job. A configured frame still uses the custom or selected scene and its geometry.
-The helper renders each frame with a two-minute timeout on a five-minute cadence.
-Between frames there may be no `xplanet` process: check the desktop job in
-management and `logs/xplanet-error.log` for helper or frame errors.
-`health` checks data sources, not whether a frame is visible. Explicit
-`preview` and `render` exports are unchanged.
+Setup and the desktop launcher require a renderer whose `-version` reports
+`Frame pipe: 1` and that installs `xplanet-desktop` beside the renderer. If the
+pair is missing, install or update the compatible package and try again. Xplanet
+does not fall back to a system wallpaper setter, and a failed preflight does not
+stop a running desktop. Between five-minute refreshes there may be no
+`xplanet` worker process. Look for the desktop job and check
+`logs/xplanet-error.log` if nothing is visible. `health` checks data sources.
+
+If a previous config contains `XPLANET_WALLPAPER_BACKEND`, remove that former
+setting from `xp.def`. It no longer selects a backend. After updating, run
+`scripts/xplanet.sh restart` to replace an existing desktop job. To use an old system
+wallpaper setter deliberately, invoke the renderer directly (for example,
+`xplanet -wallpaper_backend appkit -num_times 1` or the legacy `finder`
+equivalent on a renderer that supports it). These commands can create macOS
+wallpaper cache entries. The managed desktop no longer uses those setters.
 
 ## Renderer troubleshooting
 
@@ -526,11 +524,8 @@ permission to signal unrelated process names. An unmanaged renderer with another
 arbitrary executable name needs explicit identification rather than automatic
 historical-name discovery.
 
-The optional installation approval frame renders once **to the desktop
-background** and may request Finder automation permission. Declining it leaves
-that approval for later. Installation requires Homebrew's `trust` subcommand;
-if unavailable, update Homebrew through its normal supported procedure rather
-than bypassing trust. No particular historical Homebrew version is inferred.
+Install continues to setup without changing the macOS wallpaper or running a
+Finder approval frame.
 
 ## Checkout size
 
@@ -549,9 +544,8 @@ history is less useful for development and historical comparisons.
   to prepare its pinned private dependencies; updates never install them silently.
 - Missing or changed selected revision: inspect Selected scene / handoff, reopen
   the saved scene and explicitly review/select it again. There is no silent fallback.
-- Accepted start without visible wallpaper: inspect `logs/xplanet-error.log` and
-  [Finder Automation permission](#finder-automation-permission). Acceptance is
-  asynchronous, not proof of a frame.
+- Accepted start without a visible desktop: check `logs/xplanet-error.log`.
+  Start is asynchronous; it does not verify that a frame was displayed.
 - Restart reports that `local.xplanet.desktop` was not found: let any in-flight
   lifecycle request finish, then retry `restart` once. Restart uses the stop scope
   above. If it recurs, retain the exact error and desktop log instead of
@@ -561,19 +555,9 @@ history is less useful for development and historical comparisons.
 
 ### Finder Automation permission
 
-Xplanet 1.6 defaults to AppKit on macOS. The tested setup is Apple silicon.
-AppKit does not ask for Finder Automation permission. To explicitly roll back, set
-`XPLANET_WALLPAPER_BACKEND=finder` in `config/xp.def` and restart. Remove the
-setting (or set it to `auto`) and restart to return to the renderer default.
-The experimental `desktop-layer` opt-in is also independent of Finder.
-Use a standalone literal assignment, not a shell expression. A selected
-Configurator scene reads only this setting; it does not run `xp.def`.
-The desktop LaunchAgent does not need to be reinstalled for this change. If
-a renderer advertises wallpaper backends but does not offer Finder, restart
-rejects the rollback without stopping the current job.
-
-Older renderers and Finder rollback still need Automation permission. If macOS
-asks, choose **Allow**. If already authorized, no action is needed.
+The fileless desktop does not use Finder Automation. The steps below are for
+older installations or users who explicitly invoke the standalone Finder
+wallpaper setter. If macOS asks, choose **Allow**. If already authorized, no action is needed.
 A `Finder error -1743` (or `macOS error -1743` on older builds) warning in `logs/xplanet-error.log` means the Apple event
 was not permitted; a rendered image alone does not prove a desktop update.
 On newer builds, the log may also say “Finder Automation access was denied”

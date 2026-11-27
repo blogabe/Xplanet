@@ -29,11 +29,16 @@ class LauncherRenderTests(Sandbox):
         self.mock.write_text(
             "#!/usr/bin/env python3\n"
             "import json, os, sys\n"
+            "if sys.argv[1:] == ['-version']:\n"
+            "    print('Frame pipe: 1'); sys.exit(0)\n"
             "with open(os.environ['MOCK_CAPTURE'], 'w') as output:\n"
             "    json.dump({'args': sys.argv[1:], 'tmp': os.environ.get('TMPDIR'), "
             "'cache': os.environ.get('XDG_CACHE_HOME'), 'cwd': os.getcwd()}, output)\n"
             "sys.exit(int(os.environ.get('MOCK_EXIT', '0')))\n")
         self.mock.chmod(0o700)
+        helper = self.mock.with_name("xplanet-desktop")
+        helper.write_text('#!/bin/sh\nrenderer="$1"; shift 6; exec "$renderer" "$@"\n')
+        helper.chmod(0o700)
         (self.root / "config").mkdir()
         (self.root / "config/xp.conf").write_text('[earth]\n"Earth"\n')
         (self.root / "config/xp.def").write_text(
@@ -312,71 +317,12 @@ class LauncherRenderTests(Sandbox):
                                 capture_output=True, text=True, check=False)
         self.assertEqual(failed.returncode, 0, failed.stderr)  # launchd accepted the request
 
-    def test_finder_rollback_passes_the_flag_only_to_capable_renderers(self):
-        config = self.root / "config/xp.def"
-        config.write_text(config.read_text() + "XPLANET_WALLPAPER_BACKEND=finder\n")
-        mock = self.mock.read_text()
-        for version, expected in (
-            ("Xplanet 1.3.1.225", []),
-            ("Xplanet 1.6.0\n\tWallpaper backends: appkit, finder\n\tPNG",
-             ["-wallpaper_backend", "finder"]),
-            ("Xplanet 1.6.0\nWallpaper backends: future,  finder , appkit\n\tPNG",
-             ["-wallpaper_backend", "finder"]),
-        ):
-            with self.subTest(version=version):
-                self.mock.write_text(mock.replace("with open(", (
-                    "if sys.argv[1:] == ['-version']:\n"
-                    f"    print({version!r})\n"
-                    "    sys.exit(0)\n"
-                    "with open("
-                ), 1))
-                capture = self.base / "finder-capture.json"
-                capture.unlink(missing_ok=True)
-                result = self.invoke("start", {"MOCK_CAPTURE": str(capture)})
-                self.assertEqual(result.returncode, 0, result.stderr)
-                args = json.loads(capture.read_text())["args"]
-                self.assertEqual(args[args.index("-wallpaper_backend"):]
-                                 if "-wallpaper_backend" in args else [], expected)
-                self.assertEqual(self.invoke("stop").returncode, 0)
-
-    def test_finder_rollback_without_advertised_finder_does_not_touch_running_job(self):
-        launch_trace = self.base / "rollback-launchctl.txt"
-        env, table, signals, capture = self.lifecycle_env()
-        env["MOCK_LAUNCHCTL_TRACE"] = str(launch_trace)
-        self.assertEqual(self.invoke("start", env).returncode, 0)
-        self.assertTrue(capture.is_file())
-        launch_trace.write_text("")
-        table.write_text(json.dumps({"101": "running"}))
-        config = self.root / "config/xp.def"
-        config.write_text(config.read_text() + "XPLANET_WALLPAPER_BACKEND=finder\n")
-        mock = self.mock.read_text()
-        self.mock.write_text(mock.replace("with open(", (
-            "if sys.argv[1:] == ['-version']:\n"
-            "    print('Xplanet 1.6.0\\n\\tWallpaper backends: appkit, finder-next')\n"
-            "    sys.exit(0)\n"
-            "with open("
-        ), 1))
-        for command in ("start", "restart"):
-            with self.subTest(command=command):
-                result = self.invoke(command, env)
-                self.assertEqual(result.returncode, 2, result.stderr)
-                self.assertIn("does not advertise the Finder wallpaper backend", result.stderr)
-                self.assertEqual(launch_trace.read_text(), "")
-                self.assertEqual(json.loads(table.read_text()), {"101": "running"})
-                self.assertFalse(signals.exists())
-
-    def test_fileless_start_uses_paired_helper_and_managed_job_without_changing_auto(self):
+    def test_default_start_uses_paired_helper_and_ignores_retired_setter_preference(self):
         alias = self.base / "linked renderer"
         alias.symlink_to(self.mock)
         config = self.root / "config/xp.def"
         custom = config.read_text().replace(shlex.quote(str(self.mock)), shlex.quote(str(alias)))
-        config.write_text(custom + "XPLANET_WALLPAPER_BACKEND=desktop-layer\n")
-        self.mock.write_text(self.mock.read_text().replace("with open(", (
-            "if sys.argv[1:] == ['-version']:\n"
-            "    print('Xplanet 1.6.0\\nFrame pipe: 1')\n"
-            "    sys.exit(0)\n"
-            "with open("
-        ), 1))
+        config.write_text(custom)
         helper = self.mock.with_name("xplanet-desktop")
         helper.write_text(
             "#!" + sys.executable + "\n"
@@ -418,14 +364,8 @@ class LauncherRenderTests(Sandbox):
         self.assertEqual(stopped.stdout, "")
 
         capture.unlink()
-        config.write_text(custom + "XPLANET_WALLPAPER_BACKEND=auto\n")
-        self.assertEqual(self.invoke("start", environment).returncode, 0)
-        self.assertTrue(renderer_capture.is_file())
-        self.assertFalse(capture.exists())
-
-        renderer_capture.unlink()
         config.write_text(custom.replace("XPLANET_GEOMETRY=1600x900", "XPLANET_GEOMETRY=")
-                          + "XPLANET_WALLPAPER_BACKEND=desktop-layer\n")
+                          + "XPLANET_WALLPAPER_BACKEND=finder\n")
         restarted = self.invoke("restart", environment)
         self.assertEqual(restarted.returncode, 0, restarted.stderr)
         argv = json.loads(capture.read_text())
@@ -433,14 +373,14 @@ class LauncherRenderTests(Sandbox):
         self.assertFalse(renderer_capture.exists())
 
     def test_fileless_preflight_requires_exact_capability_and_adjacent_real_helper(self):
-        config = self.root / "config/xp.def"
-        config.write_text(config.read_text() + "XPLANET_WALLPAPER_BACKEND=desktop-layer\n")
         helper = self.mock.with_name("xplanet-desktop")
+        helper.unlink()
         elsewhere = self.base / "unrelated-helper"
         elsewhere.write_text("#!/bin/sh\nexit 0\n")
         elsewhere.chmod(0o700)
         trace = self.base / "launchctl-trace.txt"
         for capability, link, message in (
+            ("Wallpaper backends: appkit, finder", False, "requires a renderer that advertises"),
             ("Frame pipe: 10", False, "requires a renderer that advertises"),
             ("Frame pipe: 1", False, "requires the packaged xplanet-desktop"),
             ("Frame pipe: 1", True, "requires the packaged xplanet-desktop"),

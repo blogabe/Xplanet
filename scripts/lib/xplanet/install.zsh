@@ -5,12 +5,6 @@ install_failed() {
     exit 1
 }
 
-ask_install() {
-    local answer
-    read -r "answer?$1 [y/N] " || return 1
-    [[ "$answer" == [Yy] ]]
-}
-
 install_xplanet() {
     local brew_bin prefix installed
     brew_bin=$(command -v brew) || fail "Homebrew is required for install"
@@ -32,13 +26,6 @@ install_xplanet() {
     [[ "$prefix" == /* ]] || install_failed "Homebrew returned a non-absolute Xplanet prefix."
     installed="$prefix/bin/xplanet"
     [[ -x "$installed" ]] || install_failed "Homebrew Xplanet binary is not executable at $installed."
-    print -- "macOS may request security approval during a finite Xplanet launch. Review any prompts yourself."
-    if ask_install "Render one frame to the desktop background to request macOS approvals?"; then
-        (cd "$project_root" && "$installed" "-searchdir=$project_root" -num_times=1) ||
-            install_failed "The one-frame Xplanet launch failed."
-    else
-        print -- "Skipped the approval launch; macOS permissions still need manual review."
-    fi
     print -- "Xplanet and Python installation steps finished. Continuing to setup."
     XPLANET_INSTALLED_BIN="$installed" "$script_dir/xp-setup.sh"
 }
