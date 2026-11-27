@@ -222,15 +222,21 @@ def capabilities(binary, stamp, stream, code, *, expected_hash=None):
         except ValueError:
             pass
         else:
-            rows = lines[index + 1 :]
+            rows = [row for row in lines[index + 1 :] if row]
+            # Alpha-5 builds append catalog metadata after the feature block.
+            # Recognize the footer, but do not treat an arbitrary unindented
+            # line as the end of an otherwise malformed feature report.
+            if rows and rows[-1] == "TLE catalog IDs: Alpha-5":
+                rows.pop()
             if all(
-                not row
-                or row.startswith("\t")
-                and len(row) <= 200
-                and all(c.isprintable() for c in row[1:])
+                row.startswith("\t") and len(row) <= 200 and all(c.isprintable() for c in row[1:])
                 for row in rows
             ):
-                features = tuple(row.strip() for row in rows if row.strip())
+                features = tuple(
+                    row.strip()
+                    for row in rows
+                    if row.strip() and not row.startswith("\tWallpaper backends:")
+                )
                 status = "reported"
     if code != 0:
         status = "runtime/probe failure (support unknown)"
