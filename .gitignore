@@ -29,6 +29,7 @@
 !/scripts/lib/xplanet/
 !/scripts/lib/xplanet/*.zsh
 !/scripts/lib/xplanet/volcano-setup.py
+!/scripts/lib/xplanet/wallpaper-cleanup.py
 !/scripts/launchd/
 !/scripts/launchd/*.plist.example
 !/scripts/launchd/README.md

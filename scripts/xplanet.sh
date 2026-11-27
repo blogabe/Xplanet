@@ -77,6 +77,7 @@ Control the desktop
   stop         Remove desktop job; stop normal/configured Xplanet processes
                Includes matching finite renders
   restart      Stop, wait for exit, then start one display
+               --cleanup previews and confirms manual wallpaper cleanup first
   earth        Select the current month's configured Earth map link
 
 Refresh data (Python TotalMarker)
@@ -95,16 +96,18 @@ Inspect and troubleshoot
                --file PATH selects another text log within this checkout
   health       Read saved health; --live probes without updating outputs
                --verbose shows details; --json returns structured results
+               --wallpaper reports macOS gallery and cache sizes (read-only)
   diagnostics  Capture selected renderer support; --show reads saved evidence
                --renderer /absolute/path/to/xplanet works before setup
 
 Housekeeping and development
+  cleanup      Manually remove old macOS wallpaper caches; --dry-run
   log-trim     Trim recognized logs older than 30 days; --dry-run, --days N
   test         Run the offline Python regression suite
 
 Detailed help: install --help, update --help, config --help, config --guide,
                setup --help, health --help, diagnostics --help,
-               log-view --help, log-trim --help
+               log-view --help, log-trim --help, cleanup --help
 Use config --prepare to prepare the isolated scene-studio UI environment.
 For planetary examples, open Stock scenes in the studio or see
 docs/configurator/stock-scenes.md.
@@ -139,7 +142,7 @@ Workflow notes (macOS)
 USAGE
 }
 
-if (( $# > 1 )) && [[ "$1" != setup && "$1" != health && "$1" != log-trim && "$1" != log-view && "$1" != config && "$1" != diagnostics && "$1" != install && "$1" != update && "$1" != aurora ]]; then
+if (( $# > 1 )) && [[ "$1" != setup && "$1" != health && "$1" != log-trim && "$1" != log-view && "$1" != config && "$1" != diagnostics && "$1" != install && "$1" != update && "$1" != aurora && "$1" != cleanup && "$1" != restart ]]; then
     fail "expected exactly one command; use --help"
 fi
 if (( $# == 0 )); then
@@ -169,7 +172,18 @@ case "$switch" in
     diagnostics) load_helpers diagnostics ;;
     install) load_helpers install build-options ;;
     update) load_helpers display update build-options ;;
-    preview|render|start|restart|stop|earth) load_helpers display ;;
+    preview|render|start|stop|earth) load_helpers display ;;
+    cleanup) load_helpers display wallpaper-cleanup ;;
+    health) [[ "${2:-}" != --wallpaper ]] || load_helpers wallpaper-cleanup ;;
+    restart)
+        if (( $# > 1 )); then
+            [[ $# == 2 && "$2" == --cleanup ]] || fail "restart accepts only --cleanup"
+            load_helpers display wallpaper-cleanup
+            wallpaper_cleanup_require_terminal
+        else
+            load_helpers display
+        fi
+        ;;
 esac
 
 case "$switch" in
@@ -222,7 +236,15 @@ case "$switch" in
         start_xplanet
         ;;
     restart)
-        restart_xplanet
+        if (( $# == 2 )); then
+            desktop_lifecycle wallpaper_cleanup_transaction restart
+        else
+            restart_xplanet
+        fi
+        ;;
+    cleanup)
+        shift
+        cleanup_xplanet "$@"
         ;;
     stop)
         stop_xplanet
@@ -236,7 +258,15 @@ case "$switch" in
         ;;
     health)
         shift
-        "$script_dir/run-totalmarker" health "$@"
+        if [[ "${1:-}" == --wallpaper ]]; then
+            (( $# == 1 )) || fail "health --wallpaper must be used on its own"
+            wallpaper_cleanup_python health
+        elif [[ $# == 1 && ( "$1" == --help || "$1" == -h ) ]]; then
+            "$script_dir/run-totalmarker" health "$@" || exit $?
+            print -- 'macOS only: xplanet.sh health --wallpaper reports gallery and cache storage.'
+        else
+            "$script_dir/run-totalmarker" health "$@"
+        fi
         ;;
     label|labels)
         "$script_dir/run-totalmarker" labels

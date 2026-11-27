@@ -345,8 +345,20 @@ _restart_xplanet() {
         fi
         desktop_job_owned "$job_info" || fail "desktop job is foreign or unverified; refusing restart before stop"
     fi
+    local cleanup_result=0 start_result
     _stop_xplanet quiet || return $?
-    _start_xplanet restart
+    if [[ -n "${1:-}" ]]; then
+        wallpaper_cleanup_python apply "$1" || cleanup_result=$?
+    fi
+    if _start_xplanet restart; then
+        if (( cleanup_result != 0 )); then
+            print -u2 -- 'xplanet.sh: display restarted, but wallpaper cleanup did not complete.'
+        fi
+        return "$cleanup_result"
+    else
+        start_result=$?
+        return "$start_result"
+    fi
 }
 
 start_xplanet() { desktop_lifecycle _start_xplanet "$@"; }
