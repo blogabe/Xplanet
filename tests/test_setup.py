@@ -632,6 +632,33 @@ class SetupTests(Sandbox):
                 self.assertEqual(products.exists(), ready)
                 self.assertEqual(config.read_bytes(), content)
 
+    def test_setup_wallpaper_notice_uses_advertised_backend_tokens_and_policy(self):
+        scripts, env, _, _, calls = self._volcano_automation_fixture()
+        renderer = self.root / "mock-xplanet"
+        definition = self.root / "config/xp.def"
+        original = definition.read_text()
+        command = [str(scripts / "xplanet.sh"), "setup"]
+        answers = "y\n\nn\nn\nn\nn\ny\n"
+        for policy, advertised, message, expected_status in (
+            ("auto", "finder, future, appkit", "no Finder approval is needed", 0),
+            ("finder", "appkit, future, finder", "choose Allow", 0),
+            ("finder", "appkit, finder-next", "does not advertise the Finder wallpaper backend", 2),
+        ):
+            with self.subTest(policy=policy, advertised=advertised):
+                definition.write_text(original + f"XPLANET_WALLPAPER_BACKEND={policy}\n")
+                renderer.write_text("#!/bin/sh\nprintf '%s\\n' " + shlex.quote(
+                    f"Xplanet 1.6.0\n\tWallpaper backends: {advertised}") + "\n")
+                calls.unlink(missing_ok=True)
+                done = subprocess.run(command, cwd=PROJECT, env=env, input=answers,
+                                      capture_output=True, text=True, check=False)
+                self.assertEqual(done.returncode, expected_status, done.stdout + done.stderr)
+                self.assertIn(message, done.stdout if expected_status == 0 else done.stderr)
+                self.assertEqual(calls.exists(), expected_status == 0)
+                if policy == "auto":
+                    self.assertNotIn("choose Allow", done.stdout)
+                else:
+                    self.assertNotIn("no Finder approval is needed", done.stdout)
+
     def test_interactive_automation_uses_stub_only(self):
         scripts, env, products = self._shell_fixture()
         examples = scripts / "launchd"

@@ -542,14 +542,16 @@ AppKit does not ask for Finder Automation permission. To explicitly roll back, s
 setting (or set it to `auto`) and restart to return to the renderer default.
 Use a standalone literal assignment, not a shell expression. A selected
 Configurator scene reads only this setting; it does not run `xp.def`.
-The desktop LaunchAgent does not need to be reinstalled for this change.
+The desktop LaunchAgent does not need to be reinstalled for this change. If
+a renderer advertises wallpaper backends but does not offer Finder, restart
+rejects the rollback without stopping the current job.
 
 Older renderers and Finder rollback still need Automation permission. If macOS
 asks, choose **Allow**. If already authorized, no action is needed.
 A `Finder error -1743` (or `macOS error -1743` on older builds) warning in `logs/xplanet-error.log` means the Apple event
 was not permitted; a rendered image alone does not prove a desktop update.
-Homebrew revision 3 also logs “Finder Automation access was denied” and links
-to these recovery steps.
+On newer builds, the log may also say “Finder Automation access was denied”
+and link to these recovery steps.
 
 First open **System Settings > Privacy & Security > Automation** and enable
 **Finder** for the sender associated with your Xplanet run. Restart through your

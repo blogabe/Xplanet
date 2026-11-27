@@ -320,6 +320,8 @@ class LauncherRenderTests(Sandbox):
             ("Xplanet 1.3.1.225", []),
             ("Xplanet 1.6.0\n\tWallpaper backends: appkit, finder\n\tPNG",
              ["-wallpaper_backend", "finder"]),
+            ("Xplanet 1.6.0\nWallpaper backends: future,  finder , appkit\n\tPNG",
+             ["-wallpaper_backend", "finder"]),
         ):
             with self.subTest(version=version):
                 self.mock.write_text(mock.replace("with open(", (
@@ -336,6 +338,32 @@ class LauncherRenderTests(Sandbox):
                 self.assertEqual(args[args.index("-wallpaper_backend"):]
                                  if "-wallpaper_backend" in args else [], expected)
                 self.assertEqual(self.invoke("stop").returncode, 0)
+
+    def test_finder_rollback_without_advertised_finder_does_not_touch_running_job(self):
+        launch_trace = self.base / "rollback-launchctl.txt"
+        env, table, signals, capture = self.lifecycle_env()
+        env["MOCK_LAUNCHCTL_TRACE"] = str(launch_trace)
+        self.assertEqual(self.invoke("start", env).returncode, 0)
+        self.assertTrue(capture.is_file())
+        launch_trace.write_text("")
+        table.write_text(json.dumps({"101": "running"}))
+        config = self.root / "config/xp.def"
+        config.write_text(config.read_text() + "XPLANET_WALLPAPER_BACKEND=finder\n")
+        mock = self.mock.read_text()
+        self.mock.write_text(mock.replace("with open(", (
+            "if sys.argv[1:] == ['-version']:\n"
+            "    print('Xplanet 1.6.0\\n\\tWallpaper backends: appkit, finder-next')\n"
+            "    sys.exit(0)\n"
+            "with open("
+        ), 1))
+        for command in ("start", "restart"):
+            with self.subTest(command=command):
+                result = self.invoke(command, env)
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertIn("does not advertise the Finder wallpaper backend", result.stderr)
+                self.assertEqual(launch_trace.read_text(), "")
+                self.assertEqual(json.loads(table.read_text()), {"101": "running"})
+                self.assertFalse(signals.exists())
 
     def test_start_catches_up_monthly_map_even_when_display_already_running(self):
         env, table, trace, capture = self.lifecycle_env()

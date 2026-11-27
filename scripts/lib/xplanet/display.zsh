@@ -13,6 +13,7 @@ renderer_numeric_locale() {
 # Scene helpers contain literal data handling only; legacy mode stays the default.
 source "$script_dir/lib/xplanet/scene.zsh" || return 2
 source "$script_dir/lib/xplanet/lifecycle.zsh" || return 2
+source "$script_dir/lib/xplanet/wallpaper-backends.zsh" || return 2
 
 select_earth_map() (
     local checking=false
@@ -216,10 +217,13 @@ append_wallpaper_backend() {
     case "$1" in
         ''|auto) ;;
         finder)
-            local capabilities
-            capabilities=$(LC_ALL=C "$XPLANET_BIN" -version 2>/dev/null) ||
+            local wallpaper_backends_advertised
+            local -a wallpaper_backends
+            probe_wallpaper_backends "$XPLANET_BIN" ||
                 fail "could not check the renderer for Finder rollback support"
-            if [[ $'\n'"$capabilities"$'\n' == *$'\n\tWallpaper backends: appkit, finder\n'* ]]; then
+            if [[ "$wallpaper_backends_advertised" == true ]]; then
+                has_wallpaper_backend finder ||
+                    fail "the renderer does not advertise the Finder wallpaper backend; the desktop job was left unchanged"
                 desktop_args+=(-wallpaper_backend finder)
             fi
             # Older macOS builds already use Finder and do not accept the flag.
