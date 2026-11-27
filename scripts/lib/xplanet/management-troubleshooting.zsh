@@ -10,7 +10,8 @@ management_troubleshooting_draw() {
     management_item 1 "View renderer log"
     management_item 2 "View saved renderer support"
     management_item 3 "Check renderer support now"
-    management_item 4 "Back to management"
+    management_item 4 "Wallpaper storage (read-only)"
+    management_item 5 "Back to management"
     print -- "  b) Back   q) Exit"
     print
 }
@@ -25,11 +26,11 @@ management_troubleshooting_choose() {
             b|B|q|Q) management_reply=$prefix; return 0 ;;
             up|down|escape) prefix='' ;;
         esac
-        management_read "Troubleshooting choice (1-4, b back, q exit): " || return 1
+        management_read "Troubleshooting choice (1-5, b back, q exit): " || return 1
         management_reply="$prefix$management_reply"
         return 0
     fi
-    print -rn -- "Up/Down or 1-4: highlight; Enter: select; b: back; q: exit. Troubleshooting choice: "
+    print -rn -- "Up/Down or 1-5: highlight; Enter: select; b: back; q: exit. Troubleshooting choice: "
     local previous
     while true; do
         management_key_read || return 1
@@ -41,8 +42,8 @@ management_troubleshooting_choose() {
         previous=$management_selected
         case "$management_key" in
             up) (( management_selected > 1 )) && (( management_selected -= 1 )) ;;
-            down) (( management_selected < 4 )) && (( management_selected += 1 )) ;;
-            [1-4]) management_selected=$management_key ;;
+            down) (( management_selected < 5 )) && (( management_selected += 1 )) ;;
+            [1-5]) management_selected=$management_key ;;
             $'\n'|$'\r') management_reply=$management_selected; return 0 ;;
             b|B|q|Q) management_reply=$management_key; return 0 ;;
         esac
@@ -64,7 +65,7 @@ management_troubleshooting() {
         management_troubleshooting_choose || return 1
         case "$management_reply" in
             q|Q) return 1 ;;
-            4|b|B) return 0 ;;
+            5|b|B) return 0 ;;
             '') continue ;;
         esac
         management_screen_reset
@@ -107,6 +108,14 @@ management_troubleshooting() {
                    1) management_set_result warning "Diagnostic completed; renderer support remains unknown." ;;
                    *) management_set_result error "Renderer inspection failed (exit $result); review details above." ;;
                esac ;;
+            4) management_section "Wallpaper storage"
+               "$script_dir/xplanet.sh" health --wallpaper
+               result=$?
+               if (( result == 0 )); then
+                   management_set_result success "Wallpaper storage report displayed; nothing changed."
+               else
+                   management_set_result warning "Wallpaper storage unavailable; no files were changed."
+               fi ;;
             *) management_set_result info "Choose a listed option, b to return or q to exit."
                continue ;;
         esac

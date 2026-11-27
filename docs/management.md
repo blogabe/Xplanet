@@ -480,6 +480,76 @@ recent. Cached success timestamps alone do not prove recent provider access.
 Frozen quake captures remain unassessed because their manifest does not retain
 the producer's refresh-interval policy; their source generation time is still shown.
 
+## Wallpaper cache cleanup
+
+macOS can retain wallpaper data on every desktop refresh with either Finder or
+AppKit, even when Xplanet runs without `-output`. This is separate from Xplanet’s
+temporary render files. There is no cleanup at login, and plain `restart` does not
+clean anything.
+
+From Terminal, use `./scripts/xplanet.sh health --wallpaper` to see the number
+of custom gallery entries and the overall PNG and BMP cache counts and allocated
+sizes. It is also available under Troubleshooting → Wallpaper storage in the
+Terminal management menu. The report is read-only, includes non-Xplanet entries, and is not part
+of ordinary health checks. It marks any unreadable store as unavailable.
+
+To preview only the old cache files eligible for surgical cleanup:
+
+```sh
+./scripts/xplanet.sh cleanup --dry-run
+```
+
+To clean and resume in one command, use `./scripts/xplanet.sh restart --cleanup`.
+Review the preview and type `CLEANUP` before anything stops. The launcher stops
+the desktop, rechecks the plan, applies it and starts the desktop again. If no
+files qualify, it performs an ordinary restart. Cancelling leaves the desktop
+alone. If the cleanup fails after stop, the launcher still attempts to start
+the desktop and reports the failure. Alternatively, run `cleanup` from Terminal
+after `stop`, then run `start` yourself.
+
+The command only removes user-owned cache files at least 24 hours old. It matches
+BMPs to a known Xplanet temporary wallpaper path, and cached PNGs to the explicit
+copy URL macOS records for that original. It protects
+wallpaper paths still referenced by the display and Space settings, and skips
+unknown or recently changed files. If it cannot verify the wallpaper metadata,
+it stops rather than guessing. It never clears Wallpaper → Your Photos or
+deletes wallpaper originals or anything from Photos. It can leave stale tiles
+in Wallpaper settings and may reclaim only part of the space used by refreshes.
+This is manual maintenance, not a cap on how much macOS can retain.
+
+The command uses the same Python selection as TotalMarker. Run it from a logged-in
+Terminal session, not a LaunchAgent or with `sudo`. macOS can deny access to the
+wallpaper stores; in that case the command stops without changing permissions.
+
+### Full reset (manual recovery only)
+
+If you need to clear the custom wallpaper gallery too, use the Remove control
+on the affected tiles in System Settings → Wallpaper when practical. A full
+reset also removes entries for other custom wallpapers in the same macOS
+account. It is not a fallback that Xplanet runs for you. For a full reset,
+stop Xplanet, close Wallpaper settings, and back up any custom wallpaper
+preferences or cache contents you want to keep. In Finder, review the contents
+of these two cache locations before moving files to the Trash:
+
+- `~/Library/Containers/com.apple.wallpaper.agent/Data/Library/Caches/com.apple.wallpaper.caches/extension-com.apple.wallpaper.extension.image`
+- `~/Library/Containers/com.apple.wallpaper.extension.image/Data/Library/Caches`
+
+Do not remove the directories themselves. This can affect the current wallpaper
+or its preview, so start Xplanet again or select a wallpaper afterwards.
+The gallery can still contain stale tiles because it is separate from the
+files. On macOS versions using the observed `ChoiceRequests.ImageFiles`
+preference, the following Terminal commands reset **all** custom gallery entries
+for the current account, not the Photos library. This is unsupported macOS
+maintenance; don't run it if you want to preserve that gallery. If access is
+denied, stop rather than using `sudo` or changing permissions.
+
+```sh
+P="$HOME/Library/Containers/com.apple.wallpaper.extension.image/Data/Library/Preferences/com.apple.wallpaper.extension.image.plist"
+killall WallpaperImageExtension    # It may not be running.
+defaults delete "$P" ChoiceRequests.ImageFiles
+killall WallpaperAgent             # It may not be running.
+```
+
 ## Restart preflight and renderer updates
 
 Restart validates the next command and any immutable selected-scene resources

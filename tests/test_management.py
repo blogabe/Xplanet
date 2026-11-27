@@ -924,7 +924,7 @@ class ManagementTests(Sandbox):
         self.enhanced_terminal()
         self.write_script(self.scripts/'run-totalmarker', 'echo forbidden >> "$TRACE"; exit 2\n')
         before = self.snapshot()
-        for keys in ('9\nbq', '9\n4\nq', '9\n2\x1b[B\x1b[Aq', '9\n' + '\x1b[B' * 8 + '\nq'):
+        for keys in ('9\nbq', '9\n5\nq', '9\n2\x1b[B\x1b[Aq', '9\n' + '\x1b[B' * 8 + '\nq'):
             code, output = self.terminal(keys)
             self.assertEqual(code, 0, output)
             for label in ('View renderer log', 'View saved renderer support', 'Check renderer support now', 'Back to management'):
@@ -1012,6 +1012,17 @@ class ManagementTests(Sandbox):
             self.assertEqual(self.calls(), ['log-view'])
             self.assertEqual(before, self.snapshot())
 
+    def test_wallpaper_storage_is_read_only_and_loaded_only_on_selection(self):
+        self.write_script(self.scripts / 'lib/xplanet/wallpaper-cleanup.zsh',
+                          'wallpaper_cleanup_python() { echo "wallpaper $*" >> "$TRACE"; print "fixture cache totals"; }\n')
+        before = self.snapshot()
+        code, output = self.terminal('9\n4\n', pause_key=b' ', after_pause='q\n')
+        self.assertEqual(code, 0, output)
+        self.assertIn('fixture cache totals', output)
+        self.assertIn('nothing changed', output)
+        self.assertEqual(self.calls(), ['wallpaper health'])
+        self.assertEqual(before, self.snapshot())
+
     def test_saved_support_routes_show_without_probe_confirmation(self):
         self.enhanced_terminal()
         self.write_script(self.scripts/'lib/xplanet/diagnostics.zsh',
@@ -1050,7 +1061,7 @@ class ManagementTests(Sandbox):
 
     def test_plain_submenu_back_and_confirmation_eof_exit_without_probe(self):
         before = self.snapshot()
-        for keys in ('9\nb\nq\n', '9\n4\nq\n', '9\n3\n\x04'):
+        for keys in ('9\nb\nq\n', '9\n5\nq\n', '9\n3\n\x04'):
             code, output = self.terminal(keys)
             self.assertEqual(code, 0, output)
             self.assertEqual(self.calls(), [])

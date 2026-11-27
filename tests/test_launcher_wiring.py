@@ -130,7 +130,7 @@ class LauncherWiringTests(Sandbox):
             "Control the desktop": ("start", "stop", "restart", "earth"),
             "Refresh data (Python TotalMarker)": ("clouds", "quake", "storm", "volcano", "norad", "eclipse", "aurora", "label"),
             "Inspect and troubleshoot": ("log-view", "health", "diagnostics"),
-            "Housekeeping and development": ("log-trim", "test"),
+            "Housekeeping and development": ("cleanup", "log-trim", "test"),
         }
         headings = list(groups)
         rows = re.findall(r"^  ([a-z][a-z-]*) {2,}", result.stdout, re.M)

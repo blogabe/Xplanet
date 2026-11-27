@@ -111,13 +111,14 @@ with uv-managed Python available as an explicit choice.
 | `config [--prepare]` | Open the scene studio; explicitly prepare its isolated UI if needed |
 | `update` | Fast-forward Git, then reinstall Xplanet if the tap formula changed |
 | `start` / `stop` / `restart` | Start, stop, or restart the desktop display |
+| `cleanup [--dry-run]` | Preview or manually remove old Xplanet wallpaper cache files |
 | `preview` / `render` | Render the custom Earth configuration under `output/preview/` |
 | `earth` | Select the current seasonal Earth map |
 | `clouds`, `quake`, `storm`, `volcano` | Refresh that product and its labels |
 | `label` | Refresh update labels without fetching a product |
 | `log-view [--file PATH]` | Read stderr with counts for repeated resize notices; raw logs stay unchanged |
 | `log-trim [--dry-run] [--days N]` | Trim recognized event logs older than 30 days by default |
-| `health [--live] [--json] [--verbose]` | Read saved health, or validate sources without updating outputs |
+| `health [--live] [--json] [--verbose]` | Read saved health or validate sources; `health --wallpaper` reports cache sizes |
 | `norad`, `eclipse` | Run an explicitly configured optional product |
 | `aurora` | Refresh NOAA aurora; `--prepare` selects the night map offline, `--overlay-only` skips compositing |
 | `diagnostics [--show]` | Explicitly probe renderer support, or show saved evidence |
@@ -131,6 +132,7 @@ renderer, including finite renders; it does not discover arbitrary historical
 renderer names. `restart` performs that stop before starting a display.
 See [desktop behavior and upgrade details](docs/management.md#desktop-commands)
 for geometry, previews, process names and the old-launcher transition.
+If macOS wallpaper caches grow, see [manual wallpaper cleanup](docs/management.md#wallpaper-cache-cleanup).
 
 To update your checkout:
 
